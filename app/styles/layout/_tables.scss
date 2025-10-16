@@ -1,0 +1,48 @@
+$base-spacing: 1.5em;
+$heading-line-height: 1.2;
+$base-border-radius: 3px;
+$base-spacing: 1.5em;
+$big-spacing: $base-spacing * 2;
+$small-spacing: $base-spacing * 0.5;
+$base-z-index: 0;
+// Colors
+$white: #FFF;
+$grey-light: #F5F5F5;
+$grey: #E0E0E0;
+$grey-dark: #424242;
+// Border
+$base-border-color: $grey;
+$base-border: 1px solid $base-border-color;
+
+table {
+  border-collapse: collapse;
+  margin: $base-spacing 0;
+  text-align: left;
+  width: 100%;
+}
+
+thead {
+  line-height: $heading-line-height;
+  vertical-align: bottom;
+}
+
+tbody {
+  vertical-align: top;
+}
+
+tr {
+  border-bottom: $base-border;
+}
+
+th {
+  font-weight: 600;
+}
+
+th,
+td {
+  padding: $small-spacing $base-spacing;
+  @media screen and (max-width: 1400px) {
+    padding: $small-spacing;
+    padding-left: $base-spacing
+  }
+}
