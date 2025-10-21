@@ -358,21 +358,43 @@ function DashboardReobote() {
   })).sort((a, b) => b.taxa - a.taxa);
 
   // ==================== RANKING DE CONSULTORES ====================
+  // ==================== RANKING DE CONSULTORES (COMPARATIVO) ====================
   const ranking = Object.entries(
     filtradas.reduce((acc, t) => {
       const nome = t.nomeConsultor;
       if (!acc[nome]) acc[nome] = { visitas: 0, reunioes: 0, propostas: 0 };
       if (t.tipo === 'Visita') acc[nome].visitas++;
       if (t.tipo === 'Reunião') acc[nome].reunioes++;
-      if (t.tipo === 'Proposta') acc[nome].propostas++;
+      if(t.tipo==='Proposta') acc[nome].propostas++;
       return acc;
     }, {})
-  ).map(([consultor, dados]) => ({
-    consultor,
-    ...dados,
-    total: dados.visitas + dados.reunioes + dados.propostas,
-    taxa: dados.visitas > 0 ? Math.round((dados.propostas / dados.visitas) * 100) : 0
-  })).sort((a, b) => b.total - a.total);
+  ).map(([consultor, dados]) => {
+    const totalAtual = dados.visitas + dados.reunioes;
+
+    // Calcula o total do período anterior (comparação)
+    let totalAnterior = 0;
+    if (habilitarComparacao && tarefasComparacao.length > 0) {
+      const tarefasAnt = tarefasComparacao.filter(
+        t => t.nomeConsultor === consultor && (t.tipo === 'Visita' || t.tipo === 'Reunião')
+      );
+      totalAnterior = tarefasAnt.length;
+    }
+
+    // Calcula a taxa de comparação (variação percentual)
+    const taxaComparacao = totalAnterior > 0
+      ? Math.round(((totalAtual - totalAnterior) / totalAnterior) * 100)
+      : null;
+
+    return {
+      consultor,
+      visitas: dados.visitas,
+      reunioes: dados.reunioes,
+      propostas: dados.propostas,
+      total: totalAtual,
+      taxaComparacao
+    };
+  }).sort((a, b) => b.total - a.total);
+
 
   // ==================== TAXA DE CONCLUSÃO ====================
   const totalConcluidas = filtradas.filter(t => t.status === 'Concluída').length;
@@ -996,7 +1018,7 @@ function DashboardReobote() {
                       <TableCell align="center"><strong>Reuniões</strong></TableCell>
                       <TableCell align="center"><strong>Propostas</strong></TableCell>
                       <TableCell align="center"><strong>Total</strong></TableCell>
-                      <TableCell align="center"><strong>Taxa Conv.</strong></TableCell>
+                      <TableCell align="center"><strong>Taxa Comp.</strong></TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -1013,8 +1035,13 @@ function DashboardReobote() {
                           <TableCell align="center">{r.reunioes}</TableCell>
                           <TableCell align="center">{r.propostas}</TableCell>
                           <TableCell align="center"><strong>{r.total}</strong></TableCell>
-                          <TableCell align="center" style={{ color: corTaxa, fontWeight: 600 }}>
-                            {r.taxa}%
+                          <TableCell align="center" style={{
+                            color: r.taxaComparacao > 0 ? '#34C759' : r.taxaComparacao < 0 ? '#FF3B30' : '#8E8E93',
+                            fontWeight: 600
+                          }}>
+                            {habilitarComparacao
+                              ? (r.taxaComparacao !== null ? `${r.taxaComparacao > 0 ? '+' : ''}${r.taxaComparacao}%` : '—')
+                              : '—'}
                           </TableCell>
                         </TableRow>
                       );
