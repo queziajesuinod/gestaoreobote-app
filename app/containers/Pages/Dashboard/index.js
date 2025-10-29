@@ -43,8 +43,6 @@ import RemoveIcon from '@mui/icons-material/Remove';
 
 const API_URL = process.env.REACT_APP_API_URL?.replace(/\/$/, '') || 'http://localhost:3003';
 const API_INTEGRANTES_URL = `${API_URL}/integrante/equipe`;
-
-// ⚠️ Função helper para obter o token atualizado
 const getToken = () => localStorage.getItem('token');
 
 const CORES = ['#007AFF', '#FF2D55', '#00C7BE', '#FF9500', '#5856D6', '#34C759', '#FF3B30', '#5AC8FA'];
@@ -146,7 +144,7 @@ function DashboardReobote() {
         const response = await fetch(`${API_URL}/equipe`, {
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${getToken()}`
+           Authorization: `Bearer ${getToken()}`
           }
         });
         const data = await response.json();
