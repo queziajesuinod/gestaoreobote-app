@@ -2,6 +2,7 @@ import React, { Fragment } from 'react';
 import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
 import useStyles from './breadCrumb-jss';
+import { getPageTitle } from '../../config/pageTitles';
 
 const Breadcrumbs = (props) => {
   const { classes, cx } = useStyles();
@@ -18,21 +19,22 @@ const Breadcrumbs = (props) => {
   return (
     <section className={cx(theme === 'dark' ? classes.dark : classes.light, classes.breadcrumbs)}>
       <p>
-        You are here:
+        Você está em:
         <span>
           {
             parts.map((part, partIndex) => {
               const path = ['', ...parts.slice(0, partIndex + 1)].join('/');
+              const partTitle = getPageTitle(part);
               return (
                 <Fragment key={path}>
-                  <Link to={path}>{part}</Link>
+                  <Link to={path}>{partTitle}</Link>
                   { separator }
                 </Fragment>
               );
             })
           }
           &nbsp;
-          {place}
+          {getPageTitle(place)}
         </span>
       </p>
     </section>

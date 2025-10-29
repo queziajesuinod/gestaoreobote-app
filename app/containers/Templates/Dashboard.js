@@ -4,12 +4,12 @@ import { useSelector, useDispatch } from 'react-redux';
 import { GuideSlider } from 'dan-components';
 import { toggleAction, openAction, playTransitionAction } from 'dan-redux/modules/ui';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { getPageTitle } from '../../config/pageTitles';
 import LeftSidebarLayout from './layouts/LeftSidebarLayout';
 import LeftSidebarBigLayout from './layouts/LeftSidebarBigLayout';
 import DropMenuLayout from './layouts/DropMenuLayout';
 import MegaMenuLayout from './layouts/MegaMenuLayout';
 import useStyles from './appStyles-jss';
-
 
 function Dashboard({ changeMode, children }) {
   const { classes, cx } = useStyles();
@@ -31,7 +31,7 @@ function Dashboard({ changeMode, children }) {
   useEffect(() => {
     setAppHeight(window.innerHeight + 112);
 
-    const currentPath = location.pathname ;
+    const currentPath = location.pathname;
     dispatch(openAction({ initialLocation: currentPath }));
 
     setTimeout(() => {
@@ -44,8 +44,10 @@ function Dashboard({ changeMode, children }) {
   const handleCloseGuide = () => setOpenGuide(false);
 
   const titleException = ['/app'];
+  
   const parts = location.pathname.split('/');
-  const place = parts[parts.length - 1].replace('-', ' ');
+  const routeName = parts[parts.length - 1];
+  const place = getPageTitle(routeName);
 
   // ✅ função para substituir o uso de history.push()
   const goTo = (path, replace = false) => {
