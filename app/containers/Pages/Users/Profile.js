@@ -33,7 +33,9 @@ const ProfilePage = () => {
   const API_URL = process.env.REACT_APP_API_URL?.replace(/\/$/, '') || 'http://localhost:3003';
   const userStorage = JSON.parse(localStorage.getItem('user'));
   const id = userStorage?.id;
-  const token = localStorage.getItem('token');
+  
+  // ⚠️ Função helper para obter o token atualizado
+  const getToken = () => localStorage.getItem('token');
 
   const formatDate = (dateString) => {
     if (!dateString) return 'Não informado';
@@ -67,7 +69,7 @@ const ProfilePage = () => {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${getToken()}`
         }
       });
       if (!response.ok) throw new Error('Erro ao carregar os detalhes do usuário');
@@ -85,7 +87,7 @@ const ProfilePage = () => {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${getToken()}`
         },
         body: JSON.stringify({ image: base64Image })
       });

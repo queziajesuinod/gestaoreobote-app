@@ -1,8 +1,6 @@
 import React from 'react';
 import PropTypes from 'prop-types';
-import { Helmet } from 'react-helmet';
 import { useNavigate } from 'react-router-dom';
-import brand from 'dan-api/dummy/brand';
 import { LoginForm } from 'dan-components';
 import useStyles from 'dan-components/Forms/user-jss';
 import dummyContents from 'dan-api/dummy/dummyContents';
@@ -40,16 +38,26 @@ function Login({ setIsAuthenticated = () => {} }) {
       if (!response.ok) throw new Error('Falha na autenticação');
 
       const data = await response.json();
+
+      console.log( 'Resposta da API de login:', data);
       const token = data.accessToken;
       localStorage.setItem('token', token);
       localStorage.setItem('isAuthenticated', 'true');
       setIsAuthenticated(true);
 
-      // Usa os dados retornados diretamente pela API de login
+      // 🔹 Mock de perfil e permissões (substitua futuramente pela API real)
+      const perfilMock = 'ADMIN';
+      const permissoesMock = [
+        'GESTAO',
+        'DASHBOARD'
+      ];
+
+      // 🔹 Armazena o usuário e as permissões mockadas
       const userData = {
         name: data.name || 'Usuário',
         id: data.id || 'user',
-        perfilId: data.perfilId,
+        perfilId: data.perfilId || perfilMock,
+        permissoes: permissoesMock,
         title: 'Usuário Autenticado',
         avatar: data.image || 'default-avatar.png',
         status: 'online'
@@ -58,7 +66,7 @@ function Login({ setIsAuthenticated = () => {} }) {
       localStorage.setItem('user', JSON.stringify(userData));
       dummyContents.user = userData;
 
-      console.log('Usuário autenticado:', dummyContents.user);
+      console.log('Usuário autenticado (mock de perfil):', dummyContents.user);
 
       // 🔄 Redireciona após login
       navigate('/app', { replace: true });
@@ -67,10 +75,8 @@ function Login({ setIsAuthenticated = () => {} }) {
     }
   };
 
-
   return (
     <div className={classes.root}>
-      
       <div className={classes.container}>
         <div className={classes.userFormWrap}>
           <LoginForm onSubmit={submitForm} />

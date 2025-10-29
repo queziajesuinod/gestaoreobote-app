@@ -10,6 +10,7 @@ import DropMenuLayout from './layouts/DropMenuLayout';
 import MegaMenuLayout from './layouts/MegaMenuLayout';
 import useStyles from './appStyles-jss';
 
+
 function Dashboard({ changeMode, children }) {
   const { classes, cx } = useStyles();
   const [openGuide, setOpenGuide] = useState(false);
@@ -30,7 +31,7 @@ function Dashboard({ changeMode, children }) {
   useEffect(() => {
     setAppHeight(window.innerHeight + 112);
 
-    const currentPath = location.pathname;
+    const currentPath = location.pathname ;
     dispatch(openAction({ initialLocation: currentPath }));
 
     setTimeout(() => {

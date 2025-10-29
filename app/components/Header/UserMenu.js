@@ -8,6 +8,7 @@ import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import dummy from 'dan-api/dummy/dummyContents';
+import { forceLogout } from '../../utils/authInterceptor';
 
 function UserMenu() {
   const [menuState, setMenuState] = useState({
@@ -28,24 +29,11 @@ function UserMenu() {
   const handleClose = () => {
     console.log('🚪 Fazendo logout...');
     
-    // 1. Fechar o menu
+    // Fechar o menu
     setMenuState({ anchorEl: null, openMenu: null });
     
-    // 2. Limpar localStorage
-    localStorage.removeItem("isAuthenticated");
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    localStorage.clear();
-    
-    console.log('✅ localStorage limpo');
-    
-    // 3. Redirecionar para login
-    // Usar window.location.href para forçar reload completo da página
-    window.location.href = '/login';
-    
-    // Alternativa: usar navigate + reload
-    // navigate('/login');
-    // window.location.reload();
+    // Usar função centralizada de logout
+    forceLogout();
   };
 
   const handleProfile = () => {
@@ -90,4 +78,3 @@ function UserMenu() {
 UserMenu.propTypes = {};
 
 export default UserMenu;
-

@@ -69,7 +69,9 @@ function Gestao() {
   const description = brand.desc;
 
   const userStorage = JSON.parse(localStorage.getItem('user'));
-  const token = localStorage.getItem('token');
+  
+  // ⚠️ Função helper para obter o token atualizado
+  const getToken = () => localStorage.getItem('token');
 
   // Estados principais
   const [tabValue, setTabValue] = useState(0);
@@ -131,7 +133,7 @@ function Gestao() {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${getToken()}`
         }
       });
       if (!response.ok) throw new Error('Erro ao carregar consultores');
@@ -148,7 +150,7 @@ function Gestao() {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${getToken()}`
         }
       });
       if (!response.ok) throw new Error('Erro ao carregar equipes');
@@ -165,7 +167,7 @@ function Gestao() {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${getToken()}`
         }
       });
       if (!response.ok) throw new Error('Erro ao carregar integrantes');
@@ -184,7 +186,7 @@ function Gestao() {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`
+            Authorization: `Bearer ${getToken()}`
           },
           body: JSON.stringify(consultorForm),
         });
@@ -194,7 +196,7 @@ function Gestao() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`
+            Authorization: `Bearer ${getToken()}`
           },
           body: JSON.stringify(consultorForm),
         });
@@ -220,7 +222,7 @@ function Gestao() {
           method: 'DELETE',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`
+            Authorization: `Bearer ${getToken()}`
           }
         });
         showSnackbar('Consultor excluído com sucesso', 'success');
@@ -249,7 +251,7 @@ function Gestao() {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`
+            Authorization: `Bearer ${getToken()}`
           },
           body: JSON.stringify(equipeForm),
         });
@@ -259,7 +261,7 @@ function Gestao() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`
+            Authorization: `Bearer ${getToken()}`
           },
           body: JSON.stringify(equipeForm),
         });
@@ -285,7 +287,7 @@ function Gestao() {
           method: 'DELETE',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`
+            Authorization: `Bearer ${getToken()}`
           }
         });
         showSnackbar('Equipe excluída com sucesso', 'success');
@@ -313,7 +315,7 @@ function Gestao() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${getToken()}`
         },
         body: JSON.stringify({
           ...integranteForm,
@@ -336,7 +338,7 @@ function Gestao() {
           method: 'DELETE',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`
+            Authorization: `Bearer ${getToken()}`
           }
         });
         showSnackbar('Integrante removido com sucesso', 'success');

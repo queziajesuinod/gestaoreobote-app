@@ -45,8 +45,8 @@ app.use(cors({
 app.options('*', cors());
 
 // ✅ Middleware para processar JSON e formulários
-app.use(bodyParser.json({ limit: '10mb' }));
-app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
+app.use(bodyParser.json({ limit: '70mb' }));
+app.use(bodyParser.urlencoded({ limit: '70mb', extended: true }));
 app.use(express.json());
 
 // 🔓 **ROTA PÚBLICA** (Autenticação)
@@ -59,6 +59,7 @@ app.use('/equipe', authMiddleware, require("./routers/equipes"));
 app.use('/integrante', authMiddleware, require("./routers/integrantes"));
 app.use('/consultor', authMiddleware, require("./routers/consultores"));
 app.use('/agendor', authMiddleware, require("./routers/agendor"));
+
 // 🔹 Carregar Material Icons e Documentação
 app.use('/api/icons', (req, res) => {
   res.json({ records: [{ source: rawicons(req.query) }] });

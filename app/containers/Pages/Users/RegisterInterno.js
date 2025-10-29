@@ -59,7 +59,7 @@ function RegisterInterno() {
   useEffect(() => {
     async function carregarPerfis() {
       try {
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('token'); // OK: dentro da função
         const response = await fetch(`${API_URL}/perfil`, {
           headers: {
             'Content-Type': 'application/json',
@@ -99,7 +99,7 @@ function RegisterInterno() {
       setSuccess(false);
 
       try {
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('token'); // OK: dentro da função
         
         console.log('📤 Enviando dados de cadastro:', {
           name: values.name,
