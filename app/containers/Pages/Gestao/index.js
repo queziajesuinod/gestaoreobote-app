@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Helmet } from 'react-helmet';
 import brand from 'dan-api/dummy/brand';
 import { PapperBlock } from 'dan-components';
@@ -45,7 +45,9 @@ import {
   Delete as DeleteIcon,
   People as PeopleIcon,
   Person as PersonIcon,
-  Group as GroupIcon
+  Group as GroupIcon,
+  PhotoCamera as PhotoCameraIcon,
+  Close as CloseIcon
 } from '@mui/icons-material';
 
 const API_URL = process.env.REACT_APP_API_URL?.replace(/\/$/, '') || 'http://localhost:3003';
@@ -73,6 +75,9 @@ function Gestao() {
   // ⚠️ Função helper para obter o token atualizado
   const getToken = () => localStorage.getItem('token');
 
+  // Ref para o input de arquivo
+  const fileInputRef = useRef(null);
+
   // Estados principais
   const [tabValue, setTabValue] = useState(0);
   const [consultores, setConsultores] = useState([]);
@@ -93,6 +98,9 @@ function Gestao() {
     imagem_base64: '',
     ativo: true,
   });
+
+  // Estado para preview da imagem
+  const [imagePreview, setImagePreview] = useState(null);
 
   const [equipeForm, setEquipeForm] = useState({
     id: null,
@@ -178,6 +186,52 @@ function Gestao() {
     }
   };
 
+  // Função para converter arquivo para base64
+  const handleImageUpload = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      // Validar tipo de arquivo
+      if (!file.type.startsWith('image/')) {
+        showSnackbar('Por favor, selecione apenas arquivos de imagem', 'error');
+        return;
+      }
+
+      // Validar tamanho (máximo 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        showSnackbar('A imagem deve ter no máximo 5MB', 'error');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        // Remove o prefixo "data:image/...;base64," para obter apenas o base64
+        const base64String = reader.result.split(',')[1];
+        setConsultorForm({ ...consultorForm, imagem_base64: base64String });
+        setImagePreview(reader.result); // Mantém o prefixo para preview
+      };
+      reader.onerror = () => {
+        showSnackbar('Erro ao processar a imagem', 'error');
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Função para remover a imagem
+  const handleRemoveImage = () => {
+    setConsultorForm({ ...consultorForm, imagem_base64: '' });
+    setImagePreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Função para abrir o seletor de arquivo
+  const handleClickUpload = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
   // Funções de CRUD - Consultores
   const handleSaveConsultor = async () => {
     try {
@@ -212,6 +266,12 @@ function Gestao() {
 
   const handleEditConsultor = (consultor) => {
     setConsultorForm(consultor);
+    // Se houver imagem, configurar o preview
+    if (consultor.imagem_base64) {
+      setImagePreview(`data:image/jpeg;base64,${consultor.imagem_base64}`);
+    } else {
+      setImagePreview(null);
+    }
     setOpenConsultorDialog(true);
   };
 
@@ -241,6 +301,10 @@ function Gestao() {
       imagem_base64: '',
       ativo: true,
     });
+    setImagePreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   // Funções de CRUD - Equipes
@@ -523,12 +587,6 @@ function Gestao() {
                       </ListItem>
                     ))}
                   </List>
-
-                  {integrantes.length === 0 && (
-                    <Typography variant="body2" color="text.secondary" align="center" sx={{ mt: 2 }}>
-                      Nenhum integrante cadastrado nesta equipe
-                    </Typography>
-                  )}
                 </Paper>
               </Grid>
             )}
@@ -545,7 +603,7 @@ function Gestao() {
               resetConsultorForm();
               setOpenConsultorDialog(true);
             }}
-            sx={{ mb: 2 }}
+            sx={{ marginBottom: 2 }}
           >
             Novo Consultor
           </Button>
@@ -632,16 +690,72 @@ function Gestao() {
             value={consultorForm.id_agendor}
             onChange={(e) => setConsultorForm({ ...consultorForm, id_agendor: e.target.value })}
           />
-          <TextField
-            margin="dense"
-            label="Imagem Base64 (opcional)"
-            type="text"
-            fullWidth
-            multiline
-            rows={3}
-            value={consultorForm.imagem_base64}
-            onChange={(e) => setConsultorForm({ ...consultorForm, imagem_base64: e.target.value })}
-          />
+          
+          {/* Componente de Upload de Imagem */}
+          <Box sx={{ mt: 2, mb: 2 }}>
+            <Typography variant="subtitle2" gutterBottom>
+              Foto do Consultor
+            </Typography>
+            
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={handleImageUpload}
+            />
+
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              {/* Preview da imagem ou avatar padrão */}
+              <Avatar
+                sx={{
+                  width: 100,
+                  height: 100,
+                  border: '2px solid',
+                  borderColor: 'grey.300'
+                }}
+              >
+                {imagePreview ? (
+                  <img
+                    src={imagePreview}
+                    alt="Preview"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                ) : (
+                  <PersonIcon sx={{ fontSize: 60 }} />
+                )}
+              </Avatar>
+
+              {/* Botões de ação */}
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <Button
+                  variant="outlined"
+                  startIcon={<PhotoCameraIcon />}
+                  onClick={handleClickUpload}
+                  size="small"
+                >
+                  {imagePreview ? 'Alterar Foto' : 'Adicionar Foto'}
+                </Button>
+                
+                {imagePreview && (
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    startIcon={<CloseIcon />}
+                    onClick={handleRemoveImage}
+                    size="small"
+                  >
+                    Remover Foto
+                  </Button>
+                )}
+              </Box>
+            </Box>
+
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+              Formatos aceitos: JPG, PNG, GIF. Tamanho máximo: 5MB
+            </Typography>
+          </Box>
+
           <FormControl fullWidth margin="dense">
             <InputLabel>Status</InputLabel>
             <Select
@@ -699,14 +813,11 @@ function Gestao() {
               label="Consultor"
               onChange={(e) => setIntegranteForm({ ...integranteForm, consultorId: e.target.value })}
             >
-              {consultores
-                .filter(c => c.ativo)
-                .filter(c => !integrantes.some(i => i.consultorId === c.id))
-                .map((consultor) => (
-                  <MenuItem key={consultor.id} value={consultor.id}>
-                    {consultor.nome}
-                  </MenuItem>
-                ))}
+              {consultores.map((consultor) => (
+                <MenuItem key={consultor.id} value={consultor.id}>
+                  {consultor.nome}
+                </MenuItem>
+              ))}
             </Select>
           </FormControl>
           <FormControl fullWidth margin="dense">
@@ -741,7 +852,7 @@ function Gestao() {
         onClose={handleCloseSnackbar}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
       >
-        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} variant="filled">
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
           {snackbar.message}
         </Alert>
       </Snackbar>
@@ -750,4 +861,3 @@ function Gestao() {
 }
 
 export default Gestao;
-
