@@ -1,5 +1,5 @@
 /* eslint-disable */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Helmet } from 'react-helmet';
 import {
   Grid,
@@ -48,7 +48,7 @@ const getToken = () => localStorage.getItem('token');
 const CORES = ['#007AFF', '#FF2D55', '#00C7BE', '#FF9500', '#5856D6', '#34C759', '#FF3B30', '#5AC8FA'];
 
 // ==================== COMPONENTE DE INDICADOR COM COMPARAÇÃO ====================
-function IndicadorComparativo({ titulo, valorAtual, valorComparativo, cor = '#007AFF', mostrarComparacao = false }) {
+const IndicadorComparativo = React.memo(({ titulo, valorAtual, valorComparativo, cor = '#007AFF', mostrarComparacao = false }) => {
   const diferenca = valorAtual - valorComparativo;
   const percentualMudanca = valorComparativo > 0
     ? Math.round(((valorAtual - valorComparativo) / valorComparativo) * 100)
@@ -107,7 +107,7 @@ function IndicadorComparativo({ titulo, valorAtual, valorComparativo, cor = '#00
       )}
     </Paper>
   );
-}
+});
 
 function DashboardReobote() {
   const title = `${brand.name} - Dashboard Reobote`;
@@ -137,66 +137,73 @@ function DashboardReobote() {
   const [loading, setLoading] = useState(false);
   const [mapaConsultoresGlobal, setMapaConsultoresGlobal] = useState({});
 
-  // ==================== EQUIPES ====================
+  // ==================== CARREGAR DADOS INICIAIS (OTIMIZADO) ====================
   useEffect(() => {
-    async function carregarEquipes() {
+    let isMounted = true;
+
+    async function carregarDadosIniciais() {
       try {
-        const response = await fetch(`${API_URL}/equipe`, {
+        // 1. Carregar equipes
+        const responseEquipes = await fetch(`${API_URL}/equipe`, {
           headers: {
             'Content-Type': 'application/json',
-           Authorization: `Bearer ${getToken()}`
+            Authorization: `Bearer ${getToken()}`
           }
         });
-        const data = await response.json();
-        console.log('✅ Equipes carregadas:', data);
-        setEquipes(data || []);
-      } catch (err) {
-        console.error('❌ Erro ao carregar equipes:', err);
-      }
-    }
-    carregarEquipes();
-  }, []);
+        const equipesData = await responseEquipes.json();
+        
+        if (!isMounted) return;
+        console.log('✅ Equipes carregadas:', equipesData);
+        setEquipes(equipesData || []);
 
-  // ==================== CARREGAR TODAS AS EQUIPES ====================
-  useEffect(() => {
-    async function carregarTodasEquipes() {
-      if (equipes.length === 0) return;
+        // 2. Carregar integrantes de TODAS as equipes em PARALELO
+        if (equipesData && equipesData.length > 0) {
+          console.log('🌍 Carregando integrantes de TODAS as equipes em paralelo...');
+          const promises = equipesData.map(equipe =>
+            fetch(`${API_INTEGRANTES_URL}/${equipe.id}`, {
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${getToken()}`
+              }
+            }).then(res => res.json()).then(integrantes => ({ equipe, integrantes }))
+          );
 
-      try {
-        console.log('🌍 Carregando integrantes de TODAS as equipes...');
-        const mapaGlobal = {};
+          const resultados = await Promise.all(promises);
+          
+          if (!isMounted) return;
 
-        for (const equipe of equipes) {
-          const response = await fetch(`${API_INTEGRANTES_URL}/${equipe.id}`, {
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${getToken()}`
-            }
+          // 3. Criar mapa global
+          const mapaGlobal = {};
+          resultados.forEach(({ equipe, integrantes }) => {
+            integrantes.forEach(int => {
+              if (int.consultor?.id_agendor) {
+                mapaGlobal[int.consultor.id_agendor] = {
+                  equipe: equipe.descricao,
+                  nome: int.consultor.nome
+                };
+              }
+            });
           });
-          const integrantes = await response.json();
 
-          integrantes.forEach(int => {
-            if (int.consultor?.id_agendor) {
-              mapaGlobal[int.consultor.id_agendor] = {
-                equipe: equipe.descricao,
-                nome: int.consultor.nome
-              };
-            }
-          });
+          setMapaConsultoresGlobal(mapaGlobal);
+          console.log('🗺️ Mapa global criado com sucesso:', mapaGlobal);
         }
-
-        setMapaConsultoresGlobal(mapaGlobal);
-        console.log('🗺️ Mapa global de consultores criado:', mapaGlobal);
       } catch (err) {
-        console.error('❌ Erro ao carregar todas as equipes:', err);
+        console.error('❌ Erro ao carregar dados iniciais:', err);
       }
     }
 
-    carregarTodasEquipes();
-  }, [equipes]);
+    carregarDadosIniciais();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []); // ✅ Executa apenas UMA VEZ
 
   // ==================== INTEGRANTES DA EQUIPE SELECIONADA ====================
   useEffect(() => {
+    let isMounted = true;
+
     async function carregarIntegrantes() {
       if (!equipeSelecionada) {
         setIntegrantes([]);
@@ -213,18 +220,31 @@ function DashboardReobote() {
           }
         });
         const data = await response.json();
+        
+        if (!isMounted) return;
         console.log('✅ Integrantes carregados:', data);
         setIntegrantes(data || []);
       } catch (err) {
         console.error('❌ Erro ao carregar integrantes:', err);
-        setIntegrantes([]);
+        if (isMounted) setIntegrantes([]);
       }
     }
+
     carregarIntegrantes();
+
+    return () => {
+      isMounted = false;
+    };
   }, [equipeSelecionada]);
 
   // ==================== FUNÇÃO AUXILIAR: BUSCAR TAREFAS POR PERÍODO ====================
   async function buscarTarefasPorPeriodo(inicio, fim) {
+    // ✅ VALIDAÇÃO: Verificar se tem dados carregados
+    if (!inicio || !fim) {
+      console.warn('⚠️ Datas não fornecidas');
+      return [];
+    }
+
     let idsAgendor = [];
     if (consultorSelecionado) {
       idsAgendor = [consultorSelecionado];
@@ -236,11 +256,17 @@ function DashboardReobote() {
       idsAgendor = Object.keys(mapaConsultoresGlobal).map(Number);
     }
 
+    // ✅ VALIDAÇÃO: Se não tem consultores, não buscar
+    if (idsAgendor.length === 0) {
+      console.warn('⚠️ Nenhum consultor disponível para buscar tarefas');
+      return [];
+    }
+
     const params = new URLSearchParams({
       dataInicio: `${inicio}T00:00:00Z`,
       dataFim: `${fim}T23:59:59Z`,
       tipo: tipo !== 'Todos' ? tipo : '',
-      consultores: idsAgendor.length > 0 ? idsAgendor.join(',') : ''
+      consultores: idsAgendor.join(',')
     });
 
     const response = await fetch(`${API_URL}/agendor/tarefas?${params.toString()}`, {
@@ -261,7 +287,7 @@ function DashboardReobote() {
     return tarefasEnriquecidas;
   }
 
-  // ==================== BUSCAR TAREFAS ====================
+  // ==================== BUSCAR TAREFAS (OTIMIZADO) ====================
   async function buscarTarefas() {
     if (!dataInicio || !dataFim) {
       alert('Selecione o período atual');
@@ -276,20 +302,24 @@ function DashboardReobote() {
     setLoading(true);
 
     try {
-      console.log('🔍 Buscando tarefas do período atual:', dataInicio, 'a', dataFim);
-      const tarefasAtuais = await buscarTarefasPorPeriodo(dataInicio, dataFim);
-      console.log('✅ Tarefas do período atual:', tarefasAtuais.length);
+      // ✅ OTIMIZAÇÃO: Buscar ambos os períodos em PARALELO
+      const promises = [buscarTarefasPorPeriodo(dataInicio, dataFim)];
+      
+      if (habilitarComparacao) {
+        promises.push(buscarTarefasPorPeriodo(dataInicioComp, dataFimComp));
+      }
+
+      const [tarefasAtuais, tarefasComp = []] = await Promise.all(promises);
+      
+      console.log('✅ Tarefas carregadas:', {
+        atuais: tarefasAtuais.length,
+        comparacao: tarefasComp.length
+      });
+
+      // ✅ OTIMIZAÇÃO: Atualizar estados em sequência rápida
       setTarefas(tarefasAtuais);
       setFiltradas(tarefasAtuais);
-
-      if (habilitarComparacao) {
-        console.log('🔍 Buscando tarefas do período de comparação:', dataInicioComp, 'a', dataFimComp);
-        const tarefasComp = await buscarTarefasPorPeriodo(dataInicioComp, dataFimComp);
-        console.log('✅ Tarefas do período de comparação:', tarefasComp.length);
-        setTarefasComparacao(tarefasComp);
-      } else {
-        setTarefasComparacao([]);
-      }
+      setTarefasComparacao(tarefasComp);
     } catch (err) {
       console.error('❌ Erro ao buscar tarefas:', err);
       alert('Erro ao buscar tarefas. Verifique o console.');
