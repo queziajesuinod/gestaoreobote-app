@@ -396,8 +396,8 @@ function DashboardReobote() {
       
       resultados.forEach(({ idagendor, cotas }) => {
         const somaTotal = cotas.reduce((soma, cota) => {
-          const valor = parseFloat(cota.valorTotal) || 0;
-          console.log(`    Cota ${cota.cota}: valorTotal = ${cota.valorTotal} (${valor})`);
+          const valor = parseFloat(cota.valor) || 0;
+          console.log(`    Cota ${cota.cota}: valor = ${cota.valor} (${valor})`);
           return soma + valor;
         }, 0);
         
