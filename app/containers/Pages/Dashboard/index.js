@@ -304,7 +304,7 @@ function DashboardReobote() {
     setLoading(true);
 
     try {
-      // ✅ OTIMIZAÇÃO: Buscar ambos os períodos em PARALELO
+      // ✅ PASSO 1: Buscar tarefas primeiro
       const promises = [buscarTarefasPorPeriodo(dataInicio, dataFim)];
 
       if (habilitarComparacao) {
@@ -313,18 +313,53 @@ function DashboardReobote() {
 
       const [tarefasAtuais, tarefasComp = []] = await Promise.all(promises);
 
+      // ✅ PASSO 2: Extrair consultorId únicos das tarefas retornadas
+      const consultoresUnicos = [...new Set(
+        [...tarefasAtuais, ...tarefasComp]
+          .map(t => t.consultorId)
+          .filter(Boolean)
+      )];
+
       console.log('✅ Tarefas carregadas:', {
-        atuais: tarefasAtuais.length,
-        comparacao: tarefasComp.length
+        tarefasAtuais: tarefasAtuais.length,
+        tarefasComparacao: tarefasComp.length,
+        consultoresUnicos: consultoresUnicos.length
       });
 
-      // ✅ OTIMIZAÇÃO: Atualizar estados em sequência rápida
+      // ✅ PASSO 3: Buscar cotas apenas para os consultores que aparecem nas tarefas
+      let cotasAtuaisData = {};
+      let cotasCompData = {};
+
+      if (consultoresUnicos.length > 0) {
+        const promisesCotas = [
+          buscarCotasPorPeriodo(`${dataInicio}T00:00:00Z`, `${dataFim}T23:59:59Z`, consultoresUnicos)
+        ];
+
+        if (habilitarComparacao) {
+          promisesCotas.push(
+            buscarCotasPorPeriodo(`${dataInicioComp}T00:00:00Z`, `${dataFimComp}T23:59:59Z`, consultoresUnicos)
+          );
+        }
+
+        const resultadosCotas = await Promise.all(promisesCotas);
+        cotasAtuaisData = resultadosCotas[0];
+        cotasCompData = habilitarComparacao ? resultadosCotas[1] : {};
+
+        console.log('✅ Cotas carregadas:', {
+          cotasAtuais: Object.keys(cotasAtuaisData).length,
+          cotasComparacao: Object.keys(cotasCompData).length
+        });
+      }
+
+      // ✅ PASSO 4: Atualizar estados
       setTarefas(tarefasAtuais);
       setFiltradas(tarefasAtuais);
       setTarefasComparacao(tarefasComp);
+      setCotasAtuais(cotasAtuaisData);
+      setCotasComp(cotasCompData);
     } catch (err) {
-      console.error('❌ Erro ao buscar tarefas:', err);
-      alert('Erro ao buscar tarefas. Verifique o console.');
+      console.error('❌ Erro ao buscar dados:', err);
+      alert('Erro ao buscar dados. Verifique o console.');
     } finally {
       setLoading(false);
     }
@@ -333,9 +368,14 @@ function DashboardReobote() {
   // ==================== BUSCAR COTAS ====================
   async function buscarCotasPorPeriodo(inicio, fim, idsAgendor) {
     try {
+      console.log(`🔍 Buscando cotas para ${idsAgendor.length} consultores...`);
+      
+      // Faz uma requisição para CADA consultor
       const resultados = await Promise.all(
         idsAgendor.map(async (idagendor) => {
           const url = `${API_URL}/cotas/periodo?inicio=${inicio}&fim=${fim}&idagendor=${idagendor}`;
+          console.log(`🔗 Buscando cotas do consultor ${idagendor}:`, url);
+          
           const resp = await fetch(url, {
             headers: {
               'Content-Type': 'application/json',
@@ -343,17 +383,32 @@ function DashboardReobote() {
             }
           });
           const data = await resp.json();
-          return data || [];
+          const cotas = data.dados || [];
+          
+          console.log(`  ✅ Consultor ${idagendor}: ${cotas.length} cotas encontradas`);
+          
+          return { idagendor, cotas };
         })
       );
 
-      // Achata o array e soma os valores por consultor (idagendor)
-      const cotasPorConsultor = resultados.flat().reduce((acc, cota) => {
-        const id = cota.idagendor;
-        const valor = parseFloat(cota.valorTotal) || 0;
-        acc[id] = (acc[id] || 0) + valor;
-        return acc;
-      }, {});
+      // Agrupa e soma os valores por consultorId
+      const cotasPorConsultor = {};
+      
+      resultados.forEach(({ idagendor, cotas }) => {
+        const somaTotal = cotas.reduce((soma, cota) => {
+          const valor = parseFloat(cota.valorTotal) || 0;
+          console.log(`    Cota ${cota.cota}: valorTotal = ${cota.valorTotal} (${valor})`);
+          return soma + valor;
+        }, 0);
+        
+        // Usa o idagendor como chave (mesmo ID usado nas tarefas)
+        cotasPorConsultor[idagendor] = somaTotal;
+        
+        console.log(`  💰 Total do consultor ${idagendor}: ${somaTotal} centavos = R$ ${(somaTotal / 100).toFixed(2)}`);
+      });
+
+      console.log('✅ Valores finais por consultor:', cotasPorConsultor);
+
       return cotasPorConsultor;
     } catch (err) {
       console.error('❌ Erro ao buscar cotas:', err);
@@ -426,7 +481,8 @@ function DashboardReobote() {
   const ranking = Object.entries(
     filtradas.reduce((acc, t) => {
       const nome = t.nomeConsultor;
-      if (!acc[nome]) acc[nome] = { visitas: 0, reunioes: 0, propostas: 0 };
+      const consultorId = t.consultorId;
+      if (!acc[nome]) acc[nome] = { visitas: 0, reunioes: 0, propostas: 0, consultorId };
       if (t.tipo === 'Visita') acc[nome].visitas++;
       if (t.tipo === 'Reunião') acc[nome].reunioes++;
       if (t.tipo === 'Proposta') acc[nome].propostas++;
@@ -445,9 +501,19 @@ function DashboardReobote() {
     }
 
     // Calcula a taxa de comparação (variação percentual)
-    const taxaComparacao = totalAnterior > 0
+    const variacao = totalAnterior > 0
       ? Math.round(((totalAtual - totalAnterior) / totalAnterior) * 100)
       : null;
+
+    // Busca o valor total das cotas do consultor
+    const consultorId = dados.consultorId;
+    const valorCotaAtual = cotasAtuais[consultorId] || 0;
+    const valorCotaComp = cotasComp[consultorId] || 0;
+    
+    // Converte de centavos para reais (se necessário)
+    // Como valorTotal já vem como string "1000000", parseFloat converte para número
+    // Dividir por 100 se estiver em centavos
+    const valorCota = valorCotaAtual;
 
     return {
       consultor,
@@ -455,7 +521,8 @@ function DashboardReobote() {
       reunioes: dados.reunioes,
       propostas: dados.propostas,
       total: totalAtual,
-      taxaComparacao
+      variacao,
+      valorCota
     };
   }).sort((a, b) => b.total - a.total);
 
