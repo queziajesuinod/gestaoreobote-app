@@ -20,7 +20,8 @@ import {
   InputLabel,
   Checkbox,
   FormControlLabel,
-  Box
+  Box,
+  TableSortLabel
 } from '@mui/material';
 import { PapperBlock } from 'dan-components';
 import {
@@ -138,6 +139,10 @@ function DashboardReobote() {
   const [filtradas, setFiltradas] = useState([]);
   const [loading, setLoading] = useState(false);
   const [mapaConsultoresGlobal, setMapaConsultoresGlobal] = useState({});
+
+  // ==================== ESTADOS - ORDENAÇÃO ====================
+  const [orderBy, setOrderBy] = useState('total'); // Coluna padrão de ordenação
+  const [order, setOrder] = useState('desc'); // 'asc' ou 'desc'
 
   // ==================== CARREGAR DADOS INICIAIS (OTIMIZADO) ====================
   useEffect(() => {
@@ -397,14 +402,14 @@ function DashboardReobote() {
       resultados.forEach(({ idagendor, cotas }) => {
         const somaTotal = cotas.reduce((soma, cota) => {
           const valor = parseFloat(cota.valor) || 0;
-          console.log(`    Cota ${cota.cota}: valor = ${cota.valor} (${valor})`);
+          console.log(`    Cota ${cota.cota}: valorTotal = ${cota.valor} (${valor})`);
           return soma + valor;
         }, 0);
         
         // Usa o idagendor como chave (mesmo ID usado nas tarefas)
         cotasPorConsultor[idagendor] = somaTotal;
         
-        console.log(`  💰 Total do consultor ${idagendor}: ${somaTotal} centavos = R$ ${(somaTotal / 100).toFixed(2)}`);
+        console.log(`  💰 Total do consultor ${idagendor}: ${somaTotal} centavos = R$ ${(somaTotal).toFixed(2)}`);
       });
 
       console.log('✅ Valores finais por consultor:', cotasPorConsultor);
@@ -524,7 +529,34 @@ function DashboardReobote() {
       variacao,
       valorCota
     };
-  }).sort((a, b) => b.total - a.total);
+  });
+
+  // ==================== FUNÇÃO DE ORDENAÇÃO ====================
+  const handleRequestSort = (property) => {
+    const isAsc = orderBy === property && order === 'asc';
+    setOrder(isAsc ? 'desc' : 'asc');
+    setOrderBy(property);
+  };
+
+  // Aplica ordenação ao ranking
+  const rankingOrdenado = [...ranking].sort((a, b) => {
+    let aValue = a[orderBy];
+    let bValue = b[orderBy];
+
+    // Trata valores nulos/undefined
+    if (aValue === null || aValue === undefined) aValue = 0;
+    if (bValue === null || bValue === undefined) bValue = 0;
+
+    // Ordenação para strings (consultor)
+    if (orderBy === 'consultor') {
+      return order === 'asc'
+        ? aValue.localeCompare(bValue)
+        : bValue.localeCompare(aValue);
+    }
+
+    // Ordenação para números
+    return order === 'asc' ? aValue - bValue : bValue - aValue;
+  });
 
 
   // ==================== TAXA DE CONCLUSÃO ====================
@@ -1144,17 +1176,73 @@ function DashboardReobote() {
                   <TableHead>
                     <TableRow style={{ backgroundColor: '#F5F5F5' }}>
                       <TableCell><strong>#</strong></TableCell>
-                      <TableCell><strong>Consultor</strong></TableCell>
-                      <TableCell align="center"><strong>Visitas</strong></TableCell>
-                      <TableCell align="center"><strong>Reuniões</strong></TableCell>
-                      <TableCell align="center"><strong>Propostas</strong></TableCell>
-                      <TableCell align="center"><strong>Total</strong></TableCell>
-                      <TableCell align="center"><strong>Valor Total Cotas (R$)</strong></TableCell>
-                      <TableCell align="center"><strong>Variação</strong></TableCell>
+                      <TableCell>
+                        <TableSortLabel
+                          active={orderBy === 'consultor'}
+                          direction={orderBy === 'consultor' ? order : 'asc'}
+                          onClick={() => handleRequestSort('consultor')}
+                        >
+                          <strong>Consultor</strong>
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell align="center">
+                        <TableSortLabel
+                          active={orderBy === 'visitas'}
+                          direction={orderBy === 'visitas' ? order : 'asc'}
+                          onClick={() => handleRequestSort('visitas')}
+                        >
+                          <strong>Visitas</strong>
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell align="center">
+                        <TableSortLabel
+                          active={orderBy === 'reunioes'}
+                          direction={orderBy === 'reunioes' ? order : 'asc'}
+                          onClick={() => handleRequestSort('reunioes')}
+                        >
+                          <strong>Reuniões</strong>
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell align="center">
+                        <TableSortLabel
+                          active={orderBy === 'propostas'}
+                          direction={orderBy === 'propostas' ? order : 'asc'}
+                          onClick={() => handleRequestSort('propostas')}
+                        >
+                          <strong>Propostas</strong>
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell align="center">
+                        <TableSortLabel
+                          active={orderBy === 'total'}
+                          direction={orderBy === 'total' ? order : 'asc'}
+                          onClick={() => handleRequestSort('total')}
+                        >
+                          <strong>Total</strong>
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell align="center">
+                        <TableSortLabel
+                          active={orderBy === 'valorCota'}
+                          direction={orderBy === 'valorCota' ? order : 'asc'}
+                          onClick={() => handleRequestSort('valorCota')}
+                        >
+                          <strong>Valor Total Cotas (R$)</strong>
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell align="center">
+                        <TableSortLabel
+                          active={orderBy === 'variacao'}
+                          direction={orderBy === 'variacao' ? order : 'asc'}
+                          onClick={() => handleRequestSort('variacao')}
+                        >
+                          <strong>Variação</strong>
+                        </TableSortLabel>
+                      </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {ranking.map((r, index) => (
+                    {rankingOrdenado.map((r, index) => (
                       <TableRow key={index}>
                         <TableCell>{index + 1}</TableCell>
                         <TableCell>{r.consultor}</TableCell>
