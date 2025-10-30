@@ -116,6 +116,8 @@ function DashboardReobote() {
   // ==================== ESTADOS - PERÍODO ATUAL ====================
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
+  const [cotasAtuais, setCotasAtuais] = useState({});
+  const [cotasComp, setCotasComp] = useState({});
 
   // ==================== ESTADOS - PERÍODO DE COMPARAÇÃO ====================
   const [habilitarComparacao, setHabilitarComparacao] = useState(false);
@@ -151,7 +153,7 @@ function DashboardReobote() {
           }
         });
         const equipesData = await responseEquipes.json();
-        
+
         if (!isMounted) return;
         console.log('✅ Equipes carregadas:', equipesData);
         setEquipes(equipesData || []);
@@ -169,7 +171,7 @@ function DashboardReobote() {
           );
 
           const resultados = await Promise.all(promises);
-          
+
           if (!isMounted) return;
 
           // 3. Criar mapa global
@@ -220,7 +222,7 @@ function DashboardReobote() {
           }
         });
         const data = await response.json();
-        
+
         if (!isMounted) return;
         console.log('✅ Integrantes carregados:', data);
         setIntegrantes(data || []);
@@ -304,13 +306,13 @@ function DashboardReobote() {
     try {
       // ✅ OTIMIZAÇÃO: Buscar ambos os períodos em PARALELO
       const promises = [buscarTarefasPorPeriodo(dataInicio, dataFim)];
-      
+
       if (habilitarComparacao) {
         promises.push(buscarTarefasPorPeriodo(dataInicioComp, dataFimComp));
       }
 
       const [tarefasAtuais, tarefasComp = []] = await Promise.all(promises);
-      
+
       console.log('✅ Tarefas carregadas:', {
         atuais: tarefasAtuais.length,
         comparacao: tarefasComp.length
@@ -327,6 +329,38 @@ function DashboardReobote() {
       setLoading(false);
     }
   }
+
+  // ==================== BUSCAR COTAS ====================
+  async function buscarCotasPorPeriodo(inicio, fim, idsAgendor) {
+    try {
+      const resultados = await Promise.all(
+        idsAgendor.map(async (idagendor) => {
+          const url = `${API_URL}/cotas/periodo?inicio=${inicio}&fim=${fim}&idagendor=${idagendor}`;
+          const resp = await fetch(url, {
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${getToken()}`
+            }
+          });
+          const data = await resp.json();
+          return data || [];
+        })
+      );
+
+      // Achata o array e soma os valores por consultor (idagendor)
+      const cotasPorConsultor = resultados.flat().reduce((acc, cota) => {
+        const id = cota.idagendor;
+        const valor = parseFloat(cota.valorTotal) || 0;
+        acc[id] = (acc[id] || 0) + valor;
+        return acc;
+      }, {});
+      return cotasPorConsultor;
+    } catch (err) {
+      console.error('❌ Erro ao buscar cotas:', err);
+      return {};
+    }
+  }
+
 
   // ==================== FILTRO LOCAL ====================
   useEffect(() => {
@@ -395,7 +429,7 @@ function DashboardReobote() {
       if (!acc[nome]) acc[nome] = { visitas: 0, reunioes: 0, propostas: 0 };
       if (t.tipo === 'Visita') acc[nome].visitas++;
       if (t.tipo === 'Reunião') acc[nome].reunioes++;
-      if(t.tipo==='Proposta') acc[nome].propostas++;
+      if (t.tipo === 'Proposta') acc[nome].propostas++;
       return acc;
     }, {})
   ).map(([consultor, dados]) => {
@@ -1048,35 +1082,37 @@ function DashboardReobote() {
                       <TableCell align="center"><strong>Reuniões</strong></TableCell>
                       <TableCell align="center"><strong>Propostas</strong></TableCell>
                       <TableCell align="center"><strong>Total</strong></TableCell>
-                      <TableCell align="center"><strong>Taxa Comp.</strong></TableCell>
+                      <TableCell align="center"><strong>Valor Total Cotas (R$)</strong></TableCell>
+                      <TableCell align="center"><strong>Variação</strong></TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {ranking.map((r, index) => {
-                      const medalha = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}º`;
-                      const corTaxa = r.taxa >= 40 ? '#34C759' : r.taxa >= 20 ? '#FF9500' : '#FF3B30';
-                      const bgColor = index < 3 ? (index === 0 ? '#FFF9E6' : index === 1 ? '#F5F5F5' : '#FFF5E6') : 'transparent';
-
-                      return (
-                        <TableRow key={index} style={{ backgroundColor: bgColor }}>
-                          <TableCell>{medalha}</TableCell>
-                          <TableCell>{r.consultor}</TableCell>
-                          <TableCell align="center">{r.visitas}</TableCell>
-                          <TableCell align="center">{r.reunioes}</TableCell>
-                          <TableCell align="center">{r.propostas}</TableCell>
-                          <TableCell align="center"><strong>{r.total}</strong></TableCell>
-                          <TableCell align="center" style={{
-                            color: r.taxaComparacao > 0 ? '#34C759' : r.taxaComparacao < 0 ? '#FF3B30' : '#8E8E93',
+                    {ranking.map((r, index) => (
+                      <TableRow key={index}>
+                        <TableCell>{index + 1}</TableCell>
+                        <TableCell>{r.consultor}</TableCell>
+                        <TableCell align="center">{r.visitas}</TableCell>
+                        <TableCell align="center">{r.reunioes}</TableCell>
+                        <TableCell align="center">{r.propostas}</TableCell>
+                        <TableCell align="center"><strong>{r.total}</strong></TableCell>
+                        <TableCell align="center">
+                          R$ {r.valorCota.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </TableCell>
+                        <TableCell
+                          align="center"
+                          style={{
+                            color: r.variacao > 0 ? '#34C759' : r.variacao < 0 ? '#FF3B30' : '#8E8E93',
                             fontWeight: 600
-                          }}>
-                            {habilitarComparacao
-                              ? (r.taxaComparacao !== null ? `${r.taxaComparacao > 0 ? '+' : ''}${r.taxaComparacao}%` : '—')
-                              : '—'}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
+                          }}
+                        >
+                          {habilitarComparacao
+                            ? (r.variacao !== null ? `${r.variacao > 0 ? '+' : ''}${r.variacao}%` : '—')
+                            : '—'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
                   </TableBody>
+
                 </Table>
               </TableContainer>
             </Paper>

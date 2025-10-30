@@ -59,6 +59,9 @@ app.use('/equipe', authMiddleware, require("./routers/equipes"));
 app.use('/integrante', authMiddleware, require("./routers/integrantes"));
 app.use('/consultor', authMiddleware, require("./routers/consultores"));
 app.use('/agendor', authMiddleware, require("./routers/agendor"));
+app.use('/clientes', authMiddleware, require('./routers/clientes'));
+app.use('/cotas', authMiddleware, require('./routers/cotas'));
+
 
 // 🔹 Carregar Material Icons e Documentação
 app.use('/api/icons', (req, res) => {
