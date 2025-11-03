@@ -65,12 +65,17 @@ export const Parent = loadable(() =>
   });
 
 
-  export const Gestao = loadable(() =>
+export const Gestao = loadable(() =>
   import('./Pages/Gestao'), {
     fallback: <Loading />,
   });
 
-    export const ProfilePage = loadable(() =>
+export const Clientes = loadable(() =>
+  import('./Pages/Clientes'), {
+    fallback: <Loading />,
+  });
+
+export const ProfilePage = loadable(() =>
   import('./Pages/Users/Profile'), {
     fallback: <Loading />,
   });

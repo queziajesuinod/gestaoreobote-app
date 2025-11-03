@@ -1,8 +1,37 @@
-const { Cliente } = require('../models'); // Importa o model inicializado
+const { Cliente, Cota, Sequelize } = require('../models'); // Importa os models inicializados
 
 // 🧩 Lista todos os clientes
 async function getTodosClientes() {
-  return await Cliente.findAll();
+  const atributosBase = [
+    'id',
+    'nome',
+    'cpf',
+    'cidade',
+    'estado',
+    'dtnascimento',
+    'profissao',
+    'celular',
+    'email',
+    'createdAt',
+    'updatedAt'
+  ];
+
+  return await Cliente.findAll({
+    attributes: [
+      ...atributosBase,
+      [Sequelize.fn('COUNT', Sequelize.col('cotas.id')), 'totalCotas']
+    ],
+    include: [
+      {
+        model: Cota,
+        as: 'cotas',
+        attributes: [],
+        required: false
+      }
+    ],
+    group: atributosBase.map(campo => `Cliente.${campo}`),
+    order: [['nome', 'ASC']]
+  });
 }
 
 // 🧩 Busca cliente pelo ID

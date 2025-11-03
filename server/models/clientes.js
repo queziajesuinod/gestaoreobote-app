@@ -7,8 +7,10 @@ const SCHEMA = process.env.DB_SCHEMA || 'dev';
 module.exports = (sequelize) => {
   class Cliente extends Model {
     static associate(models) {
-      // Exemplo de associação (se quiser depois):
-      // this.hasMany(models.Pedido, { foreignKey: 'clienteId', as: 'pedidos' });
+      this.hasMany(models.Cota, {
+        foreignKey: 'clienteId',
+        as: 'cotas'
+      });
     }
   }
 

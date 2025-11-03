@@ -12,6 +12,7 @@ import DashboardReobote from '../Pages/Dashboard';
 import {
   BlankPage,
   Gestao,
+  Clientes,
   ProfilePage
 } from '../pageListAsync';
 
@@ -47,9 +48,13 @@ function Application({ isAuthenticated }) {
           element={<ProtectedRoute element={<DashboardReobote />} isAuthenticated={isAuthenticated} />}
         />
 
-           <Route
+        <Route
           path="gestao"
           element={<ProtectedRoute element={<Gestao />} isAuthenticated={isAuthenticated} />}
+        />
+        <Route
+          path="clientes"
+          element={<ProtectedRoute element={<Clientes />} isAuthenticated={isAuthenticated} />}
         />
 
       </Routes>

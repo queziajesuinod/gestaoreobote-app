@@ -31,6 +31,30 @@ async function buscarPorCliente(req, res) {
   }
 }
 
+// 🔹 Atualizar cota
+async function atualizar(req, res) {
+  try {
+    const { id } = req.params;
+    const cotaAtualizada = await cotaService.atualizarCota(id, req.body);
+    res.json({ mensagem: 'Cota atualizada com sucesso', dados: cotaAtualizada });
+  } catch (error) {
+    console.error('❌ Erro ao atualizar cota:', error);
+    res.status(500).json({ message: 'Erro ao atualizar cota', error: error.message });
+  }
+}
+
+// 🔹 Deletar cota
+async function deletar(req, res) {
+  try {
+    const { id } = req.params;
+    const resultado = await cotaService.deletarCota(id);
+    res.json({ mensagem: resultado.mensagem });
+  } catch (error) {
+    console.error('❌ Erro ao deletar cota:', error);
+    res.status(500).json({ message: 'Erro ao deletar cota', error: error.message });
+  }
+}
+
 // 🔹 Buscar por consultor
 async function buscarPorConsultor(req, res) {
   try {
@@ -61,6 +85,8 @@ module.exports = {
   criar,
   listar,
   buscarPorCliente,
+  atualizar,
+  deletar,
   buscarPorConsultor,
   buscarPorPeriodo
 };

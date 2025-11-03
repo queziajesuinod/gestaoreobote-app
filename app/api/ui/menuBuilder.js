@@ -15,6 +15,12 @@ export const buildMenu = (permissoes = []) => {
                     name: 'Equipes',
                     link: '/app/gestao',
                     icon: 'ion-ios-people-outline',
+                },
+                {
+                    key: 'clientes',
+                    name: 'Clientes',
+                    link: '/app/clientes',
+                    icon: 'ion-ios-person-outline',
                 }
             ].filter(Boolean),
         });

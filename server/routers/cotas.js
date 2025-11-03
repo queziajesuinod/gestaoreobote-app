@@ -10,5 +10,7 @@ router.get('/cliente/:clienteId', cotaController.buscarPorCliente);
 router.get('/consultor/:consultorId', cotaController.buscarPorConsultor);
 router.get('/periodo', cotaController.buscarPorPeriodo);
 router.post('/', cotaController.criar);
+router.put('/:id', cotaController.atualizar);
+router.delete('/:id', cotaController.deletar);
 
 module.exports = router;

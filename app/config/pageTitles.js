@@ -17,6 +17,7 @@ const pageTitles = {
   // Gestão
   'gestao': 'Gestão de Equipes',
   'equipes': 'Equipes',
+  'clientes': 'Clientes',
   'consultores': 'Consultores',
   
   // Usuários

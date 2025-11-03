@@ -1,4 +1,4 @@
-const { Cota } = require('../models');
+const { Cota, Consultor } = require('../models');
 const { Op } = require('sequelize');
 
 // 🔹 Criar nova cota
@@ -13,7 +13,36 @@ async function listarCotas() {
 
 // 🔹 Buscar por clienteId
 async function buscarPorCliente(clienteId) {
-  return await Cota.findAll({ where: { clienteId } });
+  return await Cota.findAll({
+    where: { clienteId },
+    include: [
+      {
+        model: Consultor,
+        as: 'consultor',
+        attributes: ['id', 'nome']
+      }
+    ]
+  });
+}
+
+// 🔹 Atualizar cota
+async function atualizarCota(id, dadosAtualizados) {
+  const cota = await Cota.findByPk(id);
+  if (!cota) {
+    throw new Error('Cota não encontrada');
+  }
+  await cota.update(dadosAtualizados);
+  return cota;
+}
+
+// 🔹 Deletar cota
+async function deletarCota(id) {
+  const cota = await Cota.findByPk(id);
+  if (!cota) {
+    throw new Error('Cota não encontrada');
+  }
+  await cota.destroy();
+  return { mensagem: 'Cota removida com sucesso' };
 }
 
 // 🔹 Buscar por consultorId
@@ -38,6 +67,8 @@ module.exports = {
   criarCota,
   listarCotas,
   buscarPorCliente,
+  atualizarCota,
+  deletarCota,
   buscarPorConsultor,
   buscarPorPeriodo
 };
