@@ -115,8 +115,8 @@ const IndicadorComparativo = React.memo(({ titulo, valorAtual, valorComparativo,
 function DashboardReobote() {
 
   const cacheNegocios = useRef({
-    ganhos: [],
-    andamento: []
+    ganhos: { dataInicio: null, consultores: [], dados: [] },
+    andamento: { dataInicio: null, consultores: [], dados: [] }
   });
   const title = `${brand.name} - Dashboard Reobote`;
   const description = 'Painel de tarefas integradas ao Agendor';
@@ -322,15 +322,23 @@ function DashboardReobote() {
         idsAgendor = Object.keys(mapaConsultoresGlobal).map(Number);
       }
 
-      // ✅ Se já tem cache e tem consultores filtrados, usa o cache
-      if (dealStatus === 2 && cacheNegocios.current.ganhos.length > 0 && idsAgendor.length > 0) {
-    const filtrados = cacheNegocios.current.ganhos.filter(n =>
-      idsAgendor.includes(Number(n.consultorId))
-    );
-    console.log(`⚡ Usando cache local ganhos (${filtrados.length})`);
-    setNegociosGanhos(filtrados);
-    return filtrados;
-  }
+      const cacheGanhos = cacheNegocios.current.ganhos;
+      const idsSet = new Set(idsAgendor.map(Number));
+
+      // ✅ Se já tem cache válido e a lista de consultores é subset do cache, utiliza o cache
+      const podeUsarCacheGanhos =
+        dealStatus === 2 &&
+        cacheGanhos.dados.length > 0 &&
+        cacheGanhos.dataInicio === dataInicio &&
+        idsAgendor.length > 0 &&
+        [...idsSet].every(id => cacheGanhos.consultores.includes(Number(id)));
+
+      if (podeUsarCacheGanhos) {
+        const filtrados = cacheGanhos.dados.filter(n => idsSet.has(Number(n.consultorId)));
+        console.log(`⚡ Usando cache local ganhos (${filtrados.length})`);
+        setNegociosGanhos(filtrados);
+        return filtrados;
+      }
 
       // ✅ Monta parâmetros da requisição
       const params = new URLSearchParams();
@@ -360,14 +368,18 @@ function DashboardReobote() {
 
       const data = await response.json();
 
-      cacheNegocios.current.ganhos = data.negocios || [];
-
+      const dadosGanhos = data.negocios || [];
+      cacheNegocios.current.ganhos = {
+        dataInicio,
+        consultores: Array.from(new Set(idsAgendor.map(Number))),
+        dados: dadosGanhos
+      };
 
       const filtrados = idsAgendor.length
-        ? cacheNegocios.current.ganhos.filter(n => idsAgendor.includes(Number(n.consultorId)))
-        : cacheNegocios.current.ganhos;
+        ? dadosGanhos.filter(n => idsSet.has(Number(n.consultorId)))
+        : dadosGanhos;
 
-      console.log(`💾 Negócios carregados: ${filtrados.length} de ${cacheNegocios.current.ganhos.length}`);
+      console.log(`💾 Negócios carregados: ${filtrados.length} de ${dadosGanhos.length}`);
       setNegociosGanhos(filtrados);
 
       return filtrados;
@@ -395,15 +407,22 @@ function DashboardReobote() {
         idsAgendor = Object.keys(mapaConsultoresGlobal).map(Number);
       }
 
-      // ✅ Se já tem cache e tem consultores filtrados, usa o cache
-     if (dealStatus === 1 && cacheNegocios.current.andamento.length > 0 && idsAgendor.length > 0) {
-    const filtrados = cacheNegocios.current.andamento.filter(n =>
-      idsAgendor.includes(Number(n.consultorId))
-    );
-    console.log(`⚡ Usando cache local andamento (${filtrados.length})`);
-    setNegociosEmAndamento(filtrados);
-    return filtrados;
-  }
+      const cacheAndamento = cacheNegocios.current.andamento;
+      const idsSet = new Set(idsAgendor.map(Number));
+
+      const podeUsarCacheAndamento =
+        dealStatus === 1 &&
+        cacheAndamento.dados.length > 0 &&
+        cacheAndamento.dataInicio === dataInicio &&
+        idsAgendor.length > 0 &&
+        [...idsSet].every(id => cacheAndamento.consultores.includes(Number(id)));
+
+      if (podeUsarCacheAndamento) {
+        const filtrados = cacheAndamento.dados.filter(n => idsSet.has(Number(n.consultorId)));
+        console.log(`⚡ Usando cache local andamento (${filtrados.length})`);
+        setNegociosEmAndamento(filtrados);
+        return filtrados;
+      }
 
       // ✅ Monta parâmetros da requisição
       const params = new URLSearchParams();
@@ -432,13 +451,18 @@ function DashboardReobote() {
       }
 
       const data = await response.json();
-      cacheNegocios.current.andamento = data.negocios || [];
+      const dadosAndamento = data.negocios || [];
+      cacheNegocios.current.andamento = {
+        dataInicio,
+        consultores: Array.from(new Set(idsAgendor.map(Number))),
+        dados: dadosAndamento
+      };
 
       const filtrados = idsAgendor.length
-        ? cacheNegocios.current.andamento.filter(n => idsAgendor.includes(Number(n.consultorId)))
-        : cacheNegocios.current.andamento;
+        ? dadosAndamento.filter(n => idsSet.has(Number(n.consultorId)))
+        : dadosAndamento;
 
-      console.log(`💾 Negócios carregados: ${filtrados.length} de ${cacheNegocios.current.andamento.length}`);
+      console.log(`💾 Negócios carregados: ${filtrados.length} de ${dadosAndamento.length}`);
       setNegociosEmAndamento(filtrados);
 
       return filtrados;
@@ -458,7 +482,6 @@ function DashboardReobote() {
     }
 
     // ❌ REMOVIDO: NÃO limpar cache aqui, pois as funções verificam se tem cache
-    // cacheNegocios.current = { ganhos: [], andamento: [] };
 
     if (habilitarComparacao && (!dataInicioComp || !dataFimComp)) {
       alert('Selecione o período de comparação');
@@ -1356,4 +1379,3 @@ function DashboardReobote() {
 }
 
 export default DashboardReobote;
-
