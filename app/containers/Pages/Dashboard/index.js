@@ -1,5 +1,4 @@
-/* eslint-disable */
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Helmet } from 'react-helmet';
 import {
   Grid,
@@ -41,6 +40,7 @@ import brand from 'dan-api/dummy/brand';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import RemoveIcon from '@mui/icons-material/Remove';
+import { set } from 'lodash';
 
 const API_URL = process.env.REACT_APP_API_URL?.replace(/\/$/, '') || 'http://localhost:3003';
 const API_INTEGRANTES_URL = `${API_URL}/integrante/equipe`;
@@ -110,7 +110,14 @@ const IndicadorComparativo = React.memo(({ titulo, valorAtual, valorComparativo,
   );
 });
 
+
+
 function DashboardReobote() {
+
+  const cacheNegocios = useRef({
+    ganhos: [],
+    andamento: []
+  });
   const title = `${brand.name} - Dashboard Reobote`;
   const description = 'Painel de tarefas integradas ao Agendor';
 
@@ -119,7 +126,8 @@ function DashboardReobote() {
   const [dataFim, setDataFim] = useState('');
   const [cotasAtuais, setCotasAtuais] = useState({});
   const [cotasComp, setCotasComp] = useState({});
-
+  const [negociosGanhos, setNegociosGanhos] = useState([]);
+  const [negociosEmAndamento, setNegociosEmAndamento] = useState([]);
   // ==================== ESTADOS - PERÍODO DE COMPARAÇÃO ====================
   const [habilitarComparacao, setHabilitarComparacao] = useState(false);
   const [dataInicioComp, setDataInicioComp] = useState('');
@@ -206,6 +214,8 @@ function DashboardReobote() {
       isMounted = false;
     };
   }, []); // ✅ Executa apenas UMA VEZ
+
+
 
   // ==================== INTEGRANTES DA EQUIPE SELECIONADA ====================
   useEffect(() => {
@@ -294,12 +304,161 @@ function DashboardReobote() {
     return tarefasEnriquecidas;
   }
 
+  async function buscarNegociosGanhos(dataInicio, consultoresSelecionados = [], dealStatus) {
+    try {
+      // ✅ Normaliza o array de consultores
+      let idsAgendor = [];
+
+      if (Array.isArray(consultoresSelecionados) && consultoresSelecionados.length > 0) {
+        idsAgendor = consultoresSelecionados.map(Number);
+      } else if (consultorSelecionado) {
+        idsAgendor = [Number(consultorSelecionado)];
+      } else if (equipeSelecionada) {
+        idsAgendor = integrantes
+          .map(i => i.consultor?.id_agendor)
+          .filter(Boolean)
+          .map(Number);
+      } else {
+        idsAgendor = Object.keys(mapaConsultoresGlobal).map(Number);
+      }
+
+      // ✅ Se já tem cache e tem consultores filtrados, usa o cache
+      if (dealStatus === 2 && cacheNegocios.current.ganhos.length > 0 && idsAgendor.length > 0) {
+    const filtrados = cacheNegocios.current.ganhos.filter(n =>
+      idsAgendor.includes(Number(n.consultorId))
+    );
+    console.log(`⚡ Usando cache local ganhos (${filtrados.length})`);
+    setNegociosGanhos(filtrados);
+    return filtrados;
+  }
+
+      // ✅ Monta parâmetros da requisição
+      const params = new URLSearchParams();
+      if (dataInicio) params.append('dataInicio', dataInicio);
+      if (idsAgendor.length > 0) params.append('consultor', idsAgendor.join(','));
+      params.append('dealStatus', dealStatus);
+
+      console.log('🌐 Buscando da API com params:', params.toString());
+
+      const response = await fetch(`${API_URL}/agendor/negocios?${params.toString()}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${getToken()}`
+        }
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          console.error('❌ Sessão expirada! Token inválido.');
+          alert('Sua sessão expirou. Faça login novamente.');
+          localStorage.removeItem('token');
+          window.location.href = '/login';
+          return [];
+        }
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      cacheNegocios.current.ganhos = data.negocios || [];
+
+
+      const filtrados = idsAgendor.length
+        ? cacheNegocios.current.ganhos.filter(n => idsAgendor.includes(Number(n.consultorId)))
+        : cacheNegocios.current.ganhos;
+
+      console.log(`💾 Negócios carregados: ${filtrados.length} de ${cacheNegocios.current.ganhos.length}`);
+      setNegociosGanhos(filtrados);
+
+      return filtrados;
+    } catch (error) {
+      console.error('❌ Erro em buscarNegociosGanhos:', error);
+      return [];
+    }
+  }
+
+  async function buscarNegociosEmAndamento(dataInicio, consultoresSelecionados = [], dealStatus) {
+    try {
+      // ✅ Normaliza o array de consultores
+      let idsAgendor = [];
+
+      if (Array.isArray(consultoresSelecionados) && consultoresSelecionados.length > 0) {
+        idsAgendor = consultoresSelecionados.map(Number);
+      } else if (consultorSelecionado) {
+        idsAgendor = [Number(consultorSelecionado)];
+      } else if (equipeSelecionada) {
+        idsAgendor = integrantes
+          .map(i => i.consultor?.id_agendor)
+          .filter(Boolean)
+          .map(Number);
+      } else {
+        idsAgendor = Object.keys(mapaConsultoresGlobal).map(Number);
+      }
+
+      // ✅ Se já tem cache e tem consultores filtrados, usa o cache
+     if (dealStatus === 1 && cacheNegocios.current.andamento.length > 0 && idsAgendor.length > 0) {
+    const filtrados = cacheNegocios.current.andamento.filter(n =>
+      idsAgendor.includes(Number(n.consultorId))
+    );
+    console.log(`⚡ Usando cache local andamento (${filtrados.length})`);
+    setNegociosEmAndamento(filtrados);
+    return filtrados;
+  }
+
+      // ✅ Monta parâmetros da requisição
+      const params = new URLSearchParams();
+      if (dataInicio) params.append('dataInicio', dataInicio);
+      if (idsAgendor.length > 0) params.append('consultor', idsAgendor.join(','));
+      params.append('dealStatus', dealStatus);
+
+      console.log('🌐 Buscando da API com params:', params.toString());
+
+      const response = await fetch(`${API_URL}/agendor/negocios?${params.toString()}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${getToken()}`
+        }
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          console.error('❌ Sessão expirada! Token inválido.');
+          alert('Sua sessão expirou. Faça login novamente.');
+          localStorage.removeItem('token');
+          window.location.href = '/login';
+          return [];
+        }
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      cacheNegocios.current.andamento = data.negocios || [];
+
+      const filtrados = idsAgendor.length
+        ? cacheNegocios.current.andamento.filter(n => idsAgendor.includes(Number(n.consultorId)))
+        : cacheNegocios.current.andamento;
+
+      console.log(`💾 Negócios carregados: ${filtrados.length} de ${cacheNegocios.current.andamento.length}`);
+      setNegociosEmAndamento(filtrados);
+
+      return filtrados;
+    } catch (error) {
+      console.error('❌ Erro em buscarNegociosEmAndamento:', error);
+      return [];
+    }
+  }
+
+
+
   // ==================== BUSCAR TAREFAS (OTIMIZADO) ====================
   async function buscarTarefas() {
     if (!dataInicio || !dataFim) {
       alert('Selecione o período atual');
       return;
     }
+
+    // ❌ REMOVIDO: NÃO limpar cache aqui, pois as funções verificam se tem cache
+    // cacheNegocios.current = { ganhos: [], andamento: [] };
 
     if (habilitarComparacao && (!dataInicioComp || !dataFimComp)) {
       alert('Selecione o período de comparação');
@@ -317,6 +476,16 @@ function DashboardReobote() {
       }
 
       const [tarefasAtuais, tarefasComp = []] = await Promise.all(promises);
+
+      const consultores = consultorSelecionado
+        ? [consultorSelecionado]
+        : equipeSelecionada
+          ? integrantes.map(i => i.consultor?.id_agendor).filter(Boolean)
+          : Object.keys(mapaConsultoresGlobal).map(Number);
+
+      const negociosGanhosData = await buscarNegociosGanhos(dataInicio, consultores, 2);
+      const negociosEmAndamentoData = await buscarNegociosEmAndamento(dataInicio, consultores, 1);
+
 
       // ✅ PASSO 2: Extrair consultorId únicos das tarefas retornadas
       const consultoresUnicos = [...new Set(
@@ -362,6 +531,8 @@ function DashboardReobote() {
       setTarefasComparacao(tarefasComp);
       setCotasAtuais(cotasAtuaisData);
       setCotasComp(cotasCompData);
+      setNegociosGanhos(negociosGanhosData);
+      setNegociosEmAndamento(negociosEmAndamentoData);
     } catch (err) {
       console.error('❌ Erro ao buscar dados:', err);
       alert('Erro ao buscar dados. Verifique o console.');
@@ -374,41 +545,42 @@ function DashboardReobote() {
   async function buscarCotasPorPeriodo(inicio, fim, idsAgendor) {
     try {
       console.log(`🔍 Buscando cotas para ${idsAgendor.length} consultores...`);
-      
+
       // Faz uma requisição para CADA consultor
       const resultados = await Promise.all(
         idsAgendor.map(async (idagendor) => {
           const url = `${API_URL}/cotas/periodo?inicio=${inicio}&fim=${fim}&idagendor=${idagendor}`;
           console.log(`🔗 Buscando cotas do consultor ${idagendor}:`, url);
-          
+
+          // ✅ Adiciona o header Authorization
           const resp = await fetch(url, {
             headers: {
               'Content-Type': 'application/json',
-              Authorization: `Bearer ${getToken()}`
+              Authorization: `Bearer ${getToken()}` // 👈 ESSA LINHA É FUNDAMENTAL
             }
           });
           const data = await resp.json();
           const cotas = data.dados || [];
-          
+
           console.log(`  ✅ Consultor ${idagendor}: ${cotas.length} cotas encontradas`);
-          
+
           return { idagendor, cotas };
         })
       );
 
       // Agrupa e soma os valores por consultorId
       const cotasPorConsultor = {};
-      
+
       resultados.forEach(({ idagendor, cotas }) => {
         const somaTotal = cotas.reduce((soma, cota) => {
           const valor = parseFloat(cota.valor) || 0;
           console.log(`    Cota ${cota.cota}: valorTotal = ${cota.valor} (${valor})`);
           return soma + valor;
         }, 0);
-        
+
         // Usa o idagendor como chave (mesmo ID usado nas tarefas)
         cotasPorConsultor[idagendor] = somaTotal;
-        
+
         console.log(`  💰 Total do consultor ${idagendor}: ${somaTotal} centavos = R$ ${(somaTotal).toFixed(2)}`);
       });
 
@@ -462,8 +634,13 @@ function DashboardReobote() {
   const totalGeralComp = totalVisitasComp + totalReunioesComp;
 
   // ==================== TAXA DE CONVERSÃO ====================
-  const taxaConversao = totalVisitas > 0
-    ? Math.round((totalPropostas / totalVisitas) * 100)
+  const totalNegociosGanhos = negociosGanhos.length;
+  const totalNegociosEmAndamento = negociosEmAndamento.length;
+  const taxaConversaoNegociosPendentesGanhos = (totalNegociosGanhos) > 0
+    ? Math.round((totalNegociosGanhos / (totalNegociosEmAndamento)) * 100)
+    : 0;
+  const taxaConversao = (totalReunioes + totalVisitas) > 0
+    ? Math.round((totalNegociosGanhos / (totalReunioes + totalVisitas)) * 100)
     : 0;
 
   const conversaoPorConsultor = Object.entries(
@@ -514,7 +691,7 @@ function DashboardReobote() {
     const consultorId = dados.consultorId;
     const valorCotaAtual = cotasAtuais[consultorId] || 0;
     const valorCotaComp = cotasComp[consultorId] || 0;
-    
+
     // Converte de centavos para reais (se necessário)
     // Como valorTotal já vem como string "1000000", parseFloat converte para número
     // Dividir por 100 se estiver em centavos
@@ -558,53 +735,24 @@ function DashboardReobote() {
     return order === 'asc' ? aValue - bValue : bValue - aValue;
   });
 
+  // ✅ NOVO: Calcula soma total de cotas
+  const somaValorCotas = ranking.reduce((soma, r) => soma + (r.valorCota || 0), 0);
 
-  // ==================== TAXA DE CONCLUSÃO ====================
-  const totalConcluidas = filtradas.filter(t => t.status === 'Concluída').length;
-  const totalPendentes = filtradas.filter(t => t.status === 'Pendente').length;
-  const taxaConclusao = filtradas.length > 0
-    ? Math.round((totalConcluidas / filtradas.length) * 100)
-    : 0;
 
-  const dadosStatus = [
-    { status: 'Concluída', total: totalConcluidas },
-    { status: 'Pendente', total: totalPendentes }
-  ];
-
-  // ==================== NOVOS INDICADORES ====================
-  // 1. Taxa de Conversão Reunião → Proposta
-  const taxaConversaoReuniao = totalReunioes > 0
-    ? Math.round((totalPropostas / totalReunioes) * 100)
-    : 0;
 
   // 2. Média de Tarefas por Dia
   const diasPeriodo = dataInicio && dataFim
     ? Math.ceil((new Date(dataFim) - new Date(dataInicio)) / (1000 * 60 * 60 * 24)) + 1
     : 0;
   const mediaTarefasPorDia = diasPeriodo > 0
-    ? (filtradas.length / diasPeriodo).toFixed(1)
+    ? ((totalReunioes + totalVisitas + totalPropostas) / diasPeriodo).toFixed(1)
     : 0;
 
-  // 3. Taxa de Atividade (Tarefas Concluídas / Dia)
-  const taxaAtividade = diasPeriodo > 0
-    ? (totalConcluidas / diasPeriodo).toFixed(1)
+
+  const mediaTarefasReuniaoVisitaPorDia = diasPeriodo > 0
+    ? ((totalReunioes + totalVisitas) / diasPeriodo).toFixed(1)
     : 0;
 
-  // 4. Taxa de Pendências
-  const taxaPendencias = filtradas.length > 0
-    ? Math.round((totalPendentes / filtradas.length) * 100)
-    : 0;
-
-  // 5. Produtividade Média por Consultor
-  const consultoresUnicos = [...new Set(filtradas.map(t => t.nomeConsultor))].filter(n => n !== 'Desconhecido').length;
-  const produtividadeMedia = consultoresUnicos > 0
-    ? Math.round(filtradas.length / consultoresUnicos)
-    : 0;
-
-  // 6. Taxa de Engajamento (Visitas + Reuniões / Total)
-  const taxaEngajamento = filtradas.length > 0
-    ? Math.round((totalGeral / filtradas.length) * 100)
-    : 0;
 
   // ==================== GRÁFICOS ====================
   const graficoPorEquipe = Object.entries(
@@ -744,37 +892,6 @@ function DashboardReobote() {
             </FormControl>
           </Grid>
 
-          {/* LINHA 2: FILTROS ADICIONAIS */}
-          <Grid item xs={12} sm={6} md={3}>
-            <FormControl fullWidth>
-              <InputLabel>Tipo de Tarefa</InputLabel>
-              <Select
-                value={tipo}
-                onChange={e => setTipo(e.target.value)}
-                label="Tipo de Tarefa"
-              >
-                <MenuItem value="Todos">Todos os Tipos</MenuItem>
-                <MenuItem value="Visita">Visita</MenuItem>
-                <MenuItem value="Reunião">Reunião</MenuItem>
-                <MenuItem value="Proposta">Proposta</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={3}>
-            <FormControl fullWidth>
-              <InputLabel>Status</InputLabel>
-              <Select
-                value={status}
-                onChange={e => setStatus(e.target.value)}
-                label="Status"
-              >
-                <MenuItem value="Todos">Todos Status</MenuItem>
-                <MenuItem value="Concluída">Concluída</MenuItem>
-                <MenuItem value="Pendente">Pendente</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
 
           {/* LINHA 3: COMPARAÇÃO DE PERÍODOS */}
           <Grid item xs={12}>
@@ -1043,128 +1160,67 @@ function DashboardReobote() {
             </Typography>
 
             <Grid container spacing={3} style={{ marginBottom: 30 }}>
-              {/* COLUNA 1 */}
+              {/* CARD 1 */}
               <Grid item xs={12} md={6}>
-                <Grid container spacing={2}>
-                  <Grid item xs={12}>
-                    <Paper elevation={2} style={{ padding: 20, textAlign: 'center' }}>
-                      <Typography variant="h6" gutterBottom>
-                        Taxa de Conversão Geral
-                      </Typography>
-                      <Typography variant="h2" color="primary" style={{ fontWeight: 'bold' }}>
-                        {taxaConversao}%
-                      </Typography>
-                      <Typography variant="body2" color="textSecondary">
-                        {totalPropostas} propostas / {totalVisitas} visitas
-                      </Typography>
-                    </Paper>
-                  </Grid>
-
-                  <Grid item xs={12}>
-                    <Paper elevation={2} style={{ padding: 20, textAlign: 'center' }}>
-                      <Typography variant="h6" gutterBottom>
-                        Taxa de Conversão Reunião → Proposta
-                      </Typography>
-                      <Typography variant="h2" color="primary" style={{ fontWeight: 'bold' }}>
-                        {taxaConversaoReuniao}%
-                      </Typography>
-                      <Typography variant="body2" color="textSecondary">
-                        {totalPropostas} propostas / {totalReunioes} reuniões
-                      </Typography>
-                    </Paper>
-                  </Grid>
-
-                  <Grid item xs={12}>
-                    <Paper elevation={2} style={{ padding: 20, textAlign: 'center' }}>
-                      <Typography variant="h6" gutterBottom>
-                        Média de Tarefas por Dia
-                      </Typography>
-                      <Typography variant="h2" color="primary" style={{ fontWeight: 'bold' }}>
-                        {mediaTarefasPorDia}
-                      </Typography>
-                      <Typography variant="body2" color="textSecondary">
-                        {filtradas.length} tarefas / {diasPeriodo} dias
-                      </Typography>
-                    </Paper>
-                  </Grid>
-
-                  <Grid item xs={12}>
-                    <Paper elevation={2} style={{ padding: 20, textAlign: 'center' }}>
-                      <Typography variant="h6" gutterBottom>
-                        Taxa de Atividade
-                      </Typography>
-                      <Typography variant="h2" color="primary" style={{ fontWeight: 'bold' }}>
-                        {taxaAtividade}/dia
-                      </Typography>
-                      <Typography variant="body2" color="textSecondary">
-                        {totalConcluidas} concluídas / {diasPeriodo} dias
-                      </Typography>
-                    </Paper>
-                  </Grid>
-                </Grid>
+                <Paper elevation={2} style={{ padding: 20, textAlign: 'center' }}>
+                  <Typography variant="h6" gutterBottom>
+                    Taxa de Conversão Geral
+                  </Typography>
+                  <Typography variant="h2" color="primary" style={{ fontWeight: 'bold' }}>
+                    {taxaConversao}%
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    {totalNegociosGanhos} Negócios Ganhos/ {totalReunioes + totalVisitas} Reuniões+Visitas
+                  </Typography>
+                </Paper>
               </Grid>
 
-              {/* COLUNA 2 */}
+              {/* CARD 2 */}
               <Grid item xs={12} md={6}>
-                <Grid container spacing={2}>
-                  <Grid item xs={12}>
-                    <Paper elevation={2} style={{ padding: 20, textAlign: 'center' }}>
-                      <Typography variant="h6" gutterBottom>
-                        Taxa de Conclusão
-                      </Typography>
-                      <Typography variant="h2" color="primary" style={{ fontWeight: 'bold' }}>
-                        {taxaConclusao}%
-                      </Typography>
-                      <Typography variant="body2" color="textSecondary">
-                        {totalConcluidas} concluídas / {filtradas.length} total
-                      </Typography>
-                    </Paper>
-                  </Grid>
+                <Paper elevation={2} style={{ padding: 20, textAlign: 'center' }}>
+                  <Typography variant="h6" gutterBottom>
+                    Média de Tarefas por Dia
+                  </Typography>
+                  <Typography variant="h2" color="primary" style={{ fontWeight: 'bold' }}>
+                    {mediaTarefasPorDia}
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    {totalPropostas + totalReunioes + totalVisitas} tarefas / {diasPeriodo} dias
+                  </Typography>
+                </Paper>
+              </Grid>
 
-                  <Grid item xs={12}>
-                    <Paper elevation={2} style={{ padding: 20, textAlign: 'center' }}>
-                      <Typography variant="h6" gutterBottom>
-                        Taxa de Pendências
-                      </Typography>
-                      <Typography variant="h2" color="primary" style={{ fontWeight: 'bold' }}>
-                        {taxaPendencias}%
-                      </Typography>
-                      <Typography variant="body2" color="textSecondary">
-                        {totalPendentes} pendentes / {filtradas.length} total
-                      </Typography>
-                    </Paper>
-                  </Grid>
+              {/* CARD 3 */}
+              <Grid item xs={12} md={6}>
+                <Paper elevation={2} style={{ padding: 20, textAlign: 'center' }}>
+                  <Typography variant="h6" gutterBottom>
+                    Média de Visitas + Reuniões / dia
+                  </Typography>
+                  <Typography variant="h2" color="primary" style={{ fontWeight: 'bold' }}>
+                    {mediaTarefasReuniaoVisitaPorDia}
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    {totalReunioes + totalVisitas} Reuniões + Visitas / {diasPeriodo} dias
+                  </Typography>
+                </Paper>
+              </Grid>
 
-                  <Grid item xs={12}>
-                    <Paper elevation={2} style={{ padding: 20, textAlign: 'center' }}>
-                      <Typography variant="h6" gutterBottom>
-                        Produtividade Média
-                      </Typography>
-                      <Typography variant="h2" color="primary" style={{ fontWeight: 'bold' }}>
-                        {produtividadeMedia}
-                      </Typography>
-                      <Typography variant="body2" color="textSecondary">
-                        {filtradas.length} tarefas / {consultoresUnicos} consultores
-                      </Typography>
-                    </Paper>
-                  </Grid>
-
-                  <Grid item xs={12}>
-                    <Paper elevation={2} style={{ padding: 20, textAlign: 'center' }}>
-                      <Typography variant="h6" gutterBottom>
-                        Taxa de Engajamento
-                      </Typography>
-                      <Typography variant="h2" color="primary" style={{ fontWeight: 'bold' }}>
-                        {taxaEngajamento}%
-                      </Typography>
-                      <Typography variant="body2" color="textSecondary">
-                        {totalGeral} interações / {filtradas.length} total
-                      </Typography>
-                    </Paper>
-                  </Grid>
-                </Grid>
+              {/* CARD 4 */}
+              <Grid item xs={12} md={6}>
+                <Paper elevation={2} style={{ padding: 20, textAlign: 'center' }}>
+                  <Typography variant="h6" gutterBottom>
+                    Taxa de Negócios Pendentes
+                  </Typography>
+                  <Typography variant="h2" color="primary" style={{ fontWeight: 'bold' }}>
+                    {taxaConversaoNegociosPendentesGanhos}%
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    {totalNegociosGanhos} negócios ganhos / {totalNegociosEmAndamento} negócios em andamento
+                  </Typography>
+                </Paper>
               </Grid>
             </Grid>
+
 
             {/* Ranking de Consultores */}
             <Paper elevation={2} style={{ padding: 20, marginBottom: 30 }}>
@@ -1266,6 +1322,21 @@ function DashboardReobote() {
                         </TableCell>
                       </TableRow>
                     ))}
+                  </TableBody>
+
+                  {/* ✅ NOVO: Footer com totais */}
+                  <TableBody>
+                    <TableRow style={{ backgroundColor: '#F0F8FF', fontWeight: 'bold' }}>
+                      <TableCell colSpan={6} align="right">
+                        <strong>TOTAL:</strong>
+                      </TableCell>
+                      <TableCell align="center">
+                        <strong style={{ color: '#007AFF', fontSize: '1.1em' }}>
+                          R$ {somaValorCotas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </strong>
+                      </TableCell>
+                      <TableCell colSpan={1}></TableCell>
+                    </TableRow>
                   </TableBody>
 
                 </Table>

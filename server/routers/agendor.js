@@ -8,7 +8,7 @@ const autenticado = require('../middlewares/autenticado')
 
 // Rota GET (manter compatibilidade)
 router.get('/tarefas',  agendorController.getTarefas);
-
+router.get('/negocios', agendorController.getNegocios);
 
 
 module.exports = router;

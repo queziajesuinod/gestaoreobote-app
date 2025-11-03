@@ -1,8 +1,11 @@
 // server/controllers/agendorController.js
-const { buscarTarefasPorRange } = require('../services/agendor');
+const { data } = require('autoprefixer');
+const { buscarTarefasPorRange, buscarNegociosPorRangePorStatus } = require('../services/agendor');
 
 let cacheTarefas = [];
 let ultimoFiltro = {};
+let cacheNegocios = {};
+let ultimoFiltroNegocios = {};
 
 exports.getTarefas = async (req, res) => {
   try {
@@ -60,5 +63,78 @@ exports.getTarefas = async (req, res) => {
   } catch (error) {
     console.error('❌ Erro em getTarefas:', error.message);
     res.status(500).json({ error: 'Erro ao buscar tarefas' });
+  }
+};
+
+exports.getNegocios = async (req, res) => {
+  try {
+    const { dataInicio, force, consultor, dealStatus } = req.query;
+
+    if (!dataInicio) {
+      return res.status(400).json({ error: 'dataInicio é obrigatório' });
+    }
+
+    const statusKey = dealStatus || 'ALL';
+    const cacheEntrada = cacheNegocios[statusKey] || [];
+    const ultimoFiltroEntrada = ultimoFiltroNegocios[statusKey];
+
+    // 🔹 Atualiza cache apenas se data mudou ou se force=true
+    if (
+      cacheEntrada.length > 0 &&
+      ultimoFiltroEntrada?.dataInicio === dataInicio &&
+      force !== 'true'
+    ) {
+      console.log(`⚡ Servindo negócios do cache local para dealStatus=${statusKey}`);
+    } else {
+      console.log(`🌀 Atualizando negócios no cache para dealStatus=${statusKey}...`);
+      const negociosAtualizados = await buscarNegociosPorRangePorStatus({ dataInicio, dealStatus });
+      cacheNegocios[statusKey] = Array.isArray(negociosAtualizados) ? negociosAtualizados : [];
+      ultimoFiltroNegocios[statusKey] = { dataInicio };
+    }
+
+    // 🔹 Filtra os consultores, se informado
+    let negociosFiltrados = cacheNegocios[statusKey] || [];
+
+    if (consultor) {
+      // Aceita lista de IDs separados por vírgula
+      const consultores = consultor.split(',').map(c => c.trim());
+      negociosFiltrados = negociosFiltrados.filter(n =>
+        consultores.includes(String(n.owner?.id))
+      );
+      console.log(`🎯 Filtrando ${negociosFiltrados.length} negócios  por consultores: ${consultores.join(', ')}`);
+    }
+
+    // 🔹 Mapeamento dos campos
+    const map = negociosFiltrados.map(n => ({
+      id: n.id,
+      titulo: n.title || 'Sem título',
+      valor: n.value || 0,
+      dataGanho: n.wonAt || n.endTime || n.updatedAt || '—',
+      dataCriacao: n.createdAt || '—',
+      consultorId: n.owner?.id || null,
+      consultorNome: n.owner?.name || 'Desconhecido',
+      etapa: n.dealStage?.name || '—',
+      status: n.dealStatus?.name || '—'
+    }));
+
+    // 🔹 Resumo por consultor
+    const resumoPorConsultor = {};
+    let totalGeral = 0;
+
+    map.forEach(n => {
+      const nome = n.consultorNome || 'Desconhecido';
+      resumoPorConsultor[nome] = (resumoPorConsultor[nome] || 0) + n.valor;
+      totalGeral += n.valor;
+    });
+
+    res.json({
+      periodo: { dataInicio },
+      totalNegocios: map.length,
+      totalValor: totalGeral,
+      negocios: map
+    });
+  } catch (error) {
+    console.error('❌ Erro em getNegocios:', error.message);
+    res.status(500).json({ error: 'Erro ao buscar negócios' });
   }
 };

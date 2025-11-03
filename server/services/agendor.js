@@ -113,6 +113,47 @@ async function buscarTarefasPorRange({ dataInicio, dataFim }) {
   return todas;
 }
 
+async function buscarNegociosPorRangePorStatus({ dataInicio, dealStatus }) {
+  let todasNegocios = [];
+  let page = 1;
+  let hasMoreData = true;
+
+  while (hasMoreData) {
+    const params = {
+      page,
+      per_page: CONFIG.TASKS_PER_PAGE
+    };
+
+    if (dataInicio) params.since = dataInicio;
+    params.dealStatus = dealStatus;
+
+    const url = `${API_AGENDOR_URL}/deals/stream`;
+
+    const response = await axios.get(url, {
+      headers: {
+        Authorization: `Token ${API_AGENDOR_TOKEN}`, // ✅ CORRIGIDO: inclui a palavra "Token"
+        'Content-Type': 'application/json'
+      },
+      params
+    });
+
+    const data = response.data.data || [];
+    todasNegocios = [...todasNegocios, ...data];
+
+    console.log(`📄 Página ${page}: ${data.length} negócios`);
+
+    if (data.length < CONFIG.TASKS_PER_PAGE) {
+      hasMoreData = false;
+    } else {
+      page++;
+      await esperar(CONFIG.DELAY_BETWEEN_REQUESTS);
+    }
+  }
+
+  return todasNegocios;
+}
+
+
 // ===================== AGRUPAMENTO =====================
 function processarTarefas(tarefas) {
   const resumoPorTipo = {};
@@ -158,5 +199,6 @@ function logErroAxios(error, contexto) {
 // ===================== EXPORTS =====================
 module.exports = {
   buscarTarefas,
-  buscarTarefasPorRange
+  buscarTarefasPorRange,
+  buscarNegociosPorRangePorStatus
 };
