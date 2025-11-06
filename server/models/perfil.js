@@ -1,5 +1,4 @@
-'use strict';
-const { Model, DataTypes } = require('sequelize');
+const { Model } = require('sequelize');
 
 module.exports = (sequelize, DataTypes) => {
   class Perfil extends Model {
@@ -7,6 +6,9 @@ module.exports = (sequelize, DataTypes) => {
       // Define que um perfil tem muitos usuários
       if (models.User) {
         Perfil.hasMany(models.User, { foreignKey: 'perfilId' });
+      }
+      if (models.Permissao) {
+        Perfil.hasMany(models.Permissao, { foreignKey: 'perfilId', as: 'permissoes' });
       }
     }
   }
@@ -22,7 +24,7 @@ module.exports = (sequelize, DataTypes) => {
   }, {
     sequelize,
     modelName: 'Perfil',
-    tableName: 'Perfis',  // Define explicitamente o nome da tabela
+    tableName: 'Perfis', // Define explicitamente o nome da tabela
     schema: process.env.DB_SCHEMA || 'dev'
   });
 

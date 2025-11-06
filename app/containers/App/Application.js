@@ -13,7 +13,10 @@ import {
   BlankPage,
   Gestao,
   Clientes,
-  ProfilePage
+  Cotas,
+  ProfilePage,
+  UsersAdmin,
+  PerfisAdmin
 } from '../pageListAsync';
 
 function Application({ isAuthenticated }) {
@@ -55,6 +58,18 @@ function Application({ isAuthenticated }) {
         <Route
           path="clientes"
           element={<ProtectedRoute element={<Clientes />} isAuthenticated={isAuthenticated} />}
+        />
+        <Route
+          path="cotas"
+          element={<ProtectedRoute element={<Cotas />} isAuthenticated={isAuthenticated} />}
+        />
+        <Route
+          path="usuarios"
+          element={<ProtectedRoute element={<UsersAdmin />} isAuthenticated={isAuthenticated} />}
+        />
+        <Route
+          path="perfis"
+          element={<ProtectedRoute element={<PerfisAdmin />} isAuthenticated={isAuthenticated} />}
         />
 
       </Routes>

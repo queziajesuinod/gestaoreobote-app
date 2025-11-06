@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef
+} from 'react';
 import { Helmet } from 'react-helmet';
 import {
   Grid,
@@ -15,6 +21,7 @@ import {
   TableHead,
   TableRow,
   TableContainer,
+  TablePagination,
   FormControl,
   InputLabel,
   Checkbox,
@@ -41,6 +48,7 @@ import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import RemoveIcon from '@mui/icons-material/Remove';
 import { set } from 'lodash';
+import { getStoredUser } from '../../../utils/userStorage';
 
 const API_URL = process.env.REACT_APP_API_URL?.replace(/\/$/, '') || 'http://localhost:3003';
 const API_INTEGRANTES_URL = `${API_URL}/integrante/equipe`;
@@ -147,10 +155,136 @@ function DashboardReobote() {
   const [filtradas, setFiltradas] = useState([]);
   const [loading, setLoading] = useState(false);
   const [mapaConsultoresGlobal, setMapaConsultoresGlobal] = useState({});
+  const [consultorAgendorLogado, setConsultorAgendorLogado] = useState(null);
 
   // ==================== ESTADOS - ORDENAÇÃO ====================
   const [orderBy, setOrderBy] = useState('total'); // Coluna padrão de ordenação
   const [order, setOrder] = useState('desc'); // 'asc' ou 'desc'
+  const [storedUser, setStoredUserState] = useState(() => getStoredUser());
+  const [rankingPage, setRankingPage] = useState(0);
+  const [rankingRowsPerPage, setRankingRowsPerPage] = useState(10);
+
+  useEffect(() => {
+    const handleUserUpdated = (event) => {
+      const payload = event?.detail;
+      if (payload) {
+        setStoredUserState(payload);
+      } else {
+        setStoredUserState(getStoredUser());
+      }
+    };
+
+    window.addEventListener('app:user-updated', handleUserUpdated);
+    return () => window.removeEventListener('app:user-updated', handleUserUpdated);
+  }, []);
+
+  const perfilUsuario = storedUser?.perfil?.toUpperCase() || '';
+  const permissoesUsuario = storedUser?.permissoes || [];
+  const isConsultorPerfil = perfilUsuario === 'CONSULTOR';
+  const isAdminPerfil = perfilUsuario === 'ADMIN';
+  const isGestorPerfil = perfilUsuario === 'GESTOR';
+  const consultorIdLogado = isConsultorPerfil && storedUser?.consultorId
+    ? Number(storedUser.consultorId)
+    : null;
+  const podeVerTodasEquipes = isAdminPerfil || isGestorPerfil || permissoesUsuario.includes('GESTAO');
+  const podeSelecionarTodasEquipes = podeVerTodasEquipes && !isConsultorPerfil;
+
+  useEffect(() => {
+    let ativo = true;
+
+    async function carregarConsultorLogado() {
+      if (!isConsultorPerfil) {
+        if (ativo) {
+          setConsultorAgendorLogado(null);
+        }
+        return;
+      }
+
+      if (!consultorIdLogado) {
+        if (ativo) {
+          setConsultorAgendorLogado(null);
+          setConsultorSelecionado('');
+        }
+        return;
+      }
+
+      try {
+        const resposta = await fetch(`${API_URL}/consultor/${consultorIdLogado}`, {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${getToken()}`
+          }
+        });
+
+        if (!resposta.ok) {
+          const texto = await resposta.text();
+          throw new Error(`HTTP ${resposta.status}: ${resposta.statusText} - ${texto.slice(0, 200)}`);
+        }
+
+        let dadosConsultor;
+        const contentType = resposta.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          dadosConsultor = await resposta.json();
+        } else {
+          const texto = await resposta.text();
+          throw new Error(`Resposta inesperada ao carregar consultor: ${texto.slice(0, 200)}`);
+        }
+        if (!ativo) return;
+
+        const idAgendorBruto = dadosConsultor?.id_agendor;
+        const idAgendorNormalizado = idAgendorBruto !== null && idAgendorBruto !== undefined
+          ? String(idAgendorBruto).trim()
+          : '';
+        const possuiIdAgendor = Boolean(idAgendorNormalizado);
+
+        setConsultorAgendorLogado(possuiIdAgendor ? idAgendorNormalizado : null);
+
+        if (possuiIdAgendor) {
+          setMapaConsultoresGlobal(prev => {
+            if (prev[idAgendorNormalizado]) {
+              const existente = prev[idAgendorNormalizado];
+              return {
+                ...prev,
+                [idAgendorNormalizado]: {
+                  equipe: existente.equipe || 'Sem Equipe',
+                  nome: existente.nome || dadosConsultor?.nome || 'Desconhecido'
+                }
+              };
+            }
+
+            return {
+              ...prev,
+              [idAgendorNormalizado]: {
+                equipe: dadosConsultor?.equipe || 'Sem Equipe',
+                nome: dadosConsultor?.nome || 'Desconhecido'
+              }
+            };
+          });
+
+          if (isConsultorPerfil) {
+            setConsultorSelecionado(idAgendorNormalizado);
+          }
+        } else if (isConsultorPerfil) {
+          setConsultorSelecionado('');
+        }
+      } catch (error) {
+        console.error('❌ Erro ao buscar consultor logado:', error);
+        if (ativo) {
+          setConsultorAgendorLogado(null);
+          if (isConsultorPerfil) {
+            setConsultorSelecionado('');
+          }
+        }
+      }
+    }
+
+    carregarConsultorLogado();
+
+    return () => {
+      ativo = false;
+    };
+  }, [consultorIdLogado, isConsultorPerfil]);
+
 
   // ==================== CARREGAR DADOS INICIAIS (OTIMIZADO) ====================
   useEffect(() => {
@@ -191,12 +325,12 @@ function DashboardReobote() {
           const mapaGlobal = {};
           resultados.forEach(({ equipe, integrantes }) => {
             integrantes.forEach(int => {
-              if (int.consultor?.id_agendor) {
-                mapaGlobal[int.consultor.id_agendor] = {
-                  equipe: equipe.descricao,
-                  nome: int.consultor.nome
-                };
-              }
+              const idAgendorKey = String(int.consultor?.id_agendor ?? '').trim();
+              if (!idAgendorKey) return;
+              mapaGlobal[idAgendorKey] = {
+                equipe: equipe.descricao,
+                nome: int.consultor.nome
+              };
             });
           });
 
@@ -224,7 +358,9 @@ function DashboardReobote() {
     async function carregarIntegrantes() {
       if (!equipeSelecionada) {
         setIntegrantes([]);
-        setConsultorSelecionado('');
+        if (!isConsultorPerfil) {
+          setConsultorSelecionado('');
+        }
         return;
       }
 
@@ -252,7 +388,48 @@ function DashboardReobote() {
     return () => {
       isMounted = false;
     };
-  }, [equipeSelecionada]);
+  }, [equipeSelecionada, isConsultorPerfil]);
+
+  const obterIdsConsultores = useCallback((idsExplicitos = []) => {
+    if (Array.isArray(idsExplicitos) && idsExplicitos.length > 0) {
+      return idsExplicitos
+        .map(id => String(id).trim())
+        .filter(Boolean);
+    }
+
+    if (consultorSelecionado) {
+      const normalizado = String(consultorSelecionado).trim();
+      return normalizado ? [normalizado] : [];
+    }
+
+    if (equipeSelecionada) {
+      return integrantes
+        .map(i => String(i.consultor?.id_agendor ?? '').trim())
+        .filter(Boolean);
+    }
+
+    if (isConsultorPerfil) {
+      return consultorAgendorLogado ? [consultorAgendorLogado] : [];
+    }
+
+    return Object.keys(mapaConsultoresGlobal)
+      .map(id => String(id).trim())
+      .filter(Boolean);
+  }, [
+    consultorSelecionado,
+    equipeSelecionada,
+    integrantes,
+    isConsultorPerfil,
+    consultorAgendorLogado,
+    mapaConsultoresGlobal
+  ]);
+
+  const possuiFiltroExplicito = useCallback((idsExplicitos = []) => {
+    if (Array.isArray(idsExplicitos) && idsExplicitos.length > 0) return true;
+    if (consultorSelecionado) return true;
+    if (equipeSelecionada) return true;
+    return false;
+  }, [consultorSelecionado, equipeSelecionada]);
 
   // ==================== FUNÇÃO AUXILIAR: BUSCAR TAREFAS POR PERÍODO ====================
   async function buscarTarefasPorPeriodo(inicio, fim) {
@@ -262,29 +439,27 @@ function DashboardReobote() {
       return [];
     }
 
-    let idsAgendor = [];
-    if (consultorSelecionado) {
-      idsAgendor = [consultorSelecionado];
-    } else if (equipeSelecionada) {
-      idsAgendor = integrantes
-        .map(i => i.consultor?.id_agendor)
-        .filter(Boolean);
-    } else {
-      idsAgendor = Object.keys(mapaConsultoresGlobal).map(Number);
-    }
+    const idsAgendor = obterIdsConsultores();
+    const filtroExplicito = possuiFiltroExplicito();
 
-    // ✅ VALIDAÇÃO: Se não tem consultores, não buscar
     if (idsAgendor.length === 0) {
+      if (isConsultorPerfil) {
+        console.warn('⚠️ Consultor sem ID de integração configurado.');
+        return [];
+      }
       console.warn('⚠️ Nenhum consultor disponível para buscar tarefas');
       return [];
     }
 
-    const params = new URLSearchParams({
-      dataInicio: `${inicio}T00:00:00Z`,
-      dataFim: `${fim}T23:59:59Z`,
-      tipo: tipo !== 'Todos' ? tipo : '',
-      consultores: idsAgendor.join(',')
-    });
+    const params = new URLSearchParams();
+    params.append('dataInicio', `${inicio}T00:00:00Z`);
+    params.append('dataFim', `${fim}T23:59:59Z`);
+    if (tipo && tipo !== 'Todos') {
+      params.append('tipo', tipo);
+    }
+    if (idsAgendor.length > 0 && (isConsultorPerfil || filtroExplicito)) {
+      params.append('consultores', idsAgendor.join(','));
+    }
 
     const response = await fetch(`${API_URL}/agendor/tarefas?${params.toString()}`, {
       headers: {
@@ -295,11 +470,21 @@ function DashboardReobote() {
 
     const data = await response.json();
 
-    const tarefasEnriquecidas = (data.tarefas || []).map(tarefa => ({
-      ...tarefa,
-      nomeEquipe: mapaConsultoresGlobal[tarefa.consultorId]?.equipe || 'Sem Equipe',
-      nomeConsultor: mapaConsultoresGlobal[tarefa.consultorId]?.nome || tarefa.consultor || 'Desconhecido'
-    }));
+    const tarefasEnriquecidas = (data.tarefas || []).map(tarefa => {
+      const chaveConsultor = String(tarefa.consultorId ?? '').trim();
+      return {
+        ...tarefa,
+        nomeEquipe: mapaConsultoresGlobal[chaveConsultor]?.equipe || 'Sem Equipe',
+        nomeConsultor: mapaConsultoresGlobal[chaveConsultor]?.nome || tarefa.consultor || 'Desconhecido'
+      };
+    });
+
+    const deveFiltrarLocalmente = isConsultorPerfil && !filtroExplicito && idsAgendor.length > 0;
+
+    if (deveFiltrarLocalmente) {
+      const idsSet = new Set(idsAgendor.map(id => String(id)));
+      return tarefasEnriquecidas.filter(t => idsSet.has(String(t.consultorId ?? '').trim()));
+    }
 
     return tarefasEnriquecidas;
   }
@@ -307,23 +492,18 @@ function DashboardReobote() {
   async function buscarNegociosGanhos(dataInicio, consultoresSelecionados = [], dealStatus) {
     try {
       // ✅ Normaliza o array de consultores
-      let idsAgendor = [];
+      const idsAgendor = obterIdsConsultores(consultoresSelecionados);
+      const filtroExplicito = possuiFiltroExplicito(consultoresSelecionados);
 
-      if (Array.isArray(consultoresSelecionados) && consultoresSelecionados.length > 0) {
-        idsAgendor = consultoresSelecionados.map(Number);
-      } else if (consultorSelecionado) {
-        idsAgendor = [Number(consultorSelecionado)];
-      } else if (equipeSelecionada) {
-        idsAgendor = integrantes
-          .map(i => i.consultor?.id_agendor)
-          .filter(Boolean)
-          .map(Number);
-      } else {
-        idsAgendor = Object.keys(mapaConsultoresGlobal).map(Number);
+      if (idsAgendor.length === 0) {
+        console.warn('⚠️ Nenhum consultor identificado para buscar negócios ganhos.');
+        setNegociosGanhos([]);
+        return [];
       }
 
       const cacheGanhos = cacheNegocios.current.ganhos;
-      const idsSet = new Set(idsAgendor.map(Number));
+      cacheGanhos.consultores = (cacheGanhos.consultores || []).map(id => String(id));
+      const idsSet = new Set(idsAgendor.map(id => String(id)));
 
       // ✅ Se já tem cache válido e a lista de consultores é subset do cache, utiliza o cache
       const podeUsarCacheGanhos =
@@ -331,10 +511,10 @@ function DashboardReobote() {
         cacheGanhos.dados.length > 0 &&
         cacheGanhos.dataInicio === dataInicio &&
         idsAgendor.length > 0 &&
-        [...idsSet].every(id => cacheGanhos.consultores.includes(Number(id)));
+        [...idsSet].every(id => cacheGanhos.consultores.includes(id));
 
       if (podeUsarCacheGanhos) {
-        const filtrados = cacheGanhos.dados.filter(n => idsSet.has(Number(n.consultorId)));
+        const filtrados = cacheGanhos.dados.filter(n => idsSet.has(String(n.consultorId ?? '').trim()));
         console.log(`⚡ Usando cache local ganhos (${filtrados.length})`);
         setNegociosGanhos(filtrados);
         return filtrados;
@@ -343,7 +523,9 @@ function DashboardReobote() {
       // ✅ Monta parâmetros da requisição
       const params = new URLSearchParams();
       if (dataInicio) params.append('dataInicio', dataInicio);
-      if (idsAgendor.length > 0) params.append('consultor', idsAgendor.join(','));
+      if (idsAgendor.length > 0 && (isConsultorPerfil || filtroExplicito)) {
+        params.append('consultor', idsAgendor.join(','));
+      }
       params.append('dealStatus', dealStatus);
 
       console.log('🌐 Buscando da API com params:', params.toString());
@@ -371,12 +553,12 @@ function DashboardReobote() {
       const dadosGanhos = data.negocios || [];
       cacheNegocios.current.ganhos = {
         dataInicio,
-        consultores: Array.from(new Set(idsAgendor.map(Number))),
+        consultores: Array.from(new Set(idsAgendor.map(id => String(id)))),
         dados: dadosGanhos
       };
 
       const filtrados = idsAgendor.length
-        ? dadosGanhos.filter(n => idsSet.has(Number(n.consultorId)))
+        ? dadosGanhos.filter(n => idsSet.has(String(n.consultorId ?? '').trim()))
         : dadosGanhos;
 
       console.log(`💾 Negócios carregados: ${filtrados.length} de ${dadosGanhos.length}`);
@@ -392,33 +574,28 @@ function DashboardReobote() {
   async function buscarNegociosEmAndamento(dataInicio, consultoresSelecionados = [], dealStatus) {
     try {
       // ✅ Normaliza o array de consultores
-      let idsAgendor = [];
+      const idsAgendor = obterIdsConsultores(consultoresSelecionados);
+      const filtroExplicito = possuiFiltroExplicito(consultoresSelecionados);
 
-      if (Array.isArray(consultoresSelecionados) && consultoresSelecionados.length > 0) {
-        idsAgendor = consultoresSelecionados.map(Number);
-      } else if (consultorSelecionado) {
-        idsAgendor = [Number(consultorSelecionado)];
-      } else if (equipeSelecionada) {
-        idsAgendor = integrantes
-          .map(i => i.consultor?.id_agendor)
-          .filter(Boolean)
-          .map(Number);
-      } else {
-        idsAgendor = Object.keys(mapaConsultoresGlobal).map(Number);
+      if (idsAgendor.length === 0) {
+        console.warn('⚠️ Nenhum consultor identificado para buscar negócios em andamento.');
+        setNegociosEmAndamento([]);
+        return [];
       }
 
       const cacheAndamento = cacheNegocios.current.andamento;
-      const idsSet = new Set(idsAgendor.map(Number));
+      cacheAndamento.consultores = (cacheAndamento.consultores || []).map(id => String(id));
+      const idsSet = new Set(idsAgendor.map(id => String(id)));
 
       const podeUsarCacheAndamento =
         dealStatus === 1 &&
         cacheAndamento.dados.length > 0 &&
         cacheAndamento.dataInicio === dataInicio &&
         idsAgendor.length > 0 &&
-        [...idsSet].every(id => cacheAndamento.consultores.includes(Number(id)));
+        [...idsSet].every(id => cacheAndamento.consultores.includes(id));
 
       if (podeUsarCacheAndamento) {
-        const filtrados = cacheAndamento.dados.filter(n => idsSet.has(Number(n.consultorId)));
+        const filtrados = cacheAndamento.dados.filter(n => idsSet.has(String(n.consultorId ?? '').trim()));
         console.log(`⚡ Usando cache local andamento (${filtrados.length})`);
         setNegociosEmAndamento(filtrados);
         return filtrados;
@@ -427,7 +604,9 @@ function DashboardReobote() {
       // ✅ Monta parâmetros da requisição
       const params = new URLSearchParams();
       if (dataInicio) params.append('dataInicio', dataInicio);
-      if (idsAgendor.length > 0) params.append('consultor', idsAgendor.join(','));
+      if (idsAgendor.length > 0 && (isConsultorPerfil || filtroExplicito)) {
+        params.append('consultor', idsAgendor.join(','));
+      }
       params.append('dealStatus', dealStatus);
 
       console.log('🌐 Buscando da API com params:', params.toString());
@@ -454,12 +633,12 @@ function DashboardReobote() {
       const dadosAndamento = data.negocios || [];
       cacheNegocios.current.andamento = {
         dataInicio,
-        consultores: Array.from(new Set(idsAgendor.map(Number))),
+        consultores: Array.from(new Set(idsAgendor.map(id => String(id)))),
         dados: dadosAndamento
       };
 
       const filtrados = idsAgendor.length
-        ? dadosAndamento.filter(n => idsSet.has(Number(n.consultorId)))
+        ? dadosAndamento.filter(n => idsSet.has(String(n.consultorId ?? '').trim()))
         : dadosAndamento;
 
       console.log(`💾 Negócios carregados: ${filtrados.length} de ${dadosAndamento.length}`);
@@ -500,14 +679,13 @@ function DashboardReobote() {
 
       const [tarefasAtuais, tarefasComp = []] = await Promise.all(promises);
 
-      const consultores = consultorSelecionado
-        ? [consultorSelecionado]
-        : equipeSelecionada
-          ? integrantes.map(i => i.consultor?.id_agendor).filter(Boolean)
-          : Object.keys(mapaConsultoresGlobal).map(Number);
+      const idsConsultoresParaNegocios = obterIdsConsultores();
+      const consultoresFiltro = (isConsultorPerfil || possuiFiltroExplicito())
+        ? idsConsultoresParaNegocios
+        : [];
 
-      const negociosGanhosData = await buscarNegociosGanhos(dataInicio, consultores, 2);
-      const negociosEmAndamentoData = await buscarNegociosEmAndamento(dataInicio, consultores, 1);
+      const negociosGanhosData = await buscarNegociosGanhos(dataInicio, consultoresFiltro, 2);
+      const negociosEmAndamentoData = await buscarNegociosEmAndamento(dataInicio, consultoresFiltro, 1);
 
 
       // ✅ PASSO 2: Extrair consultorId únicos das tarefas retornadas
@@ -623,7 +801,7 @@ function DashboardReobote() {
     if (tipo !== 'Todos') f = f.filter(t => t.tipo === tipo);
     if (status !== 'Todos') f = f.filter(t => t.status === status);
     if (consultorSelecionado)
-      f = f.filter(t => String(t.consultorId) === String(consultorSelecionado));
+      f = f.filter(t => String(t.consultorId ?? '').trim() === String(consultorSelecionado ?? '').trim());
     setFiltradas(f);
   }, [tipo, status, consultorSelecionado, tarefas]);
 
@@ -635,7 +813,9 @@ function DashboardReobote() {
     setDataFimComp('');
     setHabilitarComparacao(false);
     setEquipeSelecionada('');
-    setConsultorSelecionado('');
+    setConsultorSelecionado(isConsultorPerfil && consultorAgendorLogado
+      ? consultorAgendorLogado
+      : '');
     setTipo('Todos');
     setStatus('Todos');
     setTarefas([]);
@@ -739,24 +919,37 @@ function DashboardReobote() {
   };
 
   // Aplica ordenação ao ranking
-  const rankingOrdenado = [...ranking].sort((a, b) => {
-    let aValue = a[orderBy];
-    let bValue = b[orderBy];
+  const rankingOrdenado = useMemo(() => {
+    const ordenado = [...ranking].sort((a, b) => {
+      let aValue = a[orderBy];
+      let bValue = b[orderBy];
 
-    // Trata valores nulos/undefined
-    if (aValue === null || aValue === undefined) aValue = 0;
-    if (bValue === null || bValue === undefined) bValue = 0;
+      if (aValue === null || aValue === undefined) aValue = 0;
+      if (bValue === null || bValue === undefined) bValue = 0;
 
-    // Ordenação para strings (consultor)
-    if (orderBy === 'consultor') {
-      return order === 'asc'
-        ? aValue.localeCompare(bValue)
-        : bValue.localeCompare(aValue);
+      if (orderBy === 'consultor') {
+        return order === 'asc'
+          ? aValue.localeCompare(bValue)
+          : bValue.localeCompare(aValue);
+      }
+
+      return order === 'asc' ? aValue - bValue : bValue - aValue;
+    });
+
+    return ordenado;
+  }, [ranking, orderBy, order]);
+
+  const rankingPaginado = useMemo(() => {
+    if (rankingRowsPerPage === -1) {
+      return rankingOrdenado;
     }
+    const inicio = rankingPage * rankingRowsPerPage;
+    return rankingOrdenado.slice(inicio, inicio + rankingRowsPerPage);
+  }, [rankingOrdenado, rankingRowsPerPage, rankingPage]);
 
-    // Ordenação para números
-    return order === 'asc' ? aValue - bValue : bValue - aValue;
-  });
+  useEffect(() => {
+    setRankingPage(0);
+  }, [rankingOrdenado.length, rankingRowsPerPage]);
 
   // ✅ NOVO: Calcula soma total de cotas
   const somaValorCotas = ranking.reduce((soma, r) => soma + (r.valorCota || 0), 0);
@@ -881,14 +1074,17 @@ function DashboardReobote() {
           </Grid>
 
           <Grid item xs={12} sm={6} md={3}>
-            <FormControl fullWidth>
+            <FormControl fullWidth disabled={isConsultorPerfil}>
               <InputLabel>Equipe</InputLabel>
               <Select
                 value={equipeSelecionada}
                 onChange={e => setEquipeSelecionada(e.target.value)}
                 label="Equipe"
+                disabled={isConsultorPerfil}
               >
-                <MenuItem value="">Todas as Equipes</MenuItem>
+                <MenuItem value="" disabled={!podeSelecionarTodasEquipes}>
+                  Todas as Equipes
+                </MenuItem>
                 {equipes.map(eq => (
                   <MenuItem key={eq.id} value={eq.id}>{eq.descricao}</MenuItem>
                 ))}
@@ -897,17 +1093,20 @@ function DashboardReobote() {
           </Grid>
 
           <Grid item xs={12} sm={6} md={3}>
-            <FormControl fullWidth>
+            <FormControl fullWidth disabled={isConsultorPerfil}>
               <InputLabel>Consultor</InputLabel>
               <Select
-                value={consultorSelecionado}
-                onChange={e => setConsultorSelecionado(e.target.value)}
-                disabled={!equipeSelecionada}
+                value={isConsultorPerfil ? (consultorAgendorLogado || '') : consultorSelecionado}
+                onChange={e => setConsultorSelecionado(String(e.target.value).trim())}
+                disabled={isConsultorPerfil || !equipeSelecionada}
                 label="Consultor"
               >
                 <MenuItem value="">Todos os Consultores</MenuItem>
                 {integrantes.map(int => (
-                  <MenuItem key={int.consultor?.id_agendor} value={int.consultor?.id_agendor}>
+                  <MenuItem
+                    key={int.consultor?.id_agendor}
+                    value={String(int.consultor?.id_agendor ?? '').trim()}
+                  >
                     {int.consultor?.nome}
                   </MenuItem>
                 ))}
@@ -1034,147 +1233,151 @@ function DashboardReobote() {
             </Grid>
 
             {/* ==================== GRÁFICOS ==================== */}
-            <Typography variant="h5" gutterBottom style={{ marginTop: 30, marginBottom: 20 }}>
-              📈 Gráficos e Análises
-            </Typography>
+            {!isConsultorPerfil && (
+              <>
+                <Typography variant="h5" gutterBottom style={{ marginTop: 30, marginBottom: 20 }}>
+                  📈 Gráficos e Análises
+                </Typography>
 
-            {/* Gráficos Lado a Lado */}
-            <Grid container spacing={3} style={{ marginBottom: 30 }}>
-              <Grid item xs={12} md={6}>
-                <Paper elevation={2} style={{ padding: 20 }}>
-                  <Typography variant="h6" gutterBottom>
-                    Número de visitas e reuniões por equipe
-                  </Typography>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={graficoPorEquipe}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="equipe" />
-                      <YAxis />
-                      <Tooltip />
-                      <Legend />
-                      <Bar dataKey="Número de Reuniões" fill="#007AFF" />
-                      <Bar dataKey="Número de Visitas" fill="#00C7BE" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </Paper>
-              </Grid>
+                {/* Gráficos Lado a Lado */}
+                <Grid container spacing={3} style={{ marginBottom: 30 }}>
+                  <Grid item xs={12} md={6}>
+                    <Paper elevation={2} style={{ padding: 20 }}>
+                      <Typography variant="h6" gutterBottom>
+                        Número de visitas e reuniões por equipe
+                      </Typography>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={graficoPorEquipe}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="equipe" />
+                          <YAxis />
+                          <Tooltip />
+                          <Legend />
+                          <Bar dataKey="Número de Reuniões" fill="#007AFF" />
+                          <Bar dataKey="Número de Visitas" fill="#00C7BE" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </Paper>
+                  </Grid>
 
-              <Grid item xs={12} md={6}>
-                <Paper elevation={2} style={{ padding: 20 }}>
-                  <Typography variant="h6" gutterBottom>
-                    Geral Reobote Visitas e Reuniões
-                  </Typography>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <PieChart>
-                      <Pie
-                        data={graficoGeralPizza}
-                        dataKey="total"
-                        nameKey="nome"
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={120}
-                      >
-                        {graficoGeralPizza.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={CORES[index % CORES.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                      <Legend
-                        layout="vertical"
-                        align="right"
-                        verticalAlign="middle"
-                        wrapperStyle={{ paddingLeft: '20px' }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </Paper>
-              </Grid>
-            </Grid>
-
-            {/* Gráficos de Rosca (Apenas se nenhuma equipe selecionada) */}
-            {!equipeSelecionada && (
-              <Grid container spacing={3} style={{ marginBottom: 30 }}>
-                <Grid item xs={12} md={4}>
-                  <Paper elevation={2} style={{ padding: 20 }}>
-                    <Typography variant="h6" gutterBottom>
-                      % de visitas e reuniões por equipes
-                    </Typography>
-                    <ResponsiveContainer width="100%" height={250}>
-                      <PieChart>
-                        <Pie
-                          data={graficoPorcEquipes}
-                          dataKey="total"
-                          nameKey="equipe"
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={60}
-                          outerRadius={100}
-                        >
-                          {graficoPorcEquipes.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={CORES[index % CORES.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                        <Legend layout="horizontal" align="center" verticalAlign="bottom" />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </Paper>
+                  <Grid item xs={12} md={6}>
+                    <Paper elevation={2} style={{ padding: 20 }}>
+                      <Typography variant="h6" gutterBottom>
+                        Geral Reobote Visitas e Reuniões
+                      </Typography>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <PieChart>
+                          <Pie
+                            data={graficoGeralPizza}
+                            dataKey="total"
+                            nameKey="nome"
+                            cx="50%"
+                            cy="50%"
+                            outerRadius={120}
+                          >
+                            {graficoGeralPizza.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={CORES[index % CORES.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip />
+                          <Legend
+                            layout="vertical"
+                            align="right"
+                            verticalAlign="middle"
+                            wrapperStyle={{ paddingLeft: '20px' }}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </Paper>
+                  </Grid>
                 </Grid>
 
-                <Grid item xs={12} md={4}>
-                  <Paper elevation={2} style={{ padding: 20 }}>
-                    <Typography variant="h6" gutterBottom>
-                      % de propostas por Equipe
-                    </Typography>
-                    <ResponsiveContainer width="100%" height={250}>
-                      <PieChart>
-                        <Pie
-                          data={graficoPropostasPorEquipe}
-                          dataKey="total"
-                          nameKey="equipe"
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={60}
-                          outerRadius={100}
-                        >
-                          {graficoPropostasPorEquipe.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={CORES[index % CORES.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                        <Legend layout="horizontal" align="center" verticalAlign="bottom" />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </Paper>
-                </Grid>
+                {/* Gráficos de Rosca (Apenas se nenhuma equipe selecionada) */}
+                {!equipeSelecionada && (
+                  <Grid container spacing={3} style={{ marginBottom: 30 }}>
+                    <Grid item xs={12} md={4}>
+                      <Paper elevation={2} style={{ padding: 20 }}>
+                        <Typography variant="h6" gutterBottom>
+                          % de visitas e reuniões por equipes
+                        </Typography>
+                        <ResponsiveContainer width="100%" height={250}>
+                          <PieChart>
+                            <Pie
+                              data={graficoPorcEquipes}
+                              dataKey="total"
+                              nameKey="equipe"
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={60}
+                              outerRadius={100}
+                            >
+                              {graficoPorcEquipes.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={CORES[index % CORES.length]} />
+                              ))}
+                            </Pie>
+                            <Tooltip />
+                            <Legend layout="horizontal" align="center" verticalAlign="bottom" />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </Paper>
+                    </Grid>
 
-                <Grid item xs={12} md={4}>
-                  <Paper elevation={2} style={{ padding: 20 }}>
-                    <Typography variant="h6" gutterBottom>
-                      Propostas por Usuário
-                    </Typography>
-                    <ResponsiveContainer width="100%" height={250}>
-                      <PieChart>
-                        <Pie
-                          data={graficoPropostasPorUsuario}
-                          dataKey="total"
-                          nameKey="nome"
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={60}
-                          outerRadius={100}
-                        >
-                          {graficoPropostasPorUsuario.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={CORES[index % CORES.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                        <Legend layout="horizontal" align="center" verticalAlign="bottom" />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </Paper>
-                </Grid>
-              </Grid>
+                    <Grid item xs={12} md={4}>
+                      <Paper elevation={2} style={{ padding: 20 }}>
+                        <Typography variant="h6" gutterBottom>
+                          % de propostas por Equipe
+                        </Typography>
+                        <ResponsiveContainer width="100%" height={250}>
+                          <PieChart>
+                            <Pie
+                              data={graficoPropostasPorEquipe}
+                              dataKey="total"
+                              nameKey="equipe"
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={60}
+                              outerRadius={100}
+                            >
+                              {graficoPropostasPorEquipe.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={CORES[index % CORES.length]} />
+                              ))}
+                            </Pie>
+                            <Tooltip />
+                            <Legend layout="horizontal" align="center" verticalAlign="bottom" />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </Paper>
+                    </Grid>
+
+                    <Grid item xs={12} md={4}>
+                      <Paper elevation={2} style={{ padding: 20 }}>
+                        <Typography variant="h6" gutterBottom>
+                          Propostas por Usuário
+                        </Typography>
+                        <ResponsiveContainer width="100%" height={250}>
+                          <PieChart>
+                            <Pie
+                              data={graficoPropostasPorUsuario}
+                              dataKey="total"
+                              nameKey="nome"
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={60}
+                              outerRadius={100}
+                            >
+                              {graficoPropostasPorUsuario.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={CORES[index % CORES.length]} />
+                              ))}
+                            </Pie>
+                            <Tooltip />
+                            <Legend layout="horizontal" align="center" verticalAlign="bottom" />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </Paper>
+                    </Grid>
+                  </Grid>
+                )}
+              </>
             )}
 
             {/* Indicadores Adicionais */}
@@ -1321,30 +1524,36 @@ function DashboardReobote() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {rankingOrdenado.map((r, index) => (
-                      <TableRow key={index}>
-                        <TableCell>{index + 1}</TableCell>
-                        <TableCell>{r.consultor}</TableCell>
-                        <TableCell align="center">{r.visitas}</TableCell>
-                        <TableCell align="center">{r.reunioes}</TableCell>
-                        <TableCell align="center">{r.propostas}</TableCell>
-                        <TableCell align="center"><strong>{r.total}</strong></TableCell>
-                        <TableCell align="center">
-                          R$ {r.valorCota.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </TableCell>
-                        <TableCell
-                          align="center"
-                          style={{
-                            color: r.variacao > 0 ? '#34C759' : r.variacao < 0 ? '#FF3B30' : '#8E8E93',
-                            fontWeight: 600
-                          }}
-                        >
-                          {habilitarComparacao
-                            ? (r.variacao !== null ? `${r.variacao > 0 ? '+' : ''}${r.variacao}%` : '—')
-                            : '—'}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {rankingPaginado.map((r, index) => {
+                      const posicao = rankingRowsPerPage === -1
+                        ? index + 1
+                        : rankingPage * rankingRowsPerPage + index + 1;
+
+                      return (
+                        <TableRow key={`${r.consultor}-${posicao}`}>
+                          <TableCell>{posicao}</TableCell>
+                          <TableCell>{r.consultor}</TableCell>
+                          <TableCell align="center">{r.visitas}</TableCell>
+                          <TableCell align="center">{r.reunioes}</TableCell>
+                          <TableCell align="center">{r.propostas}</TableCell>
+                          <TableCell align="center"><strong>{r.total}</strong></TableCell>
+                          <TableCell align="center">
+                            R$ {r.valorCota.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </TableCell>
+                          <TableCell
+                            align="center"
+                            style={{
+                              color: r.variacao > 0 ? '#34C759' : r.variacao < 0 ? '#FF3B30' : '#8E8E93',
+                              fontWeight: 600
+                            }}
+                          >
+                            {habilitarComparacao
+                              ? (r.variacao !== null ? `${r.variacao > 0 ? '+' : ''}${r.variacao}%` : '—')
+                              : '—'}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
 
                   {/* ✅ NOVO: Footer com totais */}
@@ -1364,6 +1573,20 @@ function DashboardReobote() {
 
                 </Table>
               </TableContainer>
+              <TablePagination
+                component="div"
+                count={rankingOrdenado.length}
+                page={rankingPage}
+                onPageChange={(event, newPage) => setRankingPage(newPage)}
+                rowsPerPage={rankingRowsPerPage}
+                onRowsPerPageChange={(event) => {
+                  const value = parseInt(event.target.value, 10);
+                  setRankingRowsPerPage(value);
+                  setRankingPage(0);
+                }}
+                rowsPerPageOptions={[10, 25, 50, { label: 'Todos', value: -1 }]}
+                labelRowsPerPage="Consultores por página"
+              />
             </Paper>
           </>
         )}

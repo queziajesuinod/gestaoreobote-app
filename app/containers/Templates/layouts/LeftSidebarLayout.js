@@ -10,7 +10,7 @@ import {
   Sidebar,
   BreadCrumb,
 } from 'dan-components';
-import dataMenu from 'dan-api/ui/menu';
+import useMenuData from '../../../utils/useMenuData';
 import Decoration from '../Decoration';
 import useStyles from '../appStyles-jss';
 
@@ -40,6 +40,8 @@ function LeftSidebarLayout(props) {
     replace: (path) => goTo(path, true),
     location
   };
+
+  const dataMenu = useMenuData();
 
   return (
     <Fragment>

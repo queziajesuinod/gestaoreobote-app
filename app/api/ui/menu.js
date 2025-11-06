@@ -1,16 +1,28 @@
 // app/menu.js
-const { buildMenu } = require('./menuBuilder');
+const menuBuilderModule = require('./menuBuilder');
+const buildMenu = menuBuilderModule.default || menuBuilderModule.buildMenu || menuBuilderModule;
 
-function getMenu() {
+function resolveMenu(permissoes) {
   try {
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    const permissoes = user?.permissoes || [];
-
-    return buildMenu(permissoes);
+    return buildMenu(permissoes || []);
   } catch (err) {
     console.error('Erro ao montar menu:', err);
     return [];
   }
 }
 
-module.exports = getMenu();
+function getMenu(permissoes) {
+  try {
+    if (permissoes && Array.isArray(permissoes)) {
+      return resolveMenu(permissoes);
+    }
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    return resolveMenu(user?.permissoes || []);
+  } catch (err) {
+    console.error('Erro ao montar menu:', err);
+    return [];
+  }
+}
+
+module.exports = getMenu;
+module.exports.getMenu = getMenu;

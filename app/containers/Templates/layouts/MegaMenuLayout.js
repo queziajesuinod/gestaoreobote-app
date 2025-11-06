@@ -5,7 +5,7 @@ import Fade from '@mui/material/Fade';
 import Typography from '@mui/material/Typography';
 
 import { HeaderMenu, BreadCrumb } from 'dan-components';
-import dataMenu from 'dan-api/ui/menu';
+import useMenuData from '../../../utils/useMenuData';
 import Decoration from '../Decoration';
 import useStyles from '../appStyles-jss';
 
@@ -27,6 +27,7 @@ function DropMenuLayout(props) {
     sidebarOpen,
     loadTransition
   } = props;
+  const dataMenu = useMenuData();
   return (
     <Fragment>
       <HeaderMenu

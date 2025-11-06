@@ -1,10 +1,14 @@
-'use strict';
-const { Model, DataTypes } = require('sequelize');
+const { Model } = require('sequelize');
 
 module.exports = (sequelize, DataTypes) => {
   class Permissao extends Model {
     static associate(models) {
-      // Defina as associações aqui, se necessário.
+      if (models.Perfil) {
+        Permissao.belongsTo(models.Perfil, {
+          foreignKey: 'perfilId',
+          as: 'perfil'
+        });
+      }
     }
   }
 

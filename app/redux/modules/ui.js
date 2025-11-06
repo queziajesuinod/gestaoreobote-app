@@ -1,5 +1,5 @@
 import { createSlice } from '@reduxjs/toolkit';
-import menuContent from 'dan-api/ui/menu';
+import getMenu from 'dan-api/ui/menu';
 
 const initialState = {
   /* Settings for Themes and layout */
@@ -20,19 +20,19 @@ const initialState = {
   subMenuOpen: []
 };
 
-const getMenus = menuArray => menuArray.map(item => {
+const getMenus = (menuArray) => menuArray.map((item) => {
   if (item.child) {
     return item.child;
   }
   return false;
 });
 
-const setNavCollapse = (arr, curRoute) => {
+const setNavCollapse = (arr, curRoute, menuSource) => {
   let headMenu = 'not found';
   for (let i = 0; i < arr.length; i += 1) {
     for (let j = 0; j < arr[i].length; j += 1) {
       if (arr[i][j].link === curRoute) {
-        headMenu = menuContent[i].key;
+        headMenu = menuSource[i].key;
       }
     }
   }
@@ -55,10 +55,12 @@ const uiSlice = createSlice({
     },
     openAction: (state, action) => {
       const { initialLocation, key } = action.payload;
+      const menuSource = getMenu();
       // Set initial open parent menu
       const activeParent = setNavCollapse(
-        getMenus(menuContent),
-        initialLocation
+        getMenus(menuSource),
+        initialLocation,
+        menuSource
       );
 
       // Once page loaded will expand the parent menu

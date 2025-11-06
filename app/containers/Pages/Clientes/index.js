@@ -32,6 +32,7 @@ import {
 import { Add as AddIcon, Visibility as VisibilityIcon, Refresh as RefreshIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import brand from 'dan-api/dummy/brand';
 import { PapperBlock } from 'dan-components';
+import { getStoredUser } from '../../../utils/userStorage';
 
 const API_URL = process.env.REACT_APP_API_URL?.replace(/\/$/, '') || 'http://localhost:3003';
 const ESTADOS = [
@@ -92,6 +93,25 @@ function Clientes() {
     message: '',
     severity: 'success'
   });
+
+  const [storedUser, setStoredUserState] = useState(() => getStoredUser());
+
+  useEffect(() => {
+    const handleUserUpdated = (event) => {
+      const payload = event?.detail;
+      if (payload) {
+        setStoredUserState(payload);
+      } else {
+        setStoredUserState(getStoredUser());
+      }
+    };
+
+    window.addEventListener('app:user-updated', handleUserUpdated);
+    return () => window.removeEventListener('app:user-updated', handleUserUpdated);
+  }, []);
+
+  const permissoesUsuario = storedUser?.permissoes || [];
+  const podeGerenciarClientes = permissoesUsuario.includes('CLIENTES_ALL') || permissoesUsuario.includes('GESTAO');
 
   const showSnackbar = (message, severity = 'success') => {
     setSnackbar({ open: true, message, severity });
@@ -184,8 +204,12 @@ function Clientes() {
 
   useEffect(() => {
     loadClientes();
-    loadConsultores();
-  }, []);
+    if (podeGerenciarClientes) {
+      loadConsultores();
+    } else {
+      setConsultores([]);
+    }
+  }, [podeGerenciarClientes]);
 
   useEffect(() => {
     setPage(0);
@@ -221,6 +245,10 @@ function Clientes() {
   };
 
   const loadConsultores = async () => {
+    if (!podeGerenciarClientes) {
+      setConsultores([]);
+      return;
+    }
     try {
       const response = await fetch(`${API_URL}/consultor`, {
         headers: {
@@ -262,12 +290,20 @@ function Clientes() {
   };
 
   const handleOpenClienteDialog = () => {
+    if (!podeGerenciarClientes) {
+      showSnackbar('Você não tem permissão para cadastrar clientes.', 'error');
+      return;
+    }
     resetClienteForm();
     setClienteEditando(null);
     setOpenClienteDialog(true);
   };
 
   const handleEditCliente = (cliente) => {
+    if (!podeGerenciarClientes) {
+      showSnackbar('Você não tem permissão para editar clientes.', 'error');
+      return;
+    }
     setClienteEditando(cliente);
     setClienteForm({
       nome: cliente.nome || '',
@@ -306,16 +342,47 @@ function Clientes() {
 
   const handleSubmitCliente = async (event) => {
     event.preventDefault();
+    if (!podeGerenciarClientes) {
+      showSnackbar('Você não tem permissão para salvar clientes.', 'error');
+      return;
+    }
     const emEdicao = Boolean(clienteEditando);
     const endpoint = emEdicao ? `${API_URL}/clientes/${clienteEditando.id}` : `${API_URL}/clientes`;
     const metodo = emEdicao ? 'PUT' : 'POST';
     const mensagemSucesso = emEdicao ? 'Cliente atualizado com sucesso' : 'Cliente cadastrado com sucesso';
 
     try {
+      const cpfSanitizado = sanitizeDigits(clienteForm.cpf);
+      const celularSanitizado = sanitizeDigits(clienteForm.celular);
+      const emailTrimmed = (clienteForm.email || '').trim();
+      const emailLower = emailTrimmed.toLowerCase();
+
+      const duplicado = clientes.some(cliente => {
+        if (emEdicao && cliente.id === clienteEditando.id) {
+          return false;
+        }
+
+        const cpfExistente = sanitizeDigits(cliente.cpf);
+        const emailExistente = (cliente.email || '').trim().toLowerCase();
+
+        const mesmoCpf = cpfSanitizado && cpfExistente && cpfExistente === cpfSanitizado;
+        const mesmoEmail = emailLower && emailExistente === emailLower;
+
+        return mesmoCpf || mesmoEmail;
+      });
+
+      if (duplicado) {
+        showSnackbar('Já existe um cliente cadastrado com este CPF ou e-mail.', 'error');
+        return;
+      }
+
       const payload = {
         ...clienteForm,
-        cpf: sanitizeDigits(clienteForm.cpf),
-        celular: sanitizeDigits(clienteForm.celular),
+        nome: (clienteForm.nome || '').trim(),
+        cpf: cpfSanitizado || null,
+        celular: celularSanitizado,
+        email: emailTrimmed,
+        profissao: (clienteForm.profissao || '').trim(),
         dtnascimento: clienteForm.dtnascimento ? new Date(`${clienteForm.dtnascimento}T00:00:00`).toISOString() : null
       };
 
@@ -349,6 +416,10 @@ function Clientes() {
   };
 
   const handleDeleteCliente = async (cliente) => {
+    if (!podeGerenciarClientes) {
+      showSnackbar('Você não tem permissão para remover clientes.', 'error');
+      return;
+    }
     const confirmar = window.confirm(`Deseja remover o cliente ${cliente.nome}?`);
     if (!confirmar) return;
 
@@ -387,12 +458,20 @@ function Clientes() {
   };
 
   const handleOpenNovaCota = () => {
+    if (!podeGerenciarClientes) {
+      showSnackbar('Você não tem permissão para cadastrar cotas.', 'error');
+      return;
+    }
     resetCotaForm();
     setCotaEditando(null);
     setOpenCotaDialog(true);
   };
 
   const handleEditCota = (cota) => {
+    if (!podeGerenciarClientes) {
+      showSnackbar('Você não tem permissão para editar cotas.', 'error');
+      return;
+    }
     setCotaEditando(cota);
     setCotaForm({
       grupo: cota.grupo || '',
@@ -416,6 +495,10 @@ function Clientes() {
   const handleSubmitCota = async (event) => {
     event.preventDefault();
     if (!selectedCliente) return;
+    if (!podeGerenciarClientes) {
+      showSnackbar('Você não tem permissão para salvar cotas.', 'error');
+      return;
+    }
 
     const emEdicao = Boolean(cotaEditando);
     const endpoint = emEdicao ? `${API_URL}/cotas/${cotaEditando.id}` : `${API_URL}/cotas`;
@@ -467,6 +550,10 @@ function Clientes() {
   };
 
   const handleDeleteCota = async (cota) => {
+    if (!podeGerenciarClientes) {
+      showSnackbar('Você não tem permissão para remover cotas.', 'error');
+      return;
+    }
     if (!selectedCliente) return;
     const confirmar = window.confirm(`Deseja remover a cota ${cota.grupo}${cota.cota ? `/${cota.cota}` : ''}?`);
     if (!confirmar) return;
@@ -621,14 +708,16 @@ function Clientes() {
             >
               Atualizar
             </Button>
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={<AddIcon />}
-              onClick={handleOpenClienteDialog}
-            >
-              Novo Cliente
-            </Button>
+            {podeGerenciarClientes && (
+              <Button
+                variant="contained"
+                color="primary"
+                startIcon={<AddIcon />}
+                onClick={handleOpenClienteDialog}
+              >
+                Novo Cliente
+              </Button>
+            )}
           </Box>
         </Box>
 
@@ -645,15 +734,7 @@ function Clientes() {
                     Nome
                   </TableSortLabel>
                 </TableCell>
-                <TableCell sortDirection={orderBy === 'email' ? order : false}>
-                  <TableSortLabel
-                    active={orderBy === 'email'}
-                    direction={orderBy === 'email' ? order : 'asc'}
-                    onClick={() => handleRequestSort('email')}
-                  >
-                    Email
-                  </TableSortLabel>
-                </TableCell>
+          
                 <TableCell sortDirection={orderBy === 'celular' ? order : false}>
                   <TableSortLabel
                     active={orderBy === 'celular'}
@@ -701,25 +782,28 @@ function Clientes() {
                 clientesPaginados.map(cliente => (
                   <TableRow key={cliente.id} hover>
                     <TableCell>{cliente.nome}</TableCell>
-                    <TableCell>{cliente.email}</TableCell>
                     <TableCell>{formatPhone(cliente.celular)}</TableCell>
                     <TableCell>
                       {cliente.cidade ? `${cliente.cidade}/${cliente.estado || '--'}` : '--'}
                     </TableCell>
                     <TableCell align="center">
-                      {cliente.totalCotas ?? 0}
+                      {Number(cliente.totalCotas ?? 0)}
                     </TableCell>
                     <TableCell align="center">
                       <Box display="flex" justifyContent="center" gap={1}>
                         <IconButton size="small" color="primary" onClick={() => handleOpenDetalhes(cliente)}>
                           <VisibilityIcon fontSize="small" />
                         </IconButton>
-                        <IconButton size="small" color="primary" onClick={() => handleEditCliente(cliente)}>
-                          <EditIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton size="small" color="error" onClick={() => handleDeleteCliente(cliente)}>
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
+                        {podeGerenciarClientes && (
+                          <IconButton size="small" color="primary" onClick={() => handleEditCliente(cliente)}>
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        )}
+                        {podeGerenciarClientes && (
+                          <IconButton size="small" color="error" onClick={() => handleDeleteCliente(cliente)}>
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        )}
                       </Box>
                     </TableCell>
                   </TableRow>
@@ -873,14 +957,16 @@ function Clientes() {
 
           <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
             <Typography variant="subtitle1">Cotas do Cliente</Typography>
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={<AddIcon />}
-              onClick={handleOpenNovaCota}
-            >
-              Nova Cota
-            </Button>
+            {podeGerenciarClientes && (
+              <Button
+                variant="contained"
+                color="primary"
+                startIcon={<AddIcon />}
+                onClick={handleOpenNovaCota}
+              >
+                Nova Cota
+              </Button>
+            )}
           </Box>
 
           <TableContainer component={Paper}>
@@ -933,14 +1019,18 @@ function Clientes() {
                       <TableCell>{cota.administradora}</TableCell>
                       <TableCell>{cota.consultor?.nome || '—'}</TableCell>
                       <TableCell align="center">
-                        <Box display="flex" justifyContent="center" gap={1}>
-                          <IconButton size="small" color="primary" onClick={() => handleEditCota(cota)}>
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                          <IconButton size="small" color="error" onClick={() => handleDeleteCota(cota)}>
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </Box>
+                        {podeGerenciarClientes ? (
+                          <Box display="flex" justifyContent="center" gap={1}>
+                            <IconButton size="small" color="primary" onClick={() => handleEditCota(cota)}>
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                            <IconButton size="small" color="error" onClick={() => handleDeleteCota(cota)}>
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Box>
+                        ) : (
+                          '—'
+                        )}
                       </TableCell>
                     </TableRow>
                   ))

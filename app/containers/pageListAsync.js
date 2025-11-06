@@ -75,7 +75,22 @@ export const Clientes = loadable(() =>
     fallback: <Loading />,
   });
 
+export const Cotas = loadable(() =>
+  import('./Pages/Cotas'), {
+    fallback: <Loading />,
+  });
+
 export const ProfilePage = loadable(() =>
   import('./Pages/Users/Profile'), {
+    fallback: <Loading />,
+  });
+
+export const UsersAdmin = loadable(() =>
+  import('./Pages/Users/UsersManagement'), {
+    fallback: <Loading />,
+  });
+
+export const PerfisAdmin = loadable(() =>
+  import('./Pages/Users/PerfisManagement'), {
     fallback: <Loading />,
   });

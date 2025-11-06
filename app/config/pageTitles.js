@@ -19,6 +19,8 @@ const pageTitles = {
   'equipes': 'Equipes',
   'clientes': 'Clientes',
   'consultores': 'Consultores',
+  'usuarios': 'Usuários',
+  'perfis': 'Perfis',
   
   // Usuários
   'profile': 'Meu Perfil',

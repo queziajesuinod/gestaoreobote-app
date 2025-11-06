@@ -7,7 +7,7 @@ import {
   SidebarBig,
   BreadCrumb,
 } from 'dan-components';
-import dataMenu from 'dan-api/ui/menu';
+import useMenuData from '../../../utils/useMenuData';
 import Decoration from '../Decoration';
 import useStyles from '../appStyles-jss';
 
@@ -30,6 +30,8 @@ function LeftSidebarBigLayout(props) {
     handleOpenGuide,
   } = props;
 
+  const menuData = useMenuData();
+
   return (
     <Fragment>
       <Header
@@ -44,7 +46,7 @@ function LeftSidebarBigLayout(props) {
         openGuide={handleOpenGuide}
       />
       <SidebarBig
-        dataMenu={dataMenu}
+        dataMenu={menuData}
         loadTransition={loadTransition}
         open={sidebarOpen}
         toggleDrawerOpen={toggleDrawer}

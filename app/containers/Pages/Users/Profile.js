@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { Helmet } from 'react-helmet';
 import imageCompression from 'browser-image-compression';
 import dummyContents from 'dan-api/dummy/dummyContents';
+import { setStoredUser } from '../../../utils/userStorage';
 import { PapperBlock, Notification } from 'dan-components';
 import {
   Paper,
@@ -102,7 +103,7 @@ const ProfilePage = () => {
           ...userStorage,
           avatar: base64Image
         };
-        localStorage.setItem('user', JSON.stringify(updatedUser));
+        setStoredUser(updatedUser);
         dummyContents.user = updatedUser;
       } else {
         setNotification(`Erro: ${data.message || 'Não foi possível atualizar a imagem'}`);

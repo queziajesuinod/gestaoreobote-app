@@ -7,10 +7,8 @@ import parse from 'autosuggest-highlight/parse';
 import TextField from '@mui/material/TextField';
 import Paper from '@mui/material/Paper';
 import MenuItem from '@mui/material/MenuItem';
-import suggestionsApi from 'dan-api/ui/menu';
+import getMenu from 'dan-api/ui/menu';
 import useStyles from './search-jss';
-
-const menu = [];
 
 // Campo de busca
 function renderInput(inputProps) {
@@ -64,14 +62,14 @@ function getSuggestionValue(suggestion) {
 }
 
 // Função de busca local
-function getSuggestions(value) {
+function getSuggestions(value, menuSource) {
   const inputValue = value.trim().toLowerCase();
   const inputLength = inputValue.length;
   let count = 0;
 
   if (inputLength === 0) return [];
 
-  return menu.filter((suggestion) => {
+  return menuSource.filter((suggestion) => {
     const keep = (!inputValue
         || suggestion.name.toLowerCase().includes(inputValue))
       && count < 5;
@@ -85,23 +83,41 @@ function getSuggestions(value) {
 function SearchUi({ goTo }) {
   const [value, setValue] = useState('');
   const [suggestions, setSuggestions] = useState([]);
+  const [menuSource, setMenuSource] = useState([]);
   const { classes } = useStyles();
 
   // Carrega as sugestões
   useEffect(() => {
-    suggestionsApi.forEach((item) => {
-      if (item.child) {
-        item.child.forEach((itemChild) => {
-          if (itemChild.link) {
-            menu.push(itemChild);
+    const buildMenu = () => {
+      const flattened = [];
+      try {
+        const menuItems = getMenu();
+        menuItems.forEach((item) => {
+          if (item.child) {
+            item.child.forEach((child) => {
+              if (child.link && child.name) {
+                flattened.push(child);
+              }
+            });
           }
         });
+      } catch (error) {
+        console.error('Erro ao carregar menu para busca:', error);
       }
-    });
+      setMenuSource(flattened);
+    };
+
+    buildMenu();
+    window.addEventListener('storage', buildMenu);
+    window.addEventListener('app:user-updated', buildMenu);
+    return () => {
+      window.removeEventListener('storage', buildMenu);
+      window.removeEventListener('app:user-updated', buildMenu);
+    };
   }, []);
 
   const handleSuggestionsFetchRequested = (e) => {
-    setSuggestions(getSuggestions(e.value));
+    setSuggestions(getSuggestions(e.value, menuSource));
   };
 
   const handleSuggestionsClearRequested = () => {

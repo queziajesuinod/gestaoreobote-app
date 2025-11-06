@@ -1,10 +1,12 @@
-'use strict';
 const { Model, DataTypes } = require('sequelize');
 
 module.exports = (sequelize) => {
   class User extends Model {
     static associate(models) {
       User.belongsTo(models.Perfil, { foreignKey: 'perfilId' });
+      if (models.Consultor) {
+        User.belongsTo(models.Consultor, { foreignKey: 'consultorId', as: 'consultor' });
+      }
     }
   }
 
@@ -25,17 +27,20 @@ module.exports = (sequelize) => {
       type: DataTypes.UUID,
       allowNull: true,
     },
+    consultorId: {
+      type: DataTypes.INTEGER,
+      allowNull: true
+    },
     passwordHash: DataTypes.STRING,
     salt: DataTypes.STRING,
     image: DataTypes.STRING,
     username: DataTypes.STRING
-  
   }, {
     sequelize,
     modelName: 'User',
     tableName: 'Users',
     schema: process.env.DB_SCHEMA || 'dev'
   });
-  
+
   return User;
 };

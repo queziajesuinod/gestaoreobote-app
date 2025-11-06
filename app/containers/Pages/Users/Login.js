@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { LoginForm } from 'dan-components';
 import useStyles from 'dan-components/Forms/user-jss';
 import dummyContents from 'dan-api/dummy/dummyContents';
+import { setStoredUser } from '../../../utils/userStorage';
 
 function decodeJwt(token) {
   try {
@@ -39,34 +40,29 @@ function Login({ setIsAuthenticated = () => {} }) {
 
       const data = await response.json();
 
-      console.log( 'Resposta da API de login:', data);
       const token = data.accessToken;
       localStorage.setItem('token', token);
       localStorage.setItem('isAuthenticated', 'true');
       setIsAuthenticated(true);
 
-      // 🔹 Mock de perfil e permissões (substitua futuramente pela API real)
-      const perfilMock = 'ADMIN';
-      const permissoesMock = [
-        'GESTAO',
-        'DASHBOARD'
-      ];
+      const decodedToken = decodeJwt(token) || {};
+      const perfilDescricao = data.perfilDescricao || decodedToken.perfil || 'USUARIO';
+      const permissoes = data.permissoes || decodedToken.permissoes || [];
 
-      // 🔹 Armazena o usuário e as permissões mockadas
       const userData = {
         name: data.name || 'Usuário',
         id: data.id || 'user',
-        perfilId: data.perfilId || perfilMock,
-        permissoes: permissoesMock,
+        perfilId: data.perfilId || null,
+        perfil: perfilDescricao,
+        permissoes,
+        consultorId: data.consultorId || decodedToken.consultorId || null,
         title: 'Usuário Autenticado',
         avatar: data.image || 'default-avatar.png',
         status: 'online'
       };
 
-      localStorage.setItem('user', JSON.stringify(userData));
+      setStoredUser(userData);
       dummyContents.user = userData;
-
-      console.log('Usuário autenticado (mock de perfil):', dummyContents.user);
 
       // 🔄 Redireciona após login
       navigate('/app', { replace: true });

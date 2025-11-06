@@ -4,7 +4,24 @@ module.exports = {
   // 🔹 GET /clientes
   async listar(req, res) {
     try {
-      const clientes = await clienteService.getTodosClientes();
+      const perfil = req.user?.perfil ? req.user.perfil.toUpperCase() : '';
+      const consultorId = req.user?.consultorId ? Number(req.user.consultorId) : null;
+      const isConsultor = consultorId && perfil !== 'ADMIN' && perfil !== 'GESTOR';
+
+      let clientes;
+      if (isConsultor) {
+        if (!consultorId) {
+          return res.status(200).json({
+            sucesso: true,
+            mensagem: 'Nenhum cliente disponível para este consultor.',
+            dados: []
+          });
+        }
+        clientes = await clienteService.getClientesPorConsultor(consultorId);
+      } else {
+        clientes = await clienteService.getTodosClientes();
+      }
+
       return res.status(200).json({
         sucesso: true,
         mensagem: 'Lista de clientes obtida com sucesso.',
@@ -19,10 +36,25 @@ module.exports = {
   async buscarPorId(req, res) {
     try {
       const { id } = req.params;
+      const perfil = req.user?.perfil ? req.user.perfil.toUpperCase() : '';
+      const consultorId = req.user?.consultorId ? Number(req.user.consultorId) : null;
+      const isConsultor = consultorId && perfil !== 'ADMIN' && perfil !== 'GESTOR';
+
       const cliente = await clienteService.getClienteById(id);
       if (!cliente) {
         return res.status(404).json({ sucesso: false, mensagem: 'Cliente não encontrado.' });
       }
+
+      if (isConsultor) {
+        if (!consultorId) {
+          return res.status(403).json({ sucesso: false, mensagem: 'Acesso negado para este cliente.' });
+        }
+        const possuiAcesso = await clienteService.consultorTemAcessoAoCliente(id, consultorId);
+        if (!possuiAcesso) {
+          return res.status(403).json({ sucesso: false, mensagem: 'Acesso negado para este cliente.' });
+        }
+      }
+
       return res.status(200).json({ sucesso: true, dados: cliente });
     } catch (error) {
       return res.status(500).json({ sucesso: false, erro: error.message });
@@ -32,6 +64,11 @@ module.exports = {
   // 🔹 POST /clientes
   async criar(req, res) {
     try {
+      const perfil = req.user?.perfil ? req.user.perfil.toUpperCase() : '';
+      if (perfil !== 'ADMIN') {
+        return res.status(403).json({ sucesso: false, mensagem: 'Apenas administradores podem criar clientes.' });
+      }
+
       const novo = await clienteService.createCliente(req.body);
       return res.status(201).json({
         sucesso: true,
@@ -39,13 +76,19 @@ module.exports = {
         dados: novo
       });
     } catch (error) {
-      return res.status(500).json({ sucesso: false, erro: error.message });
+      const status = error.status || 500;
+      return res.status(status).json({ sucesso: false, erro: error.message });
     }
   },
 
   // 🔹 PUT /clientes/:id
   async atualizar(req, res) {
     try {
+      const perfil = req.user?.perfil ? req.user.perfil.toUpperCase() : '';
+      if (perfil !== 'ADMIN') {
+        return res.status(403).json({ sucesso: false, mensagem: 'Apenas administradores podem atualizar clientes.' });
+      }
+
       const { id } = req.params;
       const atualizado = await clienteService.atualizarCliente(id, req.body);
       return res.status(200).json({
@@ -54,13 +97,19 @@ module.exports = {
         dados: atualizado
       });
     } catch (error) {
-      return res.status(500).json({ sucesso: false, erro: error.message });
+      const status = error.status || 500;
+      return res.status(status).json({ sucesso: false, erro: error.message });
     }
   },
 
   // 🔹 DELETE /clientes/:id
   async deletar(req, res) {
     try {
+      const perfil = req.user?.perfil ? req.user.perfil.toUpperCase() : '';
+      if (perfil !== 'ADMIN') {
+        return res.status(403).json({ sucesso: false, mensagem: 'Apenas administradores podem remover clientes.' });
+      }
+
       const { id } = req.params;
       const resultado = await clienteService.deletarCliente(id);
       return res.status(200).json({ sucesso: true, mensagem: resultado.mensagem });

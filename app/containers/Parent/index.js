@@ -1,11 +1,11 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { makeStyles } from 'tss-react/mui';
 import { Helmet } from 'react-helmet';
 import brand from 'dan-api/dummy/brand';
 import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
 import { Link, useLocation } from 'react-router-dom';
-import MenuContent from 'dan-api/ui/menu';
+import getMenu from 'dan-api/ui/menu';
 import { PapperBlock } from 'dan-components';
 
 const useStyles = makeStyles()(() => ({
@@ -26,12 +26,26 @@ function Parent() {
 
   const location = useLocation();
   const { classes } = useStyles();
+  const [menuContent, setMenuContent] = useState(() => getMenu());
+
+  useEffect(() => {
+    const updateMenu = () => {
+      setMenuContent(getMenu());
+    };
+
+    window.addEventListener('storage', updateMenu);
+    window.addEventListener('app:user-updated', updateMenu);
+    return () => {
+      window.removeEventListener('storage', updateMenu);
+      window.removeEventListener('app:user-updated', updateMenu);
+    };
+  }, []);
 
   // Get Path Location
   let parts = location.pathname.split('/');
   const place = parts[parts.length - 1];
   parts = parts.slice(1, parts.length - 1);
-  const menuItems = MenuContent
+  const menuItems = menuContent
     .find(obj => (
       obj.key === place
     ));

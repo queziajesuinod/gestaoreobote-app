@@ -1,20 +1,43 @@
-const { Cota, Consultor } = require('../models');
 const { Op } = require('sequelize');
+const {
+  Cota,
+  Consultor,
+  Cliente
+} = require('../models');
 
 // 🔹 Criar nova cota
 async function criarCota(data) {
-  return await Cota.create(data);
+  return Cota.create(data);
 }
 
 // 🔹 Listar todas as cotas
-async function listarCotas() {
-  return await Cota.findAll();
+async function listarCotas(consultorId = null) {
+  const where = {};
+  if (consultorId) {
+    where.consultorId = consultorId;
+  }
+
+  return Cota.findAll({
+    where,
+    include: [
+      {
+        model: Consultor,
+        as: 'consultor',
+        attributes: ['id', 'nome']
+      }
+    ]
+  });
 }
 
 // 🔹 Buscar por clienteId
-async function buscarPorCliente(clienteId) {
-  return await Cota.findAll({
-    where: { clienteId },
+async function buscarPorCliente(clienteId, consultorId = null) {
+  const where = { clienteId };
+  if (consultorId) {
+    where.consultorId = consultorId;
+  }
+
+  return Cota.findAll({
+    where,
     include: [
       {
         model: Consultor,
@@ -45,22 +68,198 @@ async function deletarCota(id) {
   return { mensagem: 'Cota removida com sucesso' };
 }
 
+async function obterCotaPorId(id) {
+  return Cota.findByPk(id);
+}
+
 // 🔹 Buscar por consultorId
 async function buscarPorConsultor(consultorId) {
-  return await Cota.findAll({ where: { consultorId } });
+  return Cota.findAll({ where: { consultorId } });
 }
 
 // 🔹 Buscar por range de data e (opcionalmente) idagendor
-async function buscarPorPeriodo(inicio, fim, idagendor = null) {
+async function buscarPorPeriodo(inicio, fim, idagendor = null, consultorId = null) {
   const where = {
     dtaquisicao: {
       [Op.between]: [new Date(inicio), new Date(fim)]
     }
   };
   if (idagendor) where.idagendor = idagendor;
+  if (consultorId) where.consultorId = consultorId;
 
-  const cotas = await Cota.findAll({ where });
-  return cotas;
+  return Cota.findAll({ where });
+}
+
+function toInt(value, fallback = null) {
+  if (value === undefined || value === null || value === '') return fallback;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isNaN(parsed) ? fallback : parsed;
+}
+
+function buildDateRange({ mes, ano }) {
+  const month = toInt(mes);
+  const year = toInt(ano);
+
+  if (!month && !year) {
+    return { start: null, end: null };
+  }
+
+  const targetYear = year || new Date().getFullYear();
+
+  let start;
+  let end;
+
+  if (month) {
+    const normalizedMonth = Math.min(Math.max(month, 1), 12);
+    start = new Date(Date.UTC(targetYear, normalizedMonth - 1, 1, 0, 0, 0));
+    end = new Date(Date.UTC(targetYear, normalizedMonth, 1, 0, 0, 0));
+  } else {
+    start = new Date(Date.UTC(targetYear, 0, 1, 0, 0, 0));
+    end = new Date(Date.UTC(targetYear + 1, 0, 1, 0, 0, 0));
+  }
+
+  return { start, end };
+}
+
+async function buscarCotasComFiltros({
+  page = 1,
+  limit = 10,
+  cliente,
+  consultor,
+  mes,
+  ano,
+  administradora,
+  orderBy = 'dtaquisicao',
+  order = 'desc'
+} = {}, consultorRestrito = null) {
+  const pagina = Math.max(Number.parseInt(page, 10) || 1, 1);
+  const tamanho = Number.parseInt(limit, 10);
+  const usarTodos = tamanho === -1;
+  const realLimit = usarTodos ? null : Math.max(tamanho || 10, 1);
+  const offset = usarTodos ? undefined : (pagina - 1) * realLimit;
+
+  const where = {};
+
+  if (consultorRestrito) {
+    where.consultorId = consultorRestrito;
+  }
+
+  if (administradora) {
+    where.administradora = {
+      [Op.iLike]: `%${administradora.trim()}%`
+    };
+  }
+
+  const dateRange = buildDateRange({ mes, ano });
+  if (dateRange) {
+    if (dateRange.start && dateRange.end) {
+      where.dtaquisicao = {
+        [Op.gte]: dateRange.start,
+        [Op.lt]: dateRange.end
+      };
+    }
+  }
+
+  const consultorFiltro = consultor && consultor.toString().trim();
+  const includeBase = [{
+    model: Cliente,
+    as: 'cliente',
+    attributes: ['id', 'nome', 'cpf', 'email'],
+    required: Boolean(cliente),
+    ...(cliente
+      ? {
+          where: {
+            nome: {
+              [Op.iLike]: `%${cliente.trim()}%`
+            }
+          }
+        }
+      : {})
+  }];
+
+  includeBase.push({
+    model: Consultor,
+    as: 'consultor',
+    attributes: ['id', 'nome', 'id_agendor'],
+    required: Boolean(consultorFiltro),
+    ...(consultorFiltro
+      ? Number.isInteger(Number(consultorFiltro))
+        ? {
+            where: {
+              id: Number(consultorFiltro)
+            }
+          }
+        : {
+            where: {
+              nome: {
+                [Op.iLike]: `%${consultorFiltro}%`
+              }
+            }
+          }
+      : {})
+  });
+
+  const normalizedOrderBy = String(orderBy || '').toLowerCase();
+  const normalizedDirection = String(order || '').toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+
+  const orderMapping = {
+    cliente: [{ model: Cliente, as: 'cliente' }, 'nome'],
+    consultor: [{ model: Consultor, as: 'consultor' }, 'nome'],
+    grupo: ['grupo'],
+    cota: ['cota'],
+    administradora: ['administradora'],
+    valor: ['valor'],
+    valortotal: ['valorTotal'],
+    dtaquisicao: ['dtaquisicao']
+  };
+
+  const orderClauses = [];
+  const mappedPath = orderMapping[normalizedOrderBy];
+  if (mappedPath) {
+    orderClauses.push([...mappedPath, normalizedDirection]);
+  }
+  if (normalizedOrderBy !== 'dtaquisicao') {
+    orderClauses.push(['dtaquisicao', 'DESC']);
+  }
+
+  const resultado = await Cota.findAndCountAll({
+    where,
+    include: includeBase,
+    order: orderClauses,
+    limit: realLimit ?? undefined,
+    offset,
+    distinct: true,
+    subQuery: false
+  });
+
+  const total = resultado.count;
+  const totalPaginas = usarTodos ? 1 : Math.max(Math.ceil(total / realLimit), 1);
+
+  const includeTotals = includeBase.map((item) => ({
+    ...item,
+    attributes: [],
+    duplicating: false
+  }));
+
+  const somaValor = Number(await Cota.sum('valor', {
+    where,
+    include: includeTotals
+  }) || 0);
+
+  const somaValorTotal = Number(await Cota.sum('valorTotal', {
+    where,
+    include: includeTotals
+  }) || 0);
+
+  return {
+    total,
+    pagina,
+    totalPaginas,
+    limite: usarTodos ? total : realLimit,
+    registros: resultado.rows,
+    totalValor: somaValor,
+    totalValorTotal: somaValorTotal
+  };
 }
 
 module.exports = {
@@ -69,6 +268,8 @@ module.exports = {
   buscarPorCliente,
   atualizarCota,
   deletarCota,
+  obterCotaPorId,
   buscarPorConsultor,
-  buscarPorPeriodo
+  buscarPorPeriodo,
+  buscarCotasComFiltros
 };
