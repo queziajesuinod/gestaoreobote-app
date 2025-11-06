@@ -112,6 +112,8 @@ export const buildMenu = (permissoes = []) => {
     });
   }
 
+  
+
   menu.push({
     key: 'auth',
     name: 'Perfil',

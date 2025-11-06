@@ -11,8 +11,16 @@ function hashSHA256WithSalt(password, salt) {
   return crypto.createHmac('sha256', salt).update(password).digest('hex');
 }
 
+function sanitizeUser(user) {
+  if (!user) return null;
+  const plain = typeof user.toJSON === 'function' ? user.toJSON() : { ...user };
+  delete plain.passwordHash;
+  delete plain.salt;
+  return plain;
+}
+
 async function getTodosUsers() {
-  return User.findAll({
+  const usuarios = await User.findAll({
     include: [{
       model: Perfil,
       required: true,
@@ -27,6 +35,7 @@ async function getTodosUsers() {
       attributes: ['id', 'nome', 'id_agendor']
     }]
   });
+  return usuarios.map(sanitizeUser);
 }
 
 async function updateUser(id, updateData) {
@@ -50,11 +59,40 @@ async function updateUser(id, updateData) {
   });
 
   await user.save();
-  return user;
+  return sanitizeUser(user);
+}
+
+async function changeUserPassword(id, currentPassword, newPassword, { skipCurrentPasswordCheck = false } = {}) {
+  const user = await User.findByPk(id);
+  if (!user) {
+    throw new Error('Usuário não encontrado');
+  }
+
+  if (!newPassword || newPassword.length < 6) {
+    throw new Error('A nova senha deve conter ao menos 6 caracteres.');
+  }
+
+  if (!skipCurrentPasswordCheck) {
+    if (!currentPassword) {
+      throw new Error('Senha atual é obrigatória.');
+    }
+
+    const currentHash = hashSHA256WithSalt(currentPassword, user.salt);
+    if (currentHash !== user.passwordHash) {
+      throw new Error('Senha atual inválida.');
+    }
+  }
+
+  const newSalt = crypto.randomBytes(16).toString('hex');
+  user.passwordHash = hashSHA256WithSalt(newPassword, newSalt);
+  user.salt = newSalt;
+
+  await user.save();
+  return sanitizeUser(user);
 }
 
 async function getUserById(id) {
-  return User.findByPk(id, {
+  const user = await User.findByPk(id, {
     include: [{
       model: Perfil,
       required: true,
@@ -69,6 +107,7 @@ async function getUserById(id) {
       attributes: ['id', 'nome', 'id_agendor']
     }]
   });
+  return sanitizeUser(user);
 }
 
 async function createUser(body) {
@@ -106,12 +145,13 @@ async function createUser(body) {
     username,
     consultorId: consultorId ? Number(consultorId) : null
   });
-  return newUser;
+  return sanitizeUser(newUser);
 }
 
 module.exports = {
   getTodosUsers,
   createUser,
   getUserById,
-  updateUser
+  updateUser,
+  changeUserPassword
 };

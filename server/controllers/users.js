@@ -1,5 +1,5 @@
 const {
-  getTodosUsers, createUser, getUserById, updateUser
+  getTodosUsers, createUser, getUserById, updateUser, changeUserPassword
 } = require('../services/users');
 
 async function getUsers(req, res) {
@@ -44,13 +44,20 @@ async function putUser(req, res) {
     const perfilToken = req.user?.perfil ? req.user.perfil.toUpperCase() : '';
     const requesterId = req.user?.userId;
     const { id } = req.params;
+    const isAdmin = perfilToken === 'ADMIN';
+    const isSelf = requesterId === id;
 
-    if (perfilToken !== 'ADMIN' && requesterId !== id) {
+    if (!isAdmin && !isSelf) {
       return res.status(403).json({ message: 'Acesso negado.' });
     }
 
+    const { newPassword, currentPassword } = req.body || {};
+
     let payload = { ...req.body };
-    if (perfilToken !== 'ADMIN') {
+    delete payload.newPassword;
+    delete payload.currentPassword;
+
+    if (!isAdmin) {
       const allowedFields = ['name', 'email', 'username', 'image'];
       payload = allowedFields.reduce((acc, field) => {
         if (payload[field] !== undefined) {
@@ -58,6 +65,15 @@ async function putUser(req, res) {
         }
         return acc;
       }, {});
+    }
+
+    if (newPassword) {
+      await changeUserPassword(
+        id,
+        currentPassword,
+        newPassword,
+        { skipCurrentPasswordCheck: isAdmin && !isSelf && !currentPassword }
+      );
     }
 
     const user = await updateUser(id, payload);

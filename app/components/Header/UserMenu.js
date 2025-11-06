@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Avatar from '@mui/material/Avatar';
 import Button from '@mui/material/Button';
@@ -9,11 +9,19 @@ import MenuItem from '@mui/material/MenuItem';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import dummy from 'dan-api/dummy/dummyContents';
 import { forceLogout } from '../../utils/authInterceptor';
+import { getStoredUser } from '../../utils/userStorage';
 
 function UserMenu() {
   const [menuState, setMenuState] = useState({
     anchorEl: null,
     openMenu: null
+  });
+  const [currentUser, setCurrentUser] = useState(() => {
+    const stored = getStoredUser();
+    if (stored && Object.keys(stored).length > 0) {
+      return stored;
+    }
+    return dummy.user || {};
   });
 
   const navigate = useNavigate();
@@ -41,12 +49,29 @@ function UserMenu() {
     navigate('/app/profile');
   };
 
+  useEffect(() => {
+    const handleUserUpdated = (event) => {
+      const payload = event?.detail;
+      if (payload && Object.keys(payload).length > 0) {
+        setCurrentUser(payload);
+      } else {
+        const stored = getStoredUser();
+        if (stored && Object.keys(stored).length > 0) {
+          setCurrentUser(stored);
+        }
+      }
+    };
+
+    window.addEventListener('app:user-updated', handleUserUpdated);
+    return () => window.removeEventListener('app:user-updated', handleUserUpdated);
+  }, []);
+
   const { anchorEl, openMenu } = menuState;
 
   return (
     <div>
       <Button onClick={handleMenu('user-setting')}>
-        <Avatar alt={dummy.user.name} src={dummy.user.avatar} />
+        <Avatar alt={currentUser.name || dummy.user.name} src={currentUser.avatar || dummy.user.avatar} />
       </Button>
       <Menu
         id="menu-appbar"

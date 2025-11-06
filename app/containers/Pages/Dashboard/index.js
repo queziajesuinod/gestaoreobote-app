@@ -66,7 +66,19 @@ const formatDateBR = (value) => {
   if (!value) return '';
   const data = new Date(value);
   if (Number.isNaN(data.getTime())) return '';
-  return data.toLocaleDateString('pt-BR');
+  return data.toLocaleDateString('pt-BR', {
+    timeZone: 'America/Campo_Grande'
+  });
+};
+
+
+const formatDateForInput = (value) => {
+  if (!value) return '';
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
+    return value.trim();
+  }
+  const data = parseDateOnly(value);
+  return data ? data.toISOString().slice(0, 10) : '';
 };
 
 const obterIntervaloMesReferencia = (dateString) => {
@@ -1512,71 +1524,115 @@ function DashboardReobote() {
               📊 Métricas de Desempenho
             </Typography>
 
-            <Grid container spacing={3} style={{ marginBottom: 30 }}>
-              {/* CARD 1 */}
-              <Grid item xs={12} md={6}>
-                <Paper elevation={2} style={{ padding: 20, textAlign: 'center' }}>
-                  <Typography variant="h6" gutterBottom>
-                    Taxa de Conversão Geral
-                  </Typography>
-                  <Typography variant="h2" color="primary" style={{ fontWeight: 'bold' }}>
-                    {taxaConversao}%
-                  </Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    {totalNegociosGanhos} Negócios Ganhos/ {totalReunioes + totalVisitas} Reuniões+Visitas
-                  </Typography>
-                </Paper>
+            <Grid container spacing={3} style={{ marginBottom: 30 }} alignItems="stretch">
+              <Grid item xs={12} md={4}>
+                <Box style={{ display: 'flex', flexDirection: 'column', gap: 24, height: '100%' }}>
+                  <Paper elevation={2} style={{ padding: 20, textAlign: 'center' }}>
+                    <Typography variant="h6" gutterBottom>
+                      Taxa de <br />Conversão Geral
+                    </Typography>
+                    <Typography variant="h2" color="primary" style={{ fontWeight: 'bold' }}>
+                      {taxaConversao}%
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      {totalNegociosGanhos} Negócios Ganhos/ {totalReunioes + totalVisitas} Reuniões+Visitas
+                    </Typography>
+                  </Paper>
+
+                  <Paper elevation={2} style={{ padding: 20, textAlign: 'center' }}>
+                    <Typography variant="h6" gutterBottom>
+                      Média de<br /> Tarefas por Dia
+                    </Typography>
+                    <Typography variant="h2" color="primary" style={{ fontWeight: 'bold' }}>
+                      {mediaTarefasPorDia}
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      {totalPropostas + totalReunioes + totalVisitas} tarefas / {diasPeriodo} dias
+                    </Typography>
+                  </Paper>
+                </Box>
               </Grid>
 
-              {/* CARD 2 */}
-              <Grid item xs={12} md={6}>
-                <Paper elevation={2} style={{ padding: 20, textAlign: 'center' }}>
-                  <Typography variant="h6" gutterBottom>
-                    Média de Tarefas por Dia
-                  </Typography>
-                  <Typography variant="h2" color="primary" style={{ fontWeight: 'bold' }}>
-                    {mediaTarefasPorDia}
-                  </Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    {totalPropostas + totalReunioes + totalVisitas} tarefas / {diasPeriodo} dias
-                  </Typography>
-                </Paper>
+              <Grid item xs={12} md={4}>
+                <Box style={{ display: 'flex', flexDirection: 'column', gap: 24, height: '100%' }}>
+                  <Paper elevation={2} style={{ padding: 20, textAlign: 'center' }}>
+                    <Typography variant="h6" gutterBottom>
+                      Média <br />de Visitas + Reuniões / dia
+                    </Typography>
+                    <Typography variant="h2" color="primary" style={{ fontWeight: 'bold' }}>
+                      {mediaTarefasReuniaoVisitaPorDia}
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      {totalReunioes + totalVisitas} Reuniões + Visitas / {diasPeriodo} dias
+                    </Typography>
+                  </Paper>
+
+                  <Paper elevation={2} style={{ padding: 20, textAlign: 'center' }}>
+                    <Typography variant="h6" gutterBottom>
+                      Taxa de Negócios<br /> Ganhos sobre Pendentes
+                    </Typography>
+                    <Typography variant="h2" color="primary" style={{ fontWeight: 'bold' }}>
+                      {taxaConversaoNegociosPendentesGanhos}%
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      {totalNegociosGanhos}  ganhos / {totalNegociosEmAndamento}  em andamento
+                    </Typography>
+                  </Paper>
+                </Box>
               </Grid>
 
-              {/* CARD 3 */}
-              <Grid item xs={12} md={6}>
-                <Paper elevation={2} style={{ padding: 20, textAlign: 'center' }}>
-                  <Typography variant="h6" gutterBottom>
-                    Média de Visitas + Reuniões / dia
+              <Grid item xs={12} md={4} style={{ display: 'flex' }}>
+                <Paper elevation={2} style={{ padding: 20, height: '100%', textAlign: 'center', width: '100%' }}>
+                  <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                    Meta de Vendas
                   </Typography>
-                  <Typography variant="h2" color="primary" style={{ fontWeight: 'bold' }}>
-                    {mediaTarefasReuniaoVisitaPorDia}
-                  </Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    {totalReunioes + totalVisitas} Reuniões + Visitas / {diasPeriodo} dias
-                  </Typography>
-                </Paper>
-              </Grid>
-
-              {/* CARD 4 */}
-              <Grid item xs={12} md={6}>
-                <Paper elevation={2} style={{ padding: 20, textAlign: 'center' }}>
-                  <Typography variant="h6" gutterBottom>
-                    Taxa de Negócios Pendentes
-                  </Typography>
-                  <Typography variant="h2" color="primary" style={{ fontWeight: 'bold' }}>
-                    {taxaConversaoNegociosPendentesGanhos}%
-                  </Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    {totalNegociosGanhos} negócios ganhos / {totalNegociosEmAndamento} negócios em andamento
-                  </Typography>
+                  {metaAtiva ? (
+                    <>
+                      <Box position="relative" display="inline-flex" sx={{ mt: 2, mb: 2 }}>
+                        <CircularProgress variant="determinate" value={metaPercentual} size={140} thickness={5} />
+                        <Box
+                          top={0}
+                          left={0}
+                          bottom={0}
+                          right={0}
+                          position="absolute"
+                          display="flex"
+                          alignItems="center"
+                          justifyContent="center"
+                        >
+                          <Typography variant="h4" component="div" color="textPrimary">
+                            {`${Math.round(metaPercentual)}%`}
+                          </Typography>
+                        </Box>
+                      </Box>
+                      <Typography variant="body1" color="textSecondary">
+                        {formatCurrencyBR(totalMetaLiquido)} de {formatCurrencyBR(metaValorNumero)}
+                      </Typography>
+                      <Typography variant="caption" color="textSecondary" display="block">
+                        {formatDateBR(metaAtiva.dataInicio)}
+                        {metaAtiva.dataFim ? ` até ${formatDateBR(metaAtiva.dataFim)}` : ' em diante'}
+                      </Typography>
+                      {metaValorNumero > 0 && (
+                        <Typography variant="caption" color="textSecondary" display="block">
+                          Restante: {formatCurrencyBR(metaValorRestante)}
+                        </Typography>
+                      )}
+                      <Typography variant="caption" color="textSecondary" display="block">
+                        Valor Bruto: {formatCurrencyBR(totalMetaBruto)}
+                      </Typography>
+                    </>
+                  ) : (
+                    <Typography variant="body2" color="textSecondary" sx={{ mt: 4 }}>
+                      Nenhuma meta cadastrada para o período selecionado.
+                    </Typography>
+                  )}
                 </Paper>
               </Grid>
             </Grid>
 
 
             <Grid container spacing={3} style={{ marginBottom: 30 }}>
-              <Grid item xs={12} md={8}>
+              <Grid item xs={12} md={12}>
                 <Paper elevation={2} style={{ padding: 20, height: '100%' }}>
                   <Typography variant="h6" gutterBottom>
                     🏆 Ranking de Consultores
@@ -1714,53 +1770,7 @@ function DashboardReobote() {
                   />
                 </Paper>
               </Grid>
-              <Grid item xs={12} md={4}>
-                <Paper elevation={2} style={{ padding: 20, height: '100%', textAlign: 'center' }}>
-                  <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                    Meta de Vendas
-                  </Typography>
-                  {metaAtiva ? (
-                    <>
-                      <Box position="relative" display="inline-flex" sx={{ mt: 2, mb: 2 }}>
-                        <CircularProgress variant="determinate" value={metaPercentual} size={140} thickness={5} />
-                        <Box
-                          top={0}
-                          left={0}
-                          bottom={0}
-                          right={0}
-                          position="absolute"
-                          display="flex"
-                          alignItems="center"
-                          justifyContent="center"
-                        >
-                          <Typography variant="h4" component="div" color="textPrimary">
-                            {`${Math.round(metaPercentual)}%`}
-                          </Typography>
-                        </Box>
-                      </Box>
-                      <Typography variant="body1" color="textSecondary">
-                        {formatCurrencyBR(totalMetaLiquido)} de {formatCurrencyBR(metaValorNumero)}
-                      </Typography>
-                      <Typography variant="caption" color="textSecondary" display="block">
-                        {formatDateBR(metaAtiva.dataInicio)}
-                        {metaAtiva.dataFim ? ` até ${formatDateBR(metaAtiva.dataFim)}` : ' em diante'}
-                      </Typography>
-                      {metaValorNumero > 0 && (
-                        <Typography variant="caption" color="textSecondary" display="block">
-                          Restante: {formatCurrencyBR(metaValorRestante)}
-                        </Typography>
-                      )}
-                      <Typography variant="caption" color="textSecondary" display="block">
-                        Valor Bruto: {formatCurrencyBR(totalMetaBruto)}
-                      </Typography>
-                    </>
-                  ) : (
-                    <Typography variant="body2" color="textSecondary" sx={{ mt: 4 }}>
-                      Nenhuma meta cadastrada para o período selecionado.
-                    </Typography>
-                  )}
-                </Paper>
-              </Grid>
+           
             </Grid>
           </>
         )}

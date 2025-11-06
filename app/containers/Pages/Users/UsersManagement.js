@@ -74,7 +74,7 @@ function UsersManagement() {
   }, []);
 
   const permissoes = currentUser?.permissoes || [];
-  const podeGerenciarUsuarios = permissoes.includes('USERS_MANAGE');
+  const podeGerenciarUsuarios = permissoes.includes('USERS_MANAGE') || permissoes.includes('GESTAO');
 
   const [users, setUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
@@ -419,8 +419,6 @@ function UsersManagement() {
                 <TableCell>Email</TableCell>
                 <TableCell>Usuário</TableCell>
                 <TableCell>Perfil</TableCell>
-                <TableCell>Consultor</TableCell>
-                <TableCell>Permissões</TableCell>
                 <TableCell>Status</TableCell>
                 <TableCell align="right">Ações</TableCell>
               </TableRow>
@@ -445,16 +443,6 @@ function UsersManagement() {
                     <TableCell>{usuario.email}</TableCell>
                     <TableCell>{usuario.username || '—'}</TableCell>
                     <TableCell>{usuario.perfilDescricao}</TableCell>
-                    <TableCell>{usuario.consultorDescricao}</TableCell>
-                    <TableCell>
-                      {usuario.permissoesPerfil && usuario.permissoesPerfil.length > 0 ? (
-                        <Box display="flex" gap={0.5} flexWrap="wrap">
-                          {usuario.permissoesPerfil.map((permissao) => (
-                            <Chip key={`${usuario.id}-${permissao}`} label={permissao} size="small" />
-                          ))}
-                        </Box>
-                      ) : '—'}
-                    </TableCell>
                     <TableCell>
                       <Chip
                         label={usuario.active ? 'Ativo' : 'Inativo'}

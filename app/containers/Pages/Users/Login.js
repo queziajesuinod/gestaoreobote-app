@@ -49,6 +49,8 @@ function Login({ setIsAuthenticated = () => {} }) {
       const perfilDescricao = data.perfilDescricao || decodedToken.perfil || 'USUARIO';
       const permissoes = data.permissoes || decodedToken.permissoes || [];
 
+      const fallbackAvatar = data.image || decodedToken?.image || decodedToken?.avatar || null;
+
       const userData = {
         name: data.name || 'Usuário',
         id: data.id || 'user',
@@ -57,7 +59,8 @@ function Login({ setIsAuthenticated = () => {} }) {
         permissoes,
         consultorId: data.consultorId || decodedToken.consultorId || null,
         title: 'Usuário Autenticado',
-        avatar: data.image || 'default-avatar.png',
+        avatar: fallbackAvatar || 'default-avatar.png',
+        image: fallbackAvatar || null,
         status: 'online'
       };
 

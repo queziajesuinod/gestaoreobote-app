@@ -1,14 +1,22 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import ButtonBase from '@mui/material/ButtonBase';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import Avatar from '@mui/material/Avatar';
 import dummy from 'dan-api/dummy/dummyContents';
+import { getStoredUser } from '../../utils/userStorage';
 import useStyles from './sidebarBig-jss';
 
 function MenuProfile() {
   const { classes, cx } = useStyles();
   const [status, setStatus] = useState(dummy.user.status);
+  const [currentUser, setCurrentUser] = useState(() => {
+    const stored = getStoredUser();
+    if (stored && Object.keys(stored).length > 0) {
+      return stored;
+    }
+    return dummy.user || {};
+  });
   const [anchorEl, setAnchorEl] = useState(null);
 
   const handleOpen = event => {
@@ -23,6 +31,23 @@ function MenuProfile() {
     setStatus(st);
     handleClose();
   };
+
+  useEffect(() => {
+    const handleUserUpdated = (event) => {
+      const payload = event?.detail;
+      if (payload && Object.keys(payload).length > 0) {
+        setCurrentUser(payload);
+      } else {
+        const stored = getStoredUser();
+        if (stored && Object.keys(stored).length > 0) {
+          setCurrentUser(stored);
+        }
+      }
+    };
+
+    window.addEventListener('app:user-updated', handleUserUpdated);
+    return () => window.removeEventListener('app:user-updated', handleUserUpdated);
+  }, []);
 
   const changeStatus = st => {
     switch (st) {
@@ -41,8 +66,8 @@ function MenuProfile() {
     <div>
       <ButtonBase className={classes.avatarHead} onClick={handleOpen}>
         <Avatar
-          alt={dummy.user.name}
-          src={dummy.user.avatar}
+          alt={currentUser.name || dummy.user.name}
+          src={currentUser.avatar || dummy.user.avatar}
           className={cx(classes.avatar, classes.bigAvatar)}
         />
         <i className={cx(classes.dotStatus, classes.pinned, changeStatus(status))} />
@@ -56,12 +81,12 @@ function MenuProfile() {
       >
         <MenuItem className={classes.profile}>
           <Avatar
-            alt={dummy.user.name}
-            src={dummy.user.avatar}
+            alt={currentUser.name || dummy.user.name}
+            src={currentUser.avatar || dummy.user.avatar}
             className={cx(classes.avatar, classes.bigAvatar)}
           />
           <div className={classes.name}>
-            <h5>{dummy.user.name}</h5>
+            <h5>{currentUser.name || dummy.user.name}</h5>
             <i className={cx(classes.dotStatus, changeStatus(status))} />
             {status}
           </div>

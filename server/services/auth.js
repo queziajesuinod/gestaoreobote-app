@@ -17,7 +17,7 @@ class AuthService {
   static async login(dto) {
     // Buscar usuário pelo e-mail
     const usuario = await User.findOne({
-      attributes: ['id', 'name', 'email', 'username', 'passwordHash', 'salt', 'perfilId', 'consultorId', 'active'],
+      attributes: ['id', 'name', 'email', 'username', 'passwordHash', 'salt', 'perfilId', 'consultorId', 'active', 'image'],
       where: { email: dto.email },
       include: [
         {
@@ -134,6 +134,7 @@ class AuthService {
       permissoes,
       consultorId,
       consultorNome,
+      image: usuario.image,
       accessToken
     };
   }
