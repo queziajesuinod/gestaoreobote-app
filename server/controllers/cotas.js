@@ -244,6 +244,24 @@ async function buscarPorPeriodo(req, res) {
   }
 }
 
+async function totalPorPeriodo(req, res) {
+  try {
+    const { dataInicio, dataFim } = req.query;
+    if (!dataInicio || !dataFim) {
+      return res.status(400).json({ sucesso: false, mensagem: 'Parâmetros "dataInicio" e "dataFim" são obrigatórios.' });
+    }
+
+    const totais = await cotaService.somarCotasPorPeriodo(dataInicio, dataFim);
+    return res.status(200).json({
+      sucesso: true,
+      dados: totais
+    });
+  } catch (error) {
+    console.error('❌ Erro ao somar cotas por período:', error);
+    return res.status(400).json({ sucesso: false, mensagem: error.message });
+  }
+}
+
 module.exports = {
   criar,
   listar,
@@ -253,5 +271,6 @@ module.exports = {
   buscarPorConsultor,
   buscarPorPeriodo,
   buscarComFiltros,
+  totalPorPeriodo,
   exportar
 };

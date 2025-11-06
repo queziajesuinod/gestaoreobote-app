@@ -32,6 +32,16 @@ export const buildMenu = (permissoes = []) => {
         link: '/app/cotas',
         icon: 'ion-social-buffer-outline'
       });
+     
+    }
+
+    if (hasPermissao('ADMIN') ) {
+      gestaoChild.push({
+        key: 'metas',
+        name: 'Metas',
+        link: '/app/metas',
+        icon: 'ion-ios-flag'
+      });
     }
 
     if (gestaoChild.length > 0) {

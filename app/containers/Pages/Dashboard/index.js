@@ -56,6 +56,41 @@ const getToken = () => localStorage.getItem('token');
 
 const CORES = ['#007AFF', '#FF2D55', '#00C7BE', '#FF9500', '#5856D6', '#34C759', '#FF3B30', '#5AC8FA'];
 
+const formatCurrencyBR = (valor) => {
+  const numero = Number(valor);
+  if (Number.isNaN(numero)) return 'R$ 0,00';
+  return numero.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+};
+
+const formatDateBR = (value) => {
+  if (!value) return '';
+  const data = new Date(value);
+  if (Number.isNaN(data.getTime())) return '';
+  return data.toLocaleDateString('pt-BR');
+};
+
+const obterIntervaloMesReferencia = (dateString) => {
+  if (!dateString) return null;
+  const partes = dateString.split('-').map(Number);
+  if (partes.length < 2 || Number.isNaN(partes[0]) || Number.isNaN(partes[1])) return null;
+  const [ano, mes] = partes;
+  if (!ano || !mes) return null;
+
+  const numeroDias = new Date(ano, mes, 0).getDate();
+  const inicio = new Date(Date.UTC(ano, mes - 1, 1, 0, 0, 0, 0));
+  const fim = new Date(Date.UTC(ano, mes - 1, numeroDias, 23, 59, 59, 999));
+
+  const inicioISO = `${ano}-${String(mes).padStart(2, '0')}-01`;
+  const fimISO = `${ano}-${String(mes).padStart(2, '0')}-${String(numeroDias).padStart(2, '0')}`;
+
+  return {
+    inicioISO,
+    fimISO,
+    inicio,
+    fim
+  };
+};
+
 // ==================== COMPONENTE DE INDICADOR COM COMPARAÇÃO ====================
 const IndicadorComparativo = React.memo(({ titulo, valorAtual, valorComparativo, cor = '#007AFF', mostrarComparacao = false }) => {
   const diferenca = valorAtual - valorComparativo;
@@ -136,6 +171,9 @@ function DashboardReobote() {
   const [cotasComp, setCotasComp] = useState({});
   const [negociosGanhos, setNegociosGanhos] = useState([]);
   const [negociosEmAndamento, setNegociosEmAndamento] = useState([]);
+  const [metaAtiva, setMetaAtiva] = useState(null);
+  const [totalMetaLiquido, setTotalMetaLiquido] = useState(0);
+  const [totalMetaBruto, setTotalMetaBruto] = useState(0);
   // ==================== ESTADOS - PERÍODO DE COMPARAÇÃO ====================
   const [habilitarComparacao, setHabilitarComparacao] = useState(false);
   const [dataInicioComp, setDataInicioComp] = useState('');
@@ -430,6 +468,68 @@ function DashboardReobote() {
     if (equipeSelecionada) return true;
     return false;
   }, [consultorSelecionado, equipeSelecionada]);
+
+  async function buscarTotalCotasMeta(dataReferencia) {
+    const intervalo = obterIntervaloMesReferencia(dataReferencia);
+    if (!intervalo) {
+      setTotalMetaLiquido(0);
+      setTotalMetaBruto(0);
+      return;
+    }
+
+    try {
+      const params = new URLSearchParams();
+      params.append('dataInicio', intervalo.inicioISO);
+      params.append('dataFim', intervalo.fimISO);
+
+      const response = await fetch(`${API_URL}/cotas/total?${params.toString()}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${getToken()}`
+        }
+      });
+
+      if (!response.ok) {
+        const texto = await response.text();
+        throw new Error(`HTTP ${response.status}: ${response.statusText} - ${texto.slice(0, 200)}`);
+      }
+
+      const data = await response.json();
+      const valores = data?.dados || {};
+      setTotalMetaLiquido(Number(valores.valor || 0));
+      setTotalMetaBruto(Number(valores.valorTotal || 0));
+    } catch (error) {
+      console.error('❌ Erro ao somar cotas para meta:', error);
+      setTotalMetaLiquido(0);
+      setTotalMetaBruto(0);
+    }
+  }
+
+  async function buscarMetaPorReferencia(inicio, fim) {
+    if (!inicio) return null;
+    try {
+      const params = new URLSearchParams();
+      params.append('dataInicio', inicio);
+      if (fim) params.append('dataFim', fim);
+
+      const response = await fetch(`${API_URL}/metas/referencia?${params.toString()}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${getToken()}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data?.meta || null;
+    } catch (error) {
+      console.error('❌ Erro ao buscar meta de referência:', error);
+      return null;
+    }
+  }
 
   // ==================== FUNÇÃO AUXILIAR: BUSCAR TAREFAS POR PERÍODO ====================
   async function buscarTarefasPorPeriodo(inicio, fim) {
@@ -734,8 +834,16 @@ function DashboardReobote() {
       setCotasComp(cotasCompData);
       setNegociosGanhos(negociosGanhosData);
       setNegociosEmAndamento(negociosEmAndamentoData);
+
+      const metaSelecionada = await buscarMetaPorReferencia(dataInicio, dataFim);
+      setMetaAtiva(metaSelecionada);
+      const referenciaMeta = dataInicio || dataFim || new Date().toISOString().slice(0, 10);
+      await buscarTotalCotasMeta(referenciaMeta);
     } catch (err) {
       console.error('❌ Erro ao buscar dados:', err);
+      setMetaAtiva(null);
+      setTotalMetaLiquido(0);
+      setTotalMetaBruto(0);
       alert('Erro ao buscar dados. Verifique o console.');
     } finally {
       setLoading(false);
@@ -822,6 +930,9 @@ function DashboardReobote() {
     setTarefasComparacao([]);
     setFiltradas([]);
     setIntegrantes([]);
+    setMetaAtiva(null);
+    setTotalMetaLiquido(0);
+    setTotalMetaBruto(0);
   }
 
   // ==================== MÉTRICAS - PERÍODO ATUAL ====================
@@ -953,7 +1064,23 @@ function DashboardReobote() {
 
   // ✅ NOVO: Calcula soma total de cotas
   const somaValorCotas = ranking.reduce((soma, r) => soma + (r.valorCota || 0), 0);
-
+  const totalValorCotas = useMemo(
+    () => Object.values(cotasAtuais).reduce((soma, valor) => soma + Number(valor || 0), 0),
+    [cotasAtuais]
+  );
+  const metaValorNumero = metaAtiva && metaAtiva.valor !== undefined && metaAtiva.valor !== null
+    ? Number(metaAtiva.valor)
+    : 0;
+  const metaPercentual = useMemo(() => {
+    if (!metaValorNumero || Number.isNaN(metaValorNumero) || metaValorNumero <= 0) {
+      return 0;
+    }
+    const percentual = (totalMetaLiquido / metaValorNumero) * 100;
+    return Math.max(0, Math.min(100, percentual));
+  }, [metaValorNumero, totalMetaLiquido]);
+  const metaValorRestante = metaValorNumero > 0
+    ? Math.max(0, metaValorNumero - totalMetaLiquido)
+    : 0;
 
 
   // 2. Média de Tarefas por Dia
@@ -1448,146 +1575,193 @@ function DashboardReobote() {
             </Grid>
 
 
-            {/* Ranking de Consultores */}
-            <Paper elevation={2} style={{ padding: 20, marginBottom: 30 }}>
-              <Typography variant="h6" gutterBottom>
-                🏆 Ranking de Consultores
-              </Typography>
-              <TableContainer>
-                <Table>
-                  <TableHead>
-                    <TableRow style={{ backgroundColor: '#F5F5F5' }}>
-                      <TableCell><strong>#</strong></TableCell>
-                      <TableCell>
-                        <TableSortLabel
-                          active={orderBy === 'consultor'}
-                          direction={orderBy === 'consultor' ? order : 'asc'}
-                          onClick={() => handleRequestSort('consultor')}
-                        >
-                          <strong>Consultor</strong>
-                        </TableSortLabel>
-                      </TableCell>
-                      <TableCell align="center">
-                        <TableSortLabel
-                          active={orderBy === 'visitas'}
-                          direction={orderBy === 'visitas' ? order : 'asc'}
-                          onClick={() => handleRequestSort('visitas')}
-                        >
-                          <strong>Visitas</strong>
-                        </TableSortLabel>
-                      </TableCell>
-                      <TableCell align="center">
-                        <TableSortLabel
-                          active={orderBy === 'reunioes'}
-                          direction={orderBy === 'reunioes' ? order : 'asc'}
-                          onClick={() => handleRequestSort('reunioes')}
-                        >
-                          <strong>Reuniões</strong>
-                        </TableSortLabel>
-                      </TableCell>
-                      <TableCell align="center">
-                        <TableSortLabel
-                          active={orderBy === 'propostas'}
-                          direction={orderBy === 'propostas' ? order : 'asc'}
-                          onClick={() => handleRequestSort('propostas')}
-                        >
-                          <strong>Propostas</strong>
-                        </TableSortLabel>
-                      </TableCell>
-                      <TableCell align="center">
-                        <TableSortLabel
-                          active={orderBy === 'total'}
-                          direction={orderBy === 'total' ? order : 'asc'}
-                          onClick={() => handleRequestSort('total')}
-                        >
-                          <strong>Total</strong>
-                        </TableSortLabel>
-                      </TableCell>
-                      <TableCell align="center">
-                        <TableSortLabel
-                          active={orderBy === 'valorCota'}
-                          direction={orderBy === 'valorCota' ? order : 'asc'}
-                          onClick={() => handleRequestSort('valorCota')}
-                        >
-                          <strong>Valor Total Cotas (R$)</strong>
-                        </TableSortLabel>
-                      </TableCell>
-                      <TableCell align="center">
-                        <TableSortLabel
-                          active={orderBy === 'variacao'}
-                          direction={orderBy === 'variacao' ? order : 'asc'}
-                          onClick={() => handleRequestSort('variacao')}
-                        >
-                          <strong>Variação</strong>
-                        </TableSortLabel>
-                      </TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {rankingPaginado.map((r, index) => {
-                      const posicao = rankingRowsPerPage === -1
-                        ? index + 1
-                        : rankingPage * rankingRowsPerPage + index + 1;
-
-                      return (
-                        <TableRow key={`${r.consultor}-${posicao}`}>
-                          <TableCell>{posicao}</TableCell>
-                          <TableCell>{r.consultor}</TableCell>
-                          <TableCell align="center">{r.visitas}</TableCell>
-                          <TableCell align="center">{r.reunioes}</TableCell>
-                          <TableCell align="center">{r.propostas}</TableCell>
-                          <TableCell align="center"><strong>{r.total}</strong></TableCell>
-                          <TableCell align="center">
-                            R$ {r.valorCota.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            <Grid container spacing={3} style={{ marginBottom: 30 }}>
+              <Grid item xs={12} md={8}>
+                <Paper elevation={2} style={{ padding: 20, height: '100%' }}>
+                  <Typography variant="h6" gutterBottom>
+                    🏆 Ranking de Consultores
+                  </Typography>
+                  <TableContainer>
+                    <Table>
+                      <TableHead>
+                        <TableRow style={{ backgroundColor: '#F5F5F5' }}>
+                          <TableCell><strong>#</strong></TableCell>
+                          <TableCell>
+                            <TableSortLabel
+                              active={orderBy === 'consultor'}
+                              direction={orderBy === 'consultor' ? order : 'asc'}
+                              onClick={() => handleRequestSort('consultor')}
+                            >
+                              <strong>Consultor</strong>
+                            </TableSortLabel>
                           </TableCell>
-                          <TableCell
-                            align="center"
-                            style={{
-                              color: r.variacao > 0 ? '#34C759' : r.variacao < 0 ? '#FF3B30' : '#8E8E93',
-                              fontWeight: 600
-                            }}
-                          >
-                            {habilitarComparacao
-                              ? (r.variacao !== null ? `${r.variacao > 0 ? '+' : ''}${r.variacao}%` : '—')
-                              : '—'}
+                          <TableCell align="center">
+                            <TableSortLabel
+                              active={orderBy === 'visitas'}
+                              direction={orderBy === 'visitas' ? order : 'asc'}
+                              onClick={() => handleRequestSort('visitas')}
+                            >
+                              <strong>Visitas</strong>
+                            </TableSortLabel>
+                          </TableCell>
+                          <TableCell align="center">
+                            <TableSortLabel
+                              active={orderBy === 'reunioes'}
+                              direction={orderBy === 'reunioes' ? order : 'asc'}
+                              onClick={() => handleRequestSort('reunioes')}
+                            >
+                              <strong>Reuniões</strong>
+                            </TableSortLabel>
+                          </TableCell>
+                          <TableCell align="center">
+                            <TableSortLabel
+                              active={orderBy === 'propostas'}
+                              direction={orderBy === 'propostas' ? order : 'asc'}
+                              onClick={() => handleRequestSort('propostas')}
+                            >
+                              <strong>Propostas</strong>
+                            </TableSortLabel>
+                          </TableCell>
+                          <TableCell align="center">
+                            <TableSortLabel
+                              active={orderBy === 'total'}
+                              direction={orderBy === 'total' ? order : 'asc'}
+                              onClick={() => handleRequestSort('total')}
+                            >
+                              <strong>Total</strong>
+                            </TableSortLabel>
+                          </TableCell>
+                          <TableCell align="center">
+                            <TableSortLabel
+                              active={orderBy === 'valorCota'}
+                              direction={orderBy === 'valorCota' ? order : 'asc'}
+                              onClick={() => handleRequestSort('valorCota')}
+                            >
+                              <strong>Valor Total Cotas (R$)</strong>
+                            </TableSortLabel>
+                          </TableCell>
+                          <TableCell align="center">
+                            <TableSortLabel
+                              active={orderBy === 'variacao'}
+                              direction={orderBy === 'variacao' ? order : 'asc'}
+                              onClick={() => handleRequestSort('variacao')}
+                            >
+                              <strong>Variação</strong>
+                            </TableSortLabel>
                           </TableCell>
                         </TableRow>
-                      );
-                    })}
-                  </TableBody>
+                      </TableHead>
+                      <TableBody>
+                        {rankingPaginado.map((r, index) => {
+                          const posicao = rankingRowsPerPage === -1
+                            ? index + 1
+                            : rankingPage * rankingRowsPerPage + index + 1;
 
-                  {/* ✅ NOVO: Footer com totais */}
-                  <TableBody>
-                    <TableRow style={{ backgroundColor: '#F0F8FF', fontWeight: 'bold' }}>
-                      <TableCell colSpan={6} align="right">
-                        <strong>TOTAL:</strong>
-                      </TableCell>
-                      <TableCell align="center">
-                        <strong style={{ color: '#007AFF', fontSize: '1.1em' }}>
-                          R$ {somaValorCotas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </strong>
-                      </TableCell>
-                      <TableCell colSpan={1}></TableCell>
-                    </TableRow>
-                  </TableBody>
-
-                </Table>
-              </TableContainer>
-              <TablePagination
-                component="div"
-                count={rankingOrdenado.length}
-                page={rankingPage}
-                onPageChange={(event, newPage) => setRankingPage(newPage)}
-                rowsPerPage={rankingRowsPerPage}
-                onRowsPerPageChange={(event) => {
-                  const value = parseInt(event.target.value, 10);
-                  setRankingRowsPerPage(value);
-                  setRankingPage(0);
-                }}
-                rowsPerPageOptions={[10, 25, 50, { label: 'Todos', value: -1 }]}
-                labelRowsPerPage="Consultores por página"
-              />
-            </Paper>
+                          return (
+                            <TableRow key={`${r.consultor}-${posicao}`}>
+                              <TableCell>{posicao}</TableCell>
+                              <TableCell>{r.consultor}</TableCell>
+                              <TableCell align="center">{r.visitas}</TableCell>
+                              <TableCell align="center">{r.reunioes}</TableCell>
+                              <TableCell align="center">{r.propostas}</TableCell>
+                              <TableCell align="center"><strong>{r.total}</strong></TableCell>
+                              <TableCell align="center">
+                                R$ {r.valorCota.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </TableCell>
+                              <TableCell
+                                align="center"
+                                style={{
+                                  color: r.variacao > 0 ? '#34C759' : r.variacao < 0 ? '#FF3B30' : '#8E8E93',
+                                  fontWeight: 600
+                                }}
+                              >
+                                {habilitarComparacao
+                                  ? (r.variacao !== null ? `${r.variacao > 0 ? '+' : ''}${r.variacao}%` : '—')
+                                  : '—'}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                      <TableBody>
+                        <TableRow style={{ backgroundColor: '#F0F8FF', fontWeight: 'bold' }}>
+                          <TableCell colSpan={6} align="right">
+                            <strong>TOTAL:</strong>
+                          </TableCell>
+                          <TableCell align="center">
+                            <strong style={{ color: '#007AFF', fontSize: '1.1em' }}>
+                              R$ {somaValorCotas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </strong>
+                          </TableCell>
+                          <TableCell />
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                  <TablePagination
+                    component="div"
+                    count={rankingOrdenado.length}
+                    page={rankingPage}
+                    onPageChange={(event, newPage) => setRankingPage(newPage)}
+                    rowsPerPage={rankingRowsPerPage === -1 ? rankingOrdenado.length || 1 : rankingRowsPerPage}
+                    onRowsPerPageChange={(event) => {
+                      const value = parseInt(event.target.value, 10);
+                      setRankingRowsPerPage(value);
+                      setRankingPage(0);
+                    }}
+                    rowsPerPageOptions={[10, 25, 50, { label: 'Todos', value: -1 }]}
+                    labelRowsPerPage="Consultores por página"
+                  />
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Paper elevation={2} style={{ padding: 20, height: '100%', textAlign: 'center' }}>
+                  <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                    Meta de Vendas
+                  </Typography>
+                  {metaAtiva ? (
+                    <>
+                      <Box position="relative" display="inline-flex" sx={{ mt: 2, mb: 2 }}>
+                        <CircularProgress variant="determinate" value={metaPercentual} size={140} thickness={5} />
+                        <Box
+                          top={0}
+                          left={0}
+                          bottom={0}
+                          right={0}
+                          position="absolute"
+                          display="flex"
+                          alignItems="center"
+                          justifyContent="center"
+                        >
+                          <Typography variant="h4" component="div" color="textPrimary">
+                            {`${Math.round(metaPercentual)}%`}
+                          </Typography>
+                        </Box>
+                      </Box>
+                      <Typography variant="body1" color="textSecondary">
+                        {formatCurrencyBR(totalMetaLiquido)} de {formatCurrencyBR(metaValorNumero)}
+                      </Typography>
+                      <Typography variant="caption" color="textSecondary" display="block">
+                        {formatDateBR(metaAtiva.dataInicio)}
+                        {metaAtiva.dataFim ? ` até ${formatDateBR(metaAtiva.dataFim)}` : ' em diante'}
+                      </Typography>
+                      {metaValorNumero > 0 && (
+                        <Typography variant="caption" color="textSecondary" display="block">
+                          Restante: {formatCurrencyBR(metaValorRestante)}
+                        </Typography>
+                      )}
+                      <Typography variant="caption" color="textSecondary" display="block">
+                        Valor Bruto: {formatCurrencyBR(totalMetaBruto)}
+                      </Typography>
+                    </>
+                  ) : (
+                    <Typography variant="body2" color="textSecondary" sx={{ mt: 4 }}>
+                      Nenhuma meta cadastrada para o período selecionado.
+                    </Typography>
+                  )}
+                </Paper>
+              </Grid>
+            </Grid>
           </>
         )}
 

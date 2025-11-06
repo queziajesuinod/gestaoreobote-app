@@ -160,6 +160,50 @@ function CotasPage() {
       : { ...prev, consultor: consultorIdLogado }));
   }, [isConsultorPerfil, consultorIdLogado]);
 
+  const sortLista = useCallback((dados, coluna, direcao) => {
+    const lista = [...dados];
+
+    const getValue = (item) => {
+      switch (coluna) {
+        case 'cliente':
+          return (item.cliente?.nome || '').toString().toLowerCase();
+        case 'consultor':
+          return (item.consultor?.nome || '').toString().toLowerCase();
+        case 'grupo':
+          return (item.grupo || '').toString().toLowerCase();
+        case 'cota':
+          return (item.cota || '').toString().toLowerCase();
+        case 'administradora':
+          return (item.administradora || '').toString().toLowerCase();
+        case 'valor':
+          return Number(item.valor ?? 0);
+        case 'valorTotal':
+          return Number(item.valorTotal ?? 0);
+        case 'dtaquisicao': {
+          const data = item.dtaquisicao ? new Date(item.dtaquisicao) : null;
+          return data ? data.getTime() : 0;
+        }
+        default:
+          return 0;
+      }
+    };
+
+    lista.sort((a, b) => {
+      const valorA = getValue(a);
+      const valorB = getValue(b);
+
+      if (typeof valorA === 'number' && typeof valorB === 'number') {
+        return direcao === 'asc' ? valorA - valorB : valorB - valorA;
+      }
+
+      return direcao === 'asc'
+        ? valorA.localeCompare(valorB)
+        : valorB.localeCompare(valorA);
+    });
+
+    return lista;
+  }, []);
+
   const fetchCotas = useCallback(async () => {
     setLoading(true);
     try {
@@ -195,7 +239,8 @@ function CotasPage() {
       }
 
       const lista = Array.isArray(data?.dados) ? data.dados : [];
-      setCotas(lista);
+      const ordenada = sortLista(lista, orderBy, order);
+      setCotas(ordenada);
       setTotal(Number.isFinite(Number(data?.total)) ? Number(data.total) : lista.length);
       setTotalValor(Number.isFinite(Number(data?.somaValor)) ? Number(data.somaValor) : lista.reduce((acc, cota) => acc + (Number(cota.valor ?? 0) || 0), 0));
       setTotalValorLiquido(
@@ -213,7 +258,7 @@ function CotasPage() {
     } finally {
       setLoading(false);
     }
-  }, [appliedFilters, page, rowsPerPage, orderBy, order, showSnackbar]);
+  }, [appliedFilters, page, rowsPerPage, orderBy, order, showSnackbar, sortLista]);
 
   useEffect(() => {
     fetchCotas();

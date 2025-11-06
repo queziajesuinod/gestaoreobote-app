@@ -14,6 +14,7 @@ import {
   Gestao,
   Clientes,
   Cotas,
+  Metas,
   ProfilePage,
   UsersAdmin,
   PerfisAdmin
@@ -62,6 +63,10 @@ function Application({ isAuthenticated }) {
         <Route
           path="cotas"
           element={<ProtectedRoute element={<Cotas />} isAuthenticated={isAuthenticated} />}
+        />
+        <Route
+          path="metas"
+          element={<ProtectedRoute element={<Metas />} isAuthenticated={isAuthenticated} />}
         />
         <Route
           path="usuarios"

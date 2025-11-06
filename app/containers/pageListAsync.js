@@ -80,6 +80,11 @@ export const Cotas = loadable(() =>
     fallback: <Loading />,
   });
 
+export const Metas = loadable(() =>
+  import('./Pages/Metas'), {
+    fallback: <Loading />,
+  });
+
 export const ProfilePage = loadable(() =>
   import('./Pages/Users/Profile'), {
     fallback: <Loading />,

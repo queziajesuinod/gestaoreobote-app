@@ -262,6 +262,44 @@ async function buscarCotasComFiltros({
   };
 }
 
+async function somarCotasPorPeriodo(dataInicio, dataFim) {
+  if (!dataInicio || !dataFim) {
+    throw new Error('Parâmetros dataInicio e dataFim são obrigatórios.');
+  }
+
+  const parse = (valor) => {
+    const partes = valor.split('-').map(Number);
+    if (partes.length < 3 || partes.some(Number.isNaN)) {
+      throw new Error('Datas inválidas.');
+    }
+    const [ano, mes, dia] = partes;
+    return { ano, mes, dia };
+  };
+
+  const inicioParts = parse(dataInicio);
+  const fimParts = parse(dataFim);
+
+  const inicio = new Date(Date.UTC(inicioParts.ano, inicioParts.mes - 1, inicioParts.dia, 0, 0, 0, 0));
+  const fimExclusive = new Date(Date.UTC(fimParts.ano, fimParts.mes - 1, fimParts.dia + 1, 0, 0, 0, 0));
+
+  const where = {
+    dtaquisicao: {
+      [Op.gte]: inicio,
+      [Op.lt]: fimExclusive
+    }
+  };
+
+  const [valor, valorTotal] = await Promise.all([
+    Cota.sum('valor', { where }),
+    Cota.sum('valorTotal', { where })
+  ]);
+
+  return {
+    valor: Number(valor || 0),
+    valorTotal: Number(valorTotal || 0)
+  };
+}
+
 module.exports = {
   criarCota,
   listarCotas,
@@ -271,5 +309,6 @@ module.exports = {
   obterCotaPorId,
   buscarPorConsultor,
   buscarPorPeriodo,
-  buscarCotasComFiltros
+  buscarCotasComFiltros,
+  somarCotasPorPeriodo
 };

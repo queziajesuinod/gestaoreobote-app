@@ -16,6 +16,7 @@ const ngrok = (isDev && process.env.ENABLE_TUNNEL) || argv.tunnel ? require('ngr
 const { resolve } = require('path');
 const app = express();
 const bodyParser = require('body-parser');
+const metasService = require('./services/metas');
 
 // ✅ Middleware de autenticação JWT (Protege APIs)
 const authMiddleware = (req, res, next) => {
@@ -115,4 +116,17 @@ app.listen(port, host, async (err) => {
   }
 
   console.log(`🚀 Servidor rodando em: ${process.env.REACT_APP_API_URL}`);
+
+  const garantirMeta = async () => {
+    try {
+      await metasService.garantirMetaProximoMes();
+    } catch (error) {
+      console.error('❌ Erro ao garantir meta mensal automática:', error);
+    }
+  };
+
+  await garantirMeta();
+  const UM_DIA_MS = 24 * 60 * 60 * 1000;
+  setInterval(garantirMeta, UM_DIA_MS);
+
 });
