@@ -61,6 +61,7 @@ app.use('/consultor', authMiddleware, require("./routers/consultores"));
 app.use('/agendor', authMiddleware, require("./routers/agendor"));
 app.use('/clientes', authMiddleware, require('./routers/clientes'));
 app.use('/cotas', authMiddleware, require('./routers/cotas'));
+app.use('/metas', authMiddleware, require('./routers/metas'));
 
 
 // 🔹 Carregar Material Icons e Documentação
