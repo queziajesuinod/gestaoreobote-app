@@ -2,8 +2,15 @@ const { Op } = require('sequelize');
 const {
   Cota,
   Consultor,
-  Cliente
+  Cliente,
+  Contemplacao
 } = require('../models');
+
+const contemplacaoInclude = {
+  model: Contemplacao,
+  as: 'contemplacao',
+  attributes: ['id', 'dataContemplacao', 'tipo', 'observacao']
+};
 
 // 🔹 Criar nova cota
 async function criarCota(data) {
@@ -24,7 +31,8 @@ async function listarCotas(consultorId = null) {
         model: Consultor,
         as: 'consultor',
         attributes: ['id', 'nome']
-      }
+      },
+      contemplacaoInclude
     ]
   });
 }
@@ -43,7 +51,8 @@ async function buscarPorCliente(clienteId, consultorId = null) {
         model: Consultor,
         as: 'consultor',
         attributes: ['id', 'nome']
-      }
+      },
+      contemplacaoInclude
     ]
   });
 }
@@ -74,7 +83,10 @@ async function obterCotaPorId(id) {
 
 // 🔹 Buscar por consultorId
 async function buscarPorConsultor(consultorId) {
-  return Cota.findAll({ where: { consultorId } });
+  return Cota.findAll({
+    where: { consultorId },
+    include: [contemplacaoInclude]
+  });
 }
 
 // 🔹 Buscar por range de data e (opcionalmente) idagendor
@@ -87,7 +99,10 @@ async function buscarPorPeriodo(inicio, fim, idagendor = null, consultorId = nul
   if (idagendor) where.idagendor = idagendor;
   if (consultorId) where.consultorId = consultorId;
 
-  return Cota.findAll({ where });
+  return Cota.findAll({
+    where,
+    include: [contemplacaoInclude]
+  });
 }
 
 function toInt(value, fallback = null) {
@@ -129,6 +144,10 @@ async function buscarCotasComFiltros({
   mes,
   ano,
   administradora,
+  grupo,
+  cota,
+  tipoContemplacao,
+  somenteContempladas,
   orderBy = 'dtaquisicao',
   order = 'desc'
 } = {}, consultorRestrito = null) {
@@ -148,6 +167,14 @@ async function buscarCotasComFiltros({
     where.administradora = {
       [Op.iLike]: `%${administradora.trim()}%`
     };
+  }
+
+  if (grupo) {
+    where.grupo = { [Op.iLike]: `%${grupo.trim()}%` };
+  }
+
+  if (cota) {
+    where.cota = { [Op.iLike]: `%${cota.trim()}%` };
   }
 
   const dateRange = buildDateRange({ mes, ano });
@@ -198,6 +225,25 @@ async function buscarCotasComFiltros({
           }
       : {})
   });
+
+  const contemplacaoRequest = { ...contemplacaoInclude };
+  const normalizedTipoContemplacao = (tipoContemplacao || '').toString().toUpperCase();
+
+  if (somenteContempladas === 'true') {
+    contemplacaoRequest.required = true;
+  }
+
+  if (normalizedTipoContemplacao) {
+    const tipoValido = TIPOS_CONTEMPLACAO.includes(normalizedTipoContemplacao);
+    if (tipoValido) {
+      contemplacaoRequest.required = true;
+      contemplacaoRequest.where = {
+        tipo: normalizedTipoContemplacao
+      };
+    }
+  }
+
+  includeBase.push(contemplacaoRequest);
 
   const normalizedOrderBy = String(orderBy || '').toLowerCase();
   const normalizedDirection = String(order || '').toLowerCase() === 'asc' ? 'ASC' : 'DESC';
@@ -262,6 +308,58 @@ async function buscarCotasComFiltros({
   };
 }
 
+const TIPOS_CONTEMPLACAO = ['LANCE_FIXO', 'LANCE_LIVRE', 'SORTEIO'];
+
+function normalizarTipoContemplacao(tipo) {
+  const normalized = (tipo || '').toString().toUpperCase();
+  if (normalized === 'LANCE') {
+    return 'LANCE_LIVRE';
+  }
+  if (!TIPOS_CONTEMPLACAO.includes(normalized)) {
+    throw new Error('Tipo de contemplação inválido. Utilize "LANCE_FIXO", "LANCE_LIVRE" ou "SORTEIO".');
+  }
+  return normalized;
+}
+
+async function registrarContemplacao(cotaId, dados) {
+  const cota = await Cota.findByPk(cotaId);
+  if (!cota) {
+    throw new Error('Cota não encontrada.');
+  }
+
+  const dataContemplacao = dados?.dataContemplacao;
+  if (!dataContemplacao) {
+    throw new Error('Data de contemplação é obrigatória.');
+  }
+
+  const tipo = normalizarTipoContemplacao(dados?.tipo);
+  const observacao = dados?.observacao ? dados.observacao.toString().trim() : null;
+
+  const valores = {
+    cotaId,
+    dataContemplacao,
+    tipo,
+    observacao
+  };
+
+  const existente = await Contemplacao.findOne({ where: { cotaId } });
+  if (existente) {
+    await existente.update(valores);
+    return existente;
+  }
+
+  return Contemplacao.create(valores);
+}
+
+async function removerContemplacao(cotaId) {
+  const existente = await Contemplacao.findOne({ where: { cotaId } });
+  if (!existente) {
+    throw new Error('Contemplação não encontrada para esta cota.');
+  }
+  await existente.destroy();
+  return { mensagem: 'Contemplação removida com sucesso.' };
+}
+
 async function somarCotasPorPeriodo(dataInicio, dataFim) {
   if (!dataInicio || !dataFim) {
     throw new Error('Parâmetros dataInicio e dataFim são obrigatórios.');
@@ -310,5 +408,7 @@ module.exports = {
   buscarPorConsultor,
   buscarPorPeriodo,
   buscarCotasComFiltros,
-  somarCotasPorPeriodo
+  somarCotasPorPeriodo,
+  registrarContemplacao,
+  removerContemplacao
 };

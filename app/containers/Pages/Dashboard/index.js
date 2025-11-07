@@ -62,13 +62,69 @@ const formatCurrencyBR = (valor) => {
   return numero.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 };
 
-const formatDateBR = (value) => {
-  if (!value) return '';
+const parseISODateOnly = (value) => {
+  if (!value || typeof value !== 'string') return null;
+  const [year, month, day] = value.split('-').map(Number);
+  if ([year, month, day].some(num => Number.isNaN(num))) return null;
+  return new Date(Date.UTC(year, (month || 1) - 1, day || 1));
+};
+
+const parseDateOnly = (value) => {
+  if (!value) return null;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (isoMatch) {
+      const [, year, month, day] = isoMatch;
+      return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+    }
+  }
+
   const data = new Date(value);
-  if (Number.isNaN(data.getTime())) return '';
-  return data.toLocaleDateString('pt-BR', {
-    timeZone: 'America/Campo_Grande'
-  });
+  return Number.isNaN(data.getTime()) ? null : data;
+};
+
+const formatDateBR = (value) => {
+  const data = parseDateOnly(value);
+  if (!data) return '';
+  const dia = String(data.getUTCDate()).padStart(2, '0');
+  const mes = String(data.getUTCMonth() + 1).padStart(2, '0');
+  const ano = data.getUTCFullYear();
+  return `${dia}/${mes}/${ano}`;
+};
+
+const formatISODateOnly = (date) => (date ? date.toISOString().slice(0, 10) : '');
+
+const splitPeriodIntoChunks = (inicio, fim, maxDias = 31) => {
+  const inicioDate = parseISODateOnly(inicio);
+  const fimDate = parseISODateOnly(fim);
+
+  if (!inicioDate || !fimDate || inicioDate > fimDate) {
+    return [];
+  }
+
+  const intervalos = [];
+  let cursor = new Date(inicioDate.getTime());
+
+  while (cursor <= fimDate) {
+    const segmentoInicio = new Date(cursor.getTime());
+    const segmentoFim = new Date(cursor.getTime());
+    segmentoFim.setUTCDate(segmentoFim.getUTCDate() + (maxDias - 1));
+
+    if (segmentoFim > fimDate) {
+      segmentoFim.setTime(fimDate.getTime());
+    }
+
+    intervalos.push({
+      inicio: formatISODateOnly(segmentoInicio),
+      fim: formatISODateOnly(segmentoFim)
+    });
+
+    cursor = new Date(segmentoFim.getTime());
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+
+  return intervalos;
 };
 
 
@@ -563,42 +619,58 @@ function DashboardReobote() {
       return [];
     }
 
-    const params = new URLSearchParams();
-    params.append('dataInicio', `${inicio}T00:00:00Z`);
-    params.append('dataFim', `${fim}T23:59:59Z`);
-    if (tipo && tipo !== 'Todos') {
-      params.append('tipo', tipo);
+    const intervalos = splitPeriodIntoChunks(inicio, fim, 31);
+    if (intervalos.length === 0) {
+      console.warn('⚠️ Período inválido ou data final anterior à inicial.');
+      return [];
     }
-    if (idsAgendor.length > 0 && (isConsultorPerfil || filtroExplicito)) {
-      params.append('consultores', idsAgendor.join(','));
-    }
-
-    const response = await fetch(`${API_URL}/agendor/tarefas?${params.toString()}`, {
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${getToken()}`
-      }
-    });
-
-    const data = await response.json();
-
-    const tarefasEnriquecidas = (data.tarefas || []).map(tarefa => {
-      const chaveConsultor = String(tarefa.consultorId ?? '').trim();
-      return {
-        ...tarefa,
-        nomeEquipe: mapaConsultoresGlobal[chaveConsultor]?.equipe || 'Sem Equipe',
-        nomeConsultor: mapaConsultoresGlobal[chaveConsultor]?.nome || tarefa.consultor || 'Desconhecido'
-      };
-    });
 
     const deveFiltrarLocalmente = isConsultorPerfil && !filtroExplicito && idsAgendor.length > 0;
+    const idsSet = deveFiltrarLocalmente ? new Set(idsAgendor.map(id => String(id))) : null;
+    const todasTarefas = [];
 
-    if (deveFiltrarLocalmente) {
-      const idsSet = new Set(idsAgendor.map(id => String(id)));
-      return tarefasEnriquecidas.filter(t => idsSet.has(String(t.consultorId ?? '').trim()));
+    for (const intervalo of intervalos) {
+      const params = new URLSearchParams();
+      params.append('dataInicio', `${intervalo.inicio}T00:00:00Z`);
+      params.append('dataFim', `${intervalo.fim}T23:59:59Z`);
+      if (tipo && tipo !== 'Todos') {
+        params.append('tipo', tipo);
+      }
+      if (idsAgendor.length > 0 && (isConsultorPerfil || filtroExplicito)) {
+        params.append('consultores', idsAgendor.join(','));
+      }
+
+      const response = await fetch(`${API_URL}/agendor/tarefas?${params.toString()}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${getToken()}`
+        }
+      });
+
+      if (!response.ok) {
+        const texto = await response.text();
+        throw new Error(`HTTP ${response.status}: ${response.statusText} - ${texto.slice(0, 200)}`);
+      }
+
+      const data = await response.json();
+
+      const tarefasEnriquecidas = (data.tarefas || []).map(tarefa => {
+        const chaveConsultor = String(tarefa.consultorId ?? '').trim();
+        return {
+          ...tarefa,
+          nomeEquipe: mapaConsultoresGlobal[chaveConsultor]?.equipe || 'Sem Equipe',
+          nomeConsultor: mapaConsultoresGlobal[chaveConsultor]?.nome || tarefa.consultor || 'Desconhecido'
+        };
+      });
+
+      const tarefasFiltradas = deveFiltrarLocalmente && idsSet
+        ? tarefasEnriquecidas.filter(t => idsSet.has(String(t.consultorId ?? '').trim()))
+        : tarefasEnriquecidas;
+
+      todasTarefas.push(...tarefasFiltradas);
     }
 
-    return tarefasEnriquecidas;
+    return todasTarefas;
   }
 
   async function buscarNegociosGanhos(dataInicio, consultoresSelecionados = [], dealStatus) {
@@ -847,10 +919,16 @@ function DashboardReobote() {
       setNegociosGanhos(negociosGanhosData);
       setNegociosEmAndamento(negociosEmAndamentoData);
 
-      const metaSelecionada = await buscarMetaPorReferencia(dataInicio, dataFim);
-      setMetaAtiva(metaSelecionada);
-      const referenciaMeta = dataInicio || dataFim || new Date().toISOString().slice(0, 10);
-      await buscarTotalCotasMeta(referenciaMeta);
+      const intervaloMetaAtual = dataInicio ? obterIntervaloMesReferencia(dataInicio) : null;
+      if (intervaloMetaAtual) {
+        const metaSelecionada = await buscarMetaPorReferencia(intervaloMetaAtual.inicioISO, intervaloMetaAtual.fimISO);
+        setMetaAtiva(metaSelecionada);
+        await buscarTotalCotasMeta(intervaloMetaAtual.inicioISO);
+      } else {
+        setMetaAtiva(null);
+        setTotalMetaLiquido(0);
+        setTotalMetaBruto(0);
+      }
     } catch (err) {
       console.error('❌ Erro ao buscar dados:', err);
       setMetaAtiva(null);

@@ -12,6 +12,11 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: 'consultorId',
         as: 'consultor'
       });
+      Cota.hasOne(models.Contemplacao, {
+        foreignKey: 'cotaId',
+        as: 'contemplacao',
+        onDelete: 'CASCADE'
+      });
     }
   }
 

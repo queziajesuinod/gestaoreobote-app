@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import {
+  Alert,
   Box,
   Button,
+  Chip,
   CircularProgress,
   Dialog,
   DialogActions,
@@ -11,25 +13,33 @@ import {
   FormControl,
   Grid,
   IconButton,
+  InputAdornment,
   InputLabel,
   MenuItem,
   Paper,
   Select,
-  TablePagination,
   Snackbar,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
-  TextField,
-  Typography,
-  Alert,
   TableSortLabel,
-  InputAdornment
+  TextField,
+  Tooltip,
+  Typography
 } from '@mui/material';
-import { Add as AddIcon, Visibility as VisibilityIcon, Refresh as RefreshIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import {
+  Add as AddIcon,
+  Delete as DeleteIcon,
+  Edit as EditIcon,
+  EmojiEvents as EmojiEventsIcon,
+  Refresh as RefreshIcon,
+  Search as SearchIcon,
+  Visibility as VisibilityIcon
+} from '@mui/icons-material';
 import brand from 'dan-api/dummy/brand';
 import { PapperBlock } from 'dan-components';
 import { getStoredUser } from '../../../utils/userStorage';
@@ -39,6 +49,12 @@ const ESTADOS = [
   'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT',
   'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS',
   'RO', 'RR', 'SC', 'SP', 'SE', 'TO'
+];
+
+const TIPOS_CONTEMPLACAO = [
+  { value: 'LANCE_FIXO', label: 'Lance Fixo' },
+  { value: 'LANCE_LIVRE', label: 'Lance Livre' },
+  { value: 'SORTEIO', label: 'Sorteio' }
 ];
 
 const getToken = () => localStorage.getItem('token');
@@ -73,6 +89,15 @@ function Clientes() {
   const [loadingCotas, setLoadingCotas] = useState(false);
   const [cotasPage, setCotasPage] = useState(0);
   const [cotasRowsPerPage, setCotasRowsPerPage] = useState(5);
+  const [cotaSearchTerm, setCotaSearchTerm] = useState('');
+  const [openContemplacaoDialog, setOpenContemplacaoDialog] = useState(false);
+  const [cotaSelecionadaParaContemplacao, setCotaSelecionadaParaContemplacao] = useState(null);
+  const [contemplacaoForm, setContemplacaoForm] = useState({
+    dataContemplacao: '',
+    tipo: 'LANCE_LIVRE',
+    observacao: ''
+  });
+  const [salvandoContemplacao, setSalvandoContemplacao] = useState(false);
 
   const [consultores, setConsultores] = useState([]);
   const [openCotaDialog, setOpenCotaDialog] = useState(false);
@@ -152,6 +177,24 @@ function Clientes() {
     return date.toISOString().slice(0, 10);
   };
 
+const formatDateBR = (value) => {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleDateString('pt-BR');
+};
+
+const formatTipoContemplacao = (tipo) => {
+  const mapa = {
+    LANCE_FIXO: 'Lance Fixo',
+    LANCE_LIVRE: 'Lance Livre',
+    SORTEIO: 'Sorteio',
+    LANCE: 'Lance'
+  };
+  const chave = (tipo || '').toUpperCase();
+  return mapa[chave] || tipo || '—';
+};
+
   const toNumberOrNull = (value) => {
     if (value === '' || value === null || value === undefined) return null;
     if (typeof value === 'number') {
@@ -217,7 +260,7 @@ function Clientes() {
 
   useEffect(() => {
     setCotasPage(0);
-  }, [cotas]);
+  }, [cotas, cotaSearchTerm]);
 
   const loadClientes = async () => {
     setLoadingClientes(true);
@@ -278,6 +321,8 @@ function Clientes() {
       const data = await response.json();
       lista = Array.isArray(data) ? data : [];
       setCotas(lista);
+      setCotaSearchTerm('');
+      setCotasPage(0);
       setSelectedCliente(prev => (prev ? { ...prev, totalCotas: lista.length } : prev));
     } catch (error) {
       showSnackbar('Não foi possível carregar as cotas do cliente', 'error');
@@ -335,6 +380,7 @@ function Clientes() {
     setOpenDetalhes(false);
     setSelectedCliente(null);
     setCotas([]);
+     setCotaSearchTerm('');
     setCotaEditando(null);
     setOpenCotaDialog(false);
     resetCotaForm();
@@ -549,6 +595,96 @@ function Clientes() {
     }
   };
 
+  const handleOpenContemplacaoDialog = (cota) => {
+    if (!podeGerenciarClientes) {
+      showSnackbar('Você não tem permissão para contemplar cotas.', 'error');
+      return;
+    }
+    const defaultDate = cota.contemplacao?.dataContemplacao || new Date().toISOString().slice(0, 10);
+    setCotaSelecionadaParaContemplacao(cota);
+    setContemplacaoForm({
+      dataContemplacao: formatDateForInput(defaultDate),
+      tipo: cota.contemplacao?.tipo || 'LANCE_LIVRE',
+      observacao: cota.contemplacao?.observacao || ''
+    });
+    setOpenContemplacaoDialog(true);
+  };
+
+  const handleCloseContemplacaoDialog = () => {
+    setOpenContemplacaoDialog(false);
+    setCotaSelecionadaParaContemplacao(null);
+    setContemplacaoForm({
+      dataContemplacao: '',
+      tipo: 'LANCE_LIVRE',
+      observacao: ''
+    });
+    setSalvandoContemplacao(false);
+  };
+
+  const handleSubmitContemplacao = async (event) => {
+    event.preventDefault();
+    if (!selectedCliente || !cotaSelecionadaParaContemplacao) return;
+    if (!contemplacaoForm.dataContemplacao) {
+      showSnackbar('Informe a data de contemplação.', 'error');
+      return;
+    }
+    setSalvandoContemplacao(true);
+    try {
+      const response = await fetch(`${API_URL}/cotas/${cotaSelecionadaParaContemplacao.id}/contemplacao`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${getToken()}`
+        },
+        body: JSON.stringify({
+          dataContemplacao: contemplacaoForm.dataContemplacao,
+          tipo: contemplacaoForm.tipo,
+          observacao: contemplacaoForm.observacao || null
+        })
+      });
+      const data = await response.json();
+      if (!response.ok || data?.sucesso === false) {
+        throw new Error(data?.mensagem || 'Erro ao salvar contemplação.');
+      }
+      showSnackbar('Contemplação registrada com sucesso.');
+      await loadCotas(selectedCliente.id);
+      handleCloseContemplacaoDialog();
+    } catch (error) {
+      console.error('❌ Erro ao registrar contemplação:', error);
+      showSnackbar(error.message || 'Falha ao registrar contemplação.', 'error');
+    } finally {
+      setSalvandoContemplacao(false);
+    }
+  };
+
+  const handleRemoverContemplacao = async () => {
+    if (!selectedCliente || !cotaSelecionadaParaContemplacao?.contemplacao) {
+      return;
+    }
+    setSalvandoContemplacao(true);
+    try {
+      const response = await fetch(`${API_URL}/cotas/${cotaSelecionadaParaContemplacao.id}/contemplacao`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${getToken()}`
+        }
+      });
+      const data = await response.json();
+      if (!response.ok || data?.sucesso === false) {
+        throw new Error(data?.mensagem || 'Erro ao remover contemplação.');
+      }
+      showSnackbar('Contemplação removida com sucesso.');
+      await loadCotas(selectedCliente.id);
+      handleCloseContemplacaoDialog();
+    } catch (error) {
+      console.error('❌ Erro ao remover contemplação:', error);
+      showSnackbar(error.message || 'Falha ao remover contemplação.', 'error');
+    } finally {
+      setSalvandoContemplacao(false);
+    }
+  };
+
   const handleDeleteCota = async (cota) => {
     if (!podeGerenciarClientes) {
       showSnackbar('Você não tem permissão para remover cotas.', 'error');
@@ -653,10 +789,23 @@ function Clientes() {
     return clientesFiltradosOrdenados.slice(inicio, inicio + rowsPerPage);
   }, [clientesFiltradosOrdenados, page, rowsPerPage]);
 
+  const cotasFiltradas = useMemo(() => {
+    if (!cotaSearchTerm.trim()) return cotas;
+    const termo = cotaSearchTerm.trim().toLowerCase();
+    return cotas.filter(cota => {
+      const campos = [
+        cota.grupo,
+        cota.cota,
+        cota.administradora
+      ].map(valor => (valor || '').toString().toLowerCase());
+      return campos.some(valor => valor.includes(termo));
+    });
+  }, [cotas, cotaSearchTerm]);
+
   const cotasPaginadas = useMemo(() => {
     const inicio = cotasPage * cotasRowsPerPage;
-    return cotas.slice(inicio, inicio + cotasRowsPerPage);
-  }, [cotas, cotasPage, cotasRowsPerPage]);
+    return cotasFiltradas.slice(inicio, inicio + cotasRowsPerPage);
+  }, [cotasFiltradas, cotasPage, cotasRowsPerPage]);
 
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
@@ -955,18 +1104,34 @@ function Clientes() {
             </Box>
           )}
 
-          <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+          <Box display="flex" justifyContent="space-between" alignItems={{ xs: 'stretch', sm: 'center' }} flexDirection={{ xs: 'column', sm: 'row' }} gap={1.5} mb={2}>
             <Typography variant="subtitle1">Cotas do Cliente</Typography>
-            {podeGerenciarClientes && (
-              <Button
-                variant="contained"
-                color="primary"
-                startIcon={<AddIcon />}
-                onClick={handleOpenNovaCota}
-              >
-                Nova Cota
-              </Button>
-            )}
+            <Box display="flex" gap={1} alignItems="center" flexWrap="wrap">
+              <TextField
+                size="small"
+                label="Buscar cota/grupo"
+                value={cotaSearchTerm}
+                onChange={e => setCotaSearchTerm(e.target.value)}
+                placeholder="Digite o grupo ou cota"
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" />
+                    </InputAdornment>
+                  )
+                }}
+              />
+              {podeGerenciarClientes && (
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={<AddIcon />}
+                  onClick={handleOpenNovaCota}
+                >
+                  Nova Cota
+                </Button>
+              )}
+            </Box>
           </Box>
 
           <TableContainer component={Paper}>
@@ -975,30 +1140,36 @@ function Clientes() {
                 <TableRow>
                   <TableCell>Grupo</TableCell>
                   <TableCell>Cota</TableCell>
-                  <TableCell>Valor</TableCell>
-                  <TableCell>Valor Total</TableCell>
+                  <TableCell>Valor Líquido</TableCell>
+                  <TableCell>Valor Bruto</TableCell>
                   <TableCell>Data Aquisição</TableCell>
                   <TableCell>Administradora</TableCell>
                   <TableCell>Consultor</TableCell>
+                  <TableCell>Contemplação</TableCell>
                   <TableCell align="center">Ações</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {loadingCotas ? (
                   <TableRow>
-                    <TableCell colSpan={8} align="center">
+                    <TableCell colSpan={9} align="center">
                       <CircularProgress size={24} />
                     </TableCell>
                   </TableRow>
-                ) : cotas.length === 0 ? (
+                ) : cotasFiltradas.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} align="center">
-                      Nenhuma cota cadastrada para este cliente.
+                    <TableCell colSpan={9} align="center">
+                      Nenhuma cota encontrada com o critério informado.
                     </TableCell>
                   </TableRow>
                 ) : (
                   cotasPaginadas.map(cota => (
-                    <TableRow key={cota.id}>
+                    <TableRow
+                      key={cota.id}
+                      sx={{
+                        backgroundColor: cota.contemplacao ? 'rgba(34,197,94,0.08)' : 'inherit'
+                      }}
+                    >
                       <TableCell>{cota.grupo}</TableCell>
                       <TableCell>{cota.cota || '—'}</TableCell>
                       <TableCell>
@@ -1018,9 +1189,26 @@ function Clientes() {
                       </TableCell>
                       <TableCell>{cota.administradora}</TableCell>
                       <TableCell>{cota.consultor?.nome || '—'}</TableCell>
+                      <TableCell>
+                        {cota.contemplacao ? (
+                          <Chip
+                            size="small"
+                            color="success"
+                            icon={<EmojiEventsIcon fontSize="small" />}
+                            label={`${formatTipoContemplacao(cota.contemplacao.tipo)} · ${formatDateBR(cota.contemplacao.dataContemplacao)}`}
+                          />
+                        ) : (
+                          <Chip size="small" variant="outlined" label="Não contemplada" />
+                        )}
+                      </TableCell>
                       <TableCell align="center">
                         {podeGerenciarClientes ? (
                           <Box display="flex" justifyContent="center" gap={1}>
+                            <Tooltip title={cota.contemplacao ? 'Editar contemplação' : 'Marcar como contemplada'}>
+                              <IconButton size="small" color={cota.contemplacao ? 'success' : 'default'} onClick={() => handleOpenContemplacaoDialog(cota)}>
+                                <EmojiEventsIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
                             <IconButton size="small" color="primary" onClick={() => handleEditCota(cota)}>
                               <EditIcon fontSize="small" />
                             </IconButton>
@@ -1040,7 +1228,7 @@ function Clientes() {
           </TableContainer>
           <TablePagination
             component="div"
-            count={cotas.length}
+            count={cotasFiltradas.length}
             page={cotasPage}
             onPageChange={handleCotasPageChange}
             rowsPerPage={cotasRowsPerPage}
@@ -1096,7 +1284,7 @@ function Clientes() {
               </Grid>
               <Grid item xs={12} sm={6}>
                 <TextField
-                  label="Valor Total"
+                  label="Valor Bruto"
                   value={formatCurrencyDisplay(cotaForm.valorTotal)}
                   onChange={e => setCotaForm(prev => ({ ...prev, valorTotal: sanitizeDigits(e.target.value) }))}
                   fullWidth
@@ -1160,6 +1348,77 @@ function Clientes() {
             <Button onClick={handleCloseCotaDialog}>Cancelar</Button>
             <Button type="submit" variant="contained" color="primary">
               {cotaEditando ? 'Atualizar' : 'Salvar'}
+            </Button>
+          </DialogActions>
+        </form>
+      </Dialog>
+
+      <Dialog
+        open={openContemplacaoDialog}
+        onClose={handleCloseContemplacaoDialog}
+        fullWidth
+        maxWidth="sm"
+      >
+        <form onSubmit={handleSubmitContemplacao}>
+          <DialogTitle>
+            {cotaSelecionadaParaContemplacao?.contemplacao ? 'Editar Contemplação' : 'Registrar Contemplação'}
+          </DialogTitle>
+          <DialogContent dividers>
+            <Grid container spacing={2}>
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" color="textSecondary">
+                  {cotaSelecionadaParaContemplacao?.grupo || 'Grupo —'} · {cotaSelecionadaParaContemplacao?.cota || 'Cota —'}
+                </Typography>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Data de contemplação"
+                  type="date"
+                  value={contemplacaoForm.dataContemplacao}
+                  onChange={e => setContemplacaoForm(prev => ({ ...prev, dataContemplacao: e.target.value }))}
+                  InputLabelProps={{ shrink: true }}
+                  required
+                  fullWidth
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth required>
+                  <InputLabel>Tipo</InputLabel>
+                  <Select
+                    label="Tipo"
+                    value={contemplacaoForm.tipo}
+                    onChange={e => setContemplacaoForm(prev => ({ ...prev, tipo: e.target.value }))}
+                  >
+                    {TIPOS_CONTEMPLACAO.map(tipo => (
+                      <MenuItem key={tipo.value} value={tipo.value}>{tipo.label}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  label="Observação"
+                  value={contemplacaoForm.observacao}
+                  onChange={e => setContemplacaoForm(prev => ({ ...prev, observacao: e.target.value }))}
+                  fullWidth
+                  multiline
+                  minRows={2}
+                  placeholder="Detalhes adicionais sobre a contemplação (opcional)"
+                />
+              </Grid>
+            </Grid>
+          </DialogContent>
+          <DialogActions>
+            {cotaSelecionadaParaContemplacao?.contemplacao && (
+              <Button color="error" disabled={salvandoContemplacao} onClick={handleRemoverContemplacao}>
+                Remover marcação
+              </Button>
+            )}
+            <Button onClick={handleCloseContemplacaoDialog} disabled={salvandoContemplacao}>
+              Cancelar
+            </Button>
+            <Button type="submit" variant="contained" color="primary" disabled={salvandoContemplacao}>
+              {salvandoContemplacao ? 'Salvando...' : 'Salvar'}
             </Button>
           </DialogActions>
         </form>

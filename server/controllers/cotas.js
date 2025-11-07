@@ -1,6 +1,14 @@
 const cotaService = require('../services/cotas');
 const ExcelJS = require('exceljs');
 
+function usuarioPodeGerirContemplacao(req) {
+  const perfil = req.user?.perfil ? req.user.perfil.toUpperCase() : '';
+  if (perfil === 'ADMIN') return true;
+  const permissoes = Array.isArray(req.user?.permissoes) ? req.user.permissoes.map(p => p.toUpperCase()) : [];
+  if (permissoes.includes('GESTAO') || permissoes.includes('CLIENTES_ALL')) return true;
+  return false;
+}
+
 // 🔹 Criar nova cota
 async function criar(req, res) {
   try {
@@ -92,7 +100,10 @@ async function exportar(req, res) {
       { header: 'Administradora', key: 'administradora', width: 25 },
       { header: 'Valor', key: 'valor', width: 15 },
       { header: 'Valor Total', key: 'valorTotal', width: 15 },
-      { header: 'Data Aquisição', key: 'dtaquisicao', width: 18 }
+      { header: 'Data Aquisição', key: 'dtaquisicao', width: 18 },
+      { header: 'Contemplado', key: 'contemplado', width: 15 },
+      { header: 'Tipo Contemplação', key: 'tipoContemplacao', width: 18 },
+      { header: 'Data Contemplação', key: 'dataContemplacao', width: 18 }
     ];
 
     // Linhas
@@ -109,6 +120,11 @@ async function exportar(req, res) {
         valorTotal: Number(cota.valorTotal || 0),
         dtaquisicao: cota.dtaquisicao
           ? new Date(cota.dtaquisicao).toLocaleDateString('pt-BR')
+          : '',
+        contemplado: cota.contemplacao ? 'Sim' : 'Não',
+        tipoContemplacao: cota.contemplacao?.tipo || '',
+        dataContemplacao: cota.contemplacao?.dataContemplacao
+          ? new Date(cota.contemplacao.dataContemplacao).toLocaleDateString('pt-BR')
           : ''
       });
     });
@@ -262,6 +278,34 @@ async function totalPorPeriodo(req, res) {
   }
 }
 
+async function registrarContemplacao(req, res) {
+  try {
+    if (!usuarioPodeGerirContemplacao(req)) {
+      return res.status(403).json({ sucesso: false, mensagem: 'Você não tem permissão para contemplar cotas.' });
+    }
+    const { id } = req.params;
+    const resultado = await cotaService.registrarContemplacao(id, req.body);
+    return res.status(200).json({ sucesso: true, mensagem: 'Cota marcada como contemplada.', dados: resultado });
+  } catch (error) {
+    console.error('❌ Erro ao registrar contemplação:', error);
+    return res.status(400).json({ sucesso: false, mensagem: error.message });
+  }
+}
+
+async function removerContemplacao(req, res) {
+  try {
+    if (!usuarioPodeGerirContemplacao(req)) {
+      return res.status(403).json({ sucesso: false, mensagem: 'Você não tem permissão para remover contemplações.' });
+    }
+    const { id } = req.params;
+    const resultado = await cotaService.removerContemplacao(id);
+    return res.status(200).json({ sucesso: true, mensagem: resultado.mensagem });
+  } catch (error) {
+    console.error('❌ Erro ao remover contemplação:', error);
+    return res.status(400).json({ sucesso: false, mensagem: error.message });
+  }
+}
+
 module.exports = {
   criar,
   listar,
@@ -272,5 +316,7 @@ module.exports = {
   buscarPorPeriodo,
   buscarComFiltros,
   totalPorPeriodo,
-  exportar
+  exportar,
+  registrarContemplacao,
+  removerContemplacao
 };

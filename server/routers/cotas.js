@@ -12,6 +12,8 @@ router.get('/exportar', cotaController.exportar);
 router.post('/', cotaController.criar);
 router.put('/:id', cotaController.atualizar);
 router.delete('/:id', cotaController.deletar);
+router.post('/:id/contemplacao', cotaController.registrarContemplacao);
+router.delete('/:id/contemplacao', cotaController.removerContemplacao);
 
 
 module.exports = router;

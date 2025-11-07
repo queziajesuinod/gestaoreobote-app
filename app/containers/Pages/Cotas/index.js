@@ -1,10 +1,14 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import {
+  Alert,
   Box,
   Button,
+  Checkbox,
+  Chip,
   CircularProgress,
   FormControl,
+  FormControlLabel,
   Grid,
   InputLabel,
   MenuItem,
@@ -18,14 +22,15 @@ import {
   TableHead,
   TablePagination,
   TableRow,
+  TableSortLabel,
   TextField,
-  Typography,
-  Alert,
-  TableSortLabel
+  Typography
 } from '@mui/material';
-import { PapperBlock } from 'dan-components';
 import brand from 'dan-api/dummy/brand';
+import { PapperBlock } from 'dan-components';
 import { getStoredUser } from '../../../utils/userStorage';
+import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
+import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 
 const API_URL = process.env.REACT_APP_API_URL?.replace(/\/$/, '') || 'http://localhost:3003';
 const getToken = () => localStorage.getItem('token');
@@ -51,8 +56,19 @@ const initialFilters = {
   consultor: '',
   mes: '',
   ano: '',
-  administradora: ''
+  administradora: '',
+  tipoContemplacao: '',
+  grupo: '',
+  cota: '',
+  somenteContempladas: ''
 };
+
+const TIPOS_CONTEMPLACAO = [
+  { value: '', label: 'Todos os tipos' },
+  { value: 'LANCE_FIXO', label: 'Lance Fixo' },
+  { value: 'LANCE_LIVRE', label: 'Lance Livre' },
+  { value: 'SORTEIO', label: 'Sorteio' }
+];
 
 
 
@@ -68,6 +84,14 @@ function formatDate(value) {
   const data = new Date(value);
   if (Number.isNaN(data.getTime())) return '—';
   return data.toLocaleDateString('pt-BR');
+}
+
+function formatTipoContemplacao(tipo) {
+  const normalized = (tipo || '').toUpperCase();
+  if (normalized === 'LANCE_FIXO') return 'Lance Fixo';
+  if (normalized === 'LANCE_LIVRE' || normalized === 'LANCE') return 'Lance Livre';
+  if (normalized === 'SORTEIO') return 'Sorteio';
+  return tipo || '—';
 }
 
 function CotasPage() {
@@ -108,6 +132,10 @@ function CotasPage() {
   const perfilUsuario = storedUser?.perfil?.toUpperCase() || '';
   const isConsultorPerfil = perfilUsuario === 'CONSULTOR';
   const consultorIdLogado = storedUser?.consultorId ? String(storedUser.consultorId) : '';
+  const permissoesUsuario = storedUser?.permissoes?.map(p => p.toUpperCase()) || [];
+  const podeGerirContemplacao = perfilUsuario === 'ADMIN'
+    || permissoesUsuario.includes('GESTAO')
+    || permissoesUsuario.includes('CLIENTES_ALL');
 
   const showSnackbar = useCallback((message, severity = 'success') => {
     setSnackbar({ open: true, message, severity });
@@ -414,12 +442,60 @@ function CotasPage() {
             />
           </Grid>
 
+         <Grid item xs={12} md={4} lg={2}>
+           <TextField
+             label="Administradora"
+             value={filters.administradora}
+             onChange={handleFilterChange('administradora')}
+             fullWidth
+           />
+         </Grid>
+
           <Grid item xs={12} md={4} lg={2}>
             <TextField
-              label="Administradora"
-              value={filters.administradora}
-              onChange={handleFilterChange('administradora')}
+              label="Grupo"
+              value={filters.grupo}
+              onChange={handleFilterChange('grupo')}
               fullWidth
+            />
+          </Grid>
+
+          <Grid item xs={12} md={4} lg={2}>
+            <TextField
+              label="Cota"
+              value={filters.cota}
+              onChange={handleFilterChange('cota')}
+              fullWidth
+            />
+          </Grid>
+
+          <Grid item xs={12} md={4} lg={3}>
+            <FormControl fullWidth>
+              <InputLabel>Tipo de Contemplação</InputLabel>
+              <Select
+                value={filters.tipoContemplacao}
+                onChange={handleFilterChange('tipoContemplacao')}
+                label="Tipo de Contemplação"
+              >
+                {TIPOS_CONTEMPLACAO.map(tipo => (
+                  <MenuItem key={tipo.value || 'todos'} value={tipo.value}>{tipo.label}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+
+          <Grid item xs={12} md={4} lg={3}>
+            <FormControlLabel
+              control={(
+                <Checkbox
+                  checked={filters.somenteContempladas === 'true'}
+                  onChange={(event) => setFilters(prev => ({
+                    ...prev,
+                    somenteContempladas: event.target.checked ? 'true' : ''
+                  }))}
+                />
+              )}
+              label="Somente contempladas"
             />
           </Grid>
 
@@ -535,12 +611,20 @@ function CotasPage() {
                       Dt. Aquisição
                     </TableSortLabel>
                   </TableCell>
+                  <TableCell>
+                    Contemplação
+                  </TableCell>
+                  {podeGerirContemplacao && (
+                    <TableCell align="center">
+                      Ações
+                    </TableCell>
+                  )}
                 </TableRow>
               </TableHead>
               <TableBody>
                 {cotas.length === 0 && !loading && (
                   <TableRow>
-                    <TableCell colSpan={8} align="center">
+                    <TableCell colSpan={podeGerirContemplacao ? 10 : 9} align="center">
                       Nenhuma cota encontrada com os filtros selecionados.
                     </TableCell>
                   </TableRow>
@@ -548,14 +632,20 @@ function CotasPage() {
 
                 {loading && (
                   <TableRow>
-                    <TableCell colSpan={8} align="center">
+                    <TableCell colSpan={podeGerirContemplacao ? 10 : 9} align="center">
                       <CircularProgress size={32} />
                     </TableCell>
                   </TableRow>
                 )}
 
                 {!loading && cotas.map(cota => (
-                  <TableRow key={cota.id} hover>
+                  <TableRow
+                    key={cota.id}
+                    hover
+                    sx={{
+                      backgroundColor: cota.contemplacao ? 'rgba(34,197,94,0.08)' : 'inherit'
+                    }}
+                  >
                     <TableCell>{cota.cliente?.nome || '—'}</TableCell>
                     <TableCell>{cota.consultor?.nome || '—'}</TableCell>
                     <TableCell>{cota.grupo || '—'}</TableCell>
@@ -564,6 +654,30 @@ function CotasPage() {
                     <TableCell align="right">{formatCurrency(cota.valor)}</TableCell>
                     <TableCell align="right">{formatCurrency(cota.valorTotal)}</TableCell>
                     <TableCell>{formatDate(cota.dtaquisicao)}</TableCell>
+                    <TableCell>
+                      {cota.contemplacao ? (
+                        <Chip
+                          size="small"
+                          color="success"
+                          label={`${formatTipoContemplacao(cota.contemplacao.tipo)} · ${formatDate(cota.contemplacao.dataContemplacao)}`}
+                        />
+                      ) : (
+                        <Chip size="small" variant="outlined" label="Não contemplada" />
+                      )}
+                    </TableCell>
+                    {podeGerirContemplacao && (
+                      <TableCell align="center">
+                        <Button
+                          variant={cota.contemplacao ? 'contained' : 'outlined'}
+                          color="primary"
+                          size="small"
+                          startIcon={<EmojiEventsIcon fontSize="small" />}
+                          onClick={() => handleOpenContemplacaoCotaGeral(cota)}
+                        >
+                          {cota.contemplacao ? 'Editar' : 'Contemplar'}
+                        </Button>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
