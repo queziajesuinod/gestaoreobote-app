@@ -7,6 +7,10 @@ import {
   Checkbox,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   FormControl,
   FormControlLabel,
   Grid,
@@ -29,7 +33,6 @@ import {
 import brand from 'dan-api/dummy/brand';
 import { PapperBlock } from 'dan-components';
 import { getStoredUser } from '../../../utils/userStorage';
-import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 
 const API_URL = process.env.REACT_APP_API_URL?.replace(/\/$/, '') || 'http://localhost:3003';
@@ -113,6 +116,14 @@ function CotasPage() {
   const [orderBy, setOrderBy] = useState('dtaquisicao');
   const [order, setOrder] = useState('desc');
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [openContemplacaoDialog, setOpenContemplacaoDialog] = useState(false);
+  const [cotaSelecionada, setCotaSelecionada] = useState(null);
+  const [contemplacaoForm, setContemplacaoForm] = useState({
+    dataContemplacao: '',
+    tipo: 'LANCE_LIVRE',
+    observacao: ''
+  });
+  const [salvandoContemplacao, setSalvandoContemplacao] = useState(false);
  
 
   useEffect(() => {
@@ -381,6 +392,90 @@ function CotasPage() {
     }
   };
 
+  const handleOpenContemplacaoCotaGeral = (cota) => {
+    if (!podeGerirContemplacao) {
+      showSnackbar('Você não tem permissão para contemplar cotas.', 'error');
+      return;
+    }
+    const defaultDate = cota.contemplacao?.dataContemplacao || new Date().toISOString().slice(0, 10);
+    setCotaSelecionada(cota);
+    setContemplacaoForm({
+      dataContemplacao: defaultDate,
+      tipo: cota.contemplacao?.tipo || 'LANCE_LIVRE',
+      observacao: cota.contemplacao?.observacao || ''
+    });
+    setOpenContemplacaoDialog(true);
+  };
+
+  const handleCloseContemplacaoDialog = () => {
+    setOpenContemplacaoDialog(false);
+    setCotaSelecionada(null);
+    setContemplacaoForm({
+      dataContemplacao: '',
+      tipo: 'LANCE_LIVRE',
+      observacao: ''
+    });
+    setSalvandoContemplacao(false);
+  };
+
+  const handleSubmitContemplacao = async (event) => {
+    event.preventDefault();
+    if (!cotaSelecionada) return;
+    if (!contemplacaoForm.dataContemplacao) {
+      showSnackbar('Informe a data de contemplação.', 'error');
+      return;
+    }
+    setSalvandoContemplacao(true);
+    try {
+      const response = await fetch(`${API_URL}/cotas/${cotaSelecionada.id}/contemplacao`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${getToken()}`
+        },
+        body: JSON.stringify(contemplacaoForm)
+      });
+      const data = await response.json();
+      if (!response.ok || data?.sucesso === false) {
+        throw new Error(data?.mensagem || 'Erro ao registrar contemplação.');
+      }
+      showSnackbar('Contemplação registrada com sucesso.');
+      fetchCotas();
+      handleCloseContemplacaoDialog();
+    } catch (error) {
+      console.error('❌ Erro ao registrar contemplação:', error);
+      showSnackbar(error.message || 'Falha ao registrar contemplação.', 'error');
+    } finally {
+      setSalvandoContemplacao(false);
+    }
+  };
+
+  const handleRemoverContemplacao = async () => {
+    if (!cotaSelecionada?.contemplacao) return;
+    setSalvandoContemplacao(true);
+    try {
+      const response = await fetch(`${API_URL}/cotas/${cotaSelecionada.id}/contemplacao`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${getToken()}`
+        }
+      });
+      const data = await response.json();
+      if (!response.ok || data?.sucesso === false) {
+        throw new Error(data?.mensagem || 'Erro ao remover contemplação.');
+      }
+      showSnackbar('Contemplação removida com sucesso.');
+      fetchCotas();
+      handleCloseContemplacaoDialog();
+    } catch (error) {
+      console.error('❌ Erro ao remover contemplação:', error);
+      showSnackbar(error.message || 'Falha ao remover contemplação.', 'error');
+    } finally {
+      setSalvandoContemplacao(false);
+    }
+  };
+
   return (
     <div>
       <Helmet>
@@ -539,7 +634,7 @@ function CotasPage() {
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell sortDirection={orderBy === 'cliente' ? order : false}>
+                  <TableCell  sx={{ fontSize: '0.8rem' }} sortDirection={orderBy === 'cliente' ? order : false}>
                     <TableSortLabel
                       active={orderBy === 'cliente'}
                       direction={orderBy === 'cliente' ? order : 'asc'}
@@ -548,7 +643,7 @@ function CotasPage() {
                       Cliente
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell sortDirection={orderBy === 'consultor' ? order : false}>
+                  <TableCell sx={{ fontSize: '0.8rem' }} sortDirection={orderBy === 'consultor' ? order : false}>
                     <TableSortLabel
                       active={orderBy === 'consultor'}
                       direction={orderBy === 'consultor' ? order : 'asc'}
@@ -557,16 +652,7 @@ function CotasPage() {
                       Consultor
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell sortDirection={orderBy === 'grupo' ? order : false}>
-                    <TableSortLabel
-                      active={orderBy === 'grupo'}
-                      direction={orderBy === 'grupo' ? order : 'asc'}
-                      onClick={() => handleRequestSort('grupo')}
-                    >
-                      Grupo
-                    </TableSortLabel>
-                  </TableCell>
-                  <TableCell sortDirection={orderBy === 'cota' ? order : false}>
+                  <TableCell sx={{ fontSize: '0.8rem' }} sortDirection={orderBy === 'cota' ? order : false}>
                     <TableSortLabel
                       active={orderBy === 'cota'}
                       direction={orderBy === 'cota' ? order : 'asc'}
@@ -575,34 +661,34 @@ function CotasPage() {
                       Cota
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell sortDirection={orderBy === 'administradora' ? order : false}>
+                  <TableCell sx={{ fontSize: '0.8rem' }} sortDirection={orderBy === 'administradora' ? order : false}>
                     <TableSortLabel
                       active={orderBy === 'administradora'}
                       direction={orderBy === 'administradora' ? order : 'asc'}
                       onClick={() => handleRequestSort('administradora')}
                     >
-                      Administradora
+                      ADM
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell align="right" sortDirection={orderBy === 'valor' ? order : false}>
+                  <TableCell align="center" sx={{ fontSize: '0.8rem' }} ßsortDirection={orderBy === 'valor' ? order : false}>
                     <TableSortLabel
                       active={orderBy === 'valor'}
                       direction={orderBy === 'valor' ? order : 'asc'}
                       onClick={() => handleRequestSort('valor')}
                     >
-                      Valor Líquido
+                      V. Líquido
                     </TableSortLabel>
-                  </TableCell>
-                  <TableCell align="right" sortDirection={orderBy === 'valorTotal' ? order : false}>
+                  </TableCell >
+                  <TableCell align="center" sx={{ fontSize: '0.8rem' }} sortDirection={orderBy === 'valorTotal' ? order : false} >
                     <TableSortLabel
                       active={orderBy === 'valorTotal'}
                       direction={orderBy === 'valorTotal' ? order : 'asc'}
                       onClick={() => handleRequestSort('valorTotal')}
                     >
-                      Valor Bruto
+                      V. Bruto
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell sortDirection={orderBy === 'dtaquisicao' ? order : false}>
+                  <TableCell sortDirection={orderBy === 'dtaquisicao' ? order : false} sx={{ fontSize: '0.8rem' }}>
                     <TableSortLabel
                       active={orderBy === 'dtaquisicao'}
                       direction={orderBy === 'dtaquisicao' ? order : 'desc'}
@@ -615,7 +701,7 @@ function CotasPage() {
                     Contemplação
                   </TableCell>
                   {podeGerirContemplacao && (
-                    <TableCell align="center">
+                    <TableCell align="center" sx={{ fontSize: '0.8rem' }}>
                       Ações
                     </TableCell>
                   )}
@@ -646,15 +732,14 @@ function CotasPage() {
                       backgroundColor: cota.contemplacao ? 'rgba(34,197,94,0.08)' : 'inherit'
                     }}
                   >
-                    <TableCell>{cota.cliente?.nome || '—'}</TableCell>
-                    <TableCell>{cota.consultor?.nome || '—'}</TableCell>
-                    <TableCell>{cota.grupo || '—'}</TableCell>
-                    <TableCell>{cota.cota || '—'}</TableCell>
-                    <TableCell>{cota.administradora || '—'}</TableCell>
-                    <TableCell align="right">{formatCurrency(cota.valor)}</TableCell>
-                    <TableCell align="right">{formatCurrency(cota.valorTotal)}</TableCell>
-                    <TableCell>{formatDate(cota.dtaquisicao)}</TableCell>
-                    <TableCell>
+                    <TableCell sx={{ fontSize: '0.8rem' }}>{cota.cliente?.nome || '—'}</TableCell>
+                    <TableCell sx={{ fontSize: '0.8rem' }}>{cota.consultor?.nome || '—'}</TableCell>
+                    <TableCell sx={{ fontSize: '0.8rem' }}>{cota.grupo ? `${cota.grupo} / ${cota.cota}` : '—'}</TableCell>
+                    <TableCell sx={{ fontSize: '0.8rem' }}>{cota.administradora || '—'}</TableCell>
+                    <TableCell align="right" sx={{ fontSize: '0.8rem' }}>{formatCurrency(cota.valor)}</TableCell>
+                    <TableCell align="right" sx={{ fontSize: '0.8rem' }}>{formatCurrency(cota.valorTotal)}</TableCell>
+                    <TableCell sx={{ fontSize: '0.8rem' }}>{formatDate(cota.dtaquisicao)}</TableCell>
+                    <TableCell sx={{ fontSize: '0.7rem' }}>
                       {cota.contemplacao ? (
                         <Chip
                           size="small"
@@ -696,6 +781,78 @@ function CotasPage() {
           />
         </Paper>
       </PapperBlock>
+
+      <Dialog
+        open={openContemplacaoDialog}
+        onClose={handleCloseContemplacaoDialog}
+        fullWidth
+        maxWidth="sm"
+      >
+        <form onSubmit={handleSubmitContemplacao}>
+          <DialogTitle>{cotaSelecionada?.contemplacao ? 'Editar Contemplação' : 'Registrar Contemplação'}</DialogTitle>
+          <DialogContent dividers>
+            <Grid container spacing={2}>
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" color="textSecondary">
+                  {cotaSelecionada?.cliente?.nome || 'Cliente'}
+                </Typography>
+                <Typography variant="body2" color="textSecondary">
+                  {cotaSelecionada ? `${cotaSelecionada.grupo || 'Grupo —'} · ${cotaSelecionada.cota || 'Cota —'}` : ''}
+                </Typography>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Data"
+                  type="date"
+                  value={contemplacaoForm.dataContemplacao}
+                  onChange={e => setContemplacaoForm(prev => ({ ...prev, dataContemplacao: e.target.value }))}
+                  InputLabelProps={{ shrink: true }}
+                  required
+                  fullWidth
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth required>
+                  <InputLabel>Tipo</InputLabel>
+                  <Select
+                    label="Tipo"
+                    value={contemplacaoForm.tipo}
+                    onChange={e => setContemplacaoForm(prev => ({ ...prev, tipo: e.target.value }))}
+                  >
+                    {TIPOS_CONTEMPLACAO.filter(t => t.value).map(tipo => (
+                      <MenuItem key={tipo.value} value={tipo.value}>{tipo.label}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  label="Observação"
+                  value={contemplacaoForm.observacao}
+                  onChange={e => setContemplacaoForm(prev => ({ ...prev, observacao: e.target.value }))}
+                  fullWidth
+                  multiline
+                  minRows={2}
+                  placeholder="Detalhes adicionais (opcional)"
+                />
+              </Grid>
+            </Grid>
+          </DialogContent>
+          <DialogActions>
+            {cotaSelecionada?.contemplacao && (
+              <Button color="error" disabled={salvandoContemplacao} onClick={handleRemoverContemplacao}>
+                Remover marcação
+              </Button>
+            )}
+            <Button onClick={handleCloseContemplacaoDialog} disabled={salvandoContemplacao}>
+              Cancelar
+            </Button>
+            <Button type="submit" variant="contained" disabled={salvandoContemplacao}>
+              {salvandoContemplacao ? 'Salvando...' : 'Salvar'}
+            </Button>
+          </DialogActions>
+        </form>
+      </Dialog>
 
       <Snackbar
         open={snackbar.open}

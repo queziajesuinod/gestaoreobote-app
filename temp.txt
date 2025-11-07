@@ -1,0 +1,6 @@
+      </Snackbar>
+    </div>
+  );
+}
+
+export default CotasPage;
