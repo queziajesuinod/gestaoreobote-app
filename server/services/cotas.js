@@ -6,6 +6,8 @@ const {
   Contemplacao
 } = require('../models');
 
+const TIPOS_CONTEMPLACAO = ['LANCE_FIXO', 'LANCE_LIVRE', 'SORTEIO'];
+
 const contemplacaoInclude = {
   model: Contemplacao,
   as: 'contemplacao',
@@ -111,6 +113,33 @@ function toInt(value, fallback = null) {
   return Number.isNaN(parsed) ? fallback : parsed;
 }
 
+function normalizeToArray(value) {
+  if (Array.isArray(value)) {
+    return value;
+  }
+  if (value === null || value === undefined || value === '') {
+    return [];
+  }
+  return [value];
+}
+
+function sanitizeStringArray(value) {
+  return normalizeToArray(value)
+    .map(item => (item !== null && item !== undefined ? String(item).trim() : ''))
+    .filter(Boolean);
+}
+
+function sanitizeNumberArray(value, { min = null, max = null } = {}) {
+  return normalizeToArray(value)
+    .map(item => toInt(item))
+    .filter(num => num !== null)
+    .filter((num) => {
+      if (min !== null && num < min) return false;
+      if (max !== null && num > max) return false;
+      return true;
+    });
+}
+
 function buildDateRange({ mes, ano }) {
   const month = toInt(mes);
   const year = toInt(ano);
@@ -134,6 +163,45 @@ function buildDateRange({ mes, ano }) {
   }
 
   return { start, end };
+}
+
+function buildDateConditions(mesesSelecionados = [], anosSelecionados = []) {
+  const uniqueMeses = [...new Set(mesesSelecionados)].filter(mes => mes >= 1 && mes <= 12);
+  const uniqueAnos = [...new Set(anosSelecionados)];
+  const conditions = [];
+
+  const addCondition = ({ mes, ano }) => {
+    const range = buildDateRange({ mes, ano });
+    if (range && range.start && range.end) {
+      conditions.push({
+        dtaquisicao: {
+          [Op.gte]: range.start,
+          [Op.lt]: range.end
+        }
+      });
+    }
+  };
+
+  if (uniqueMeses.length && uniqueAnos.length) {
+    uniqueAnos.forEach((ano) => {
+      uniqueMeses.forEach((mes) => {
+        addCondition({ mes, ano });
+      });
+    });
+    return conditions;
+  }
+
+  if (uniqueMeses.length) {
+    const currentYear = new Date().getFullYear();
+    uniqueMeses.forEach((mes) => addCondition({ mes, ano: currentYear }));
+    return conditions;
+  }
+
+  if (uniqueAnos.length) {
+    uniqueAnos.forEach((ano) => addCondition({ ano }));
+  }
+
+  return conditions;
 }
 
 async function buscarCotasComFiltros({
@@ -177,17 +245,29 @@ async function buscarCotasComFiltros({
     where.cota = { [Op.iLike]: `%${cota.trim()}%` };
   }
 
-  const dateRange = buildDateRange({ mes, ano });
-  if (dateRange) {
-    if (dateRange.start && dateRange.end) {
-      where.dtaquisicao = {
-        [Op.gte]: dateRange.start,
-        [Op.lt]: dateRange.end
-      };
-    }
+  const mesesSelecionados = sanitizeNumberArray(mes, { min: 1, max: 12 });
+  const anosSelecionados = sanitizeNumberArray(ano, { min: 1900 });
+  const intervalosDatas = buildDateConditions(mesesSelecionados, anosSelecionados);
+  if (intervalosDatas.length === 1) {
+    where.dtaquisicao = intervalosDatas[0].dtaquisicao;
+  } else if (intervalosDatas.length > 1) {
+    where[Op.or] = where[Op.or] || [];
+    intervalosDatas.forEach((condicao) => {
+      where[Op.or].push(condicao);
+    });
   }
 
-  const consultorFiltro = consultor && consultor.toString().trim();
+  const consultorFiltroLista = sanitizeStringArray(consultor);
+  const consultorIds = [
+    ...new Set(
+      consultorFiltroLista
+        .map((item) => toInt(item))
+        .filter(id => id !== null)
+    )
+  ];
+  const consultorIdsSet = new Set(consultorIds);
+  const consultorFiltroTexto = consultorFiltroLista.filter(item => !consultorIdsSet.has(toInt(item)));
+  const possuiFiltroConsultor = consultorIds.length > 0 || consultorFiltroTexto.length > 0;
   const includeBase = [{
     model: Cliente,
     as: 'cliente',
@@ -195,52 +275,57 @@ async function buscarCotasComFiltros({
     required: Boolean(cliente),
     ...(cliente
       ? {
-          where: {
-            nome: {
-              [Op.iLike]: `%${cliente.trim()}%`
-            }
+        where: {
+          nome: {
+            [Op.iLike]: `%${cliente.trim()}%`
           }
         }
+      }
       : {})
   }];
 
-  includeBase.push({
+  const consultorInclude = {
     model: Consultor,
     as: 'consultor',
     attributes: ['id', 'nome', 'id_agendor'],
-    required: Boolean(consultorFiltro),
-    ...(consultorFiltro
-      ? Number.isInteger(Number(consultorFiltro))
-        ? {
-            where: {
-              id: Number(consultorFiltro)
-            }
+    required: possuiFiltroConsultor
+  };
+
+  if (possuiFiltroConsultor) {
+    if (consultorIds.length) {
+      consultorInclude.where = {
+        id: {
+          [Op.in]: consultorIds
+        }
+      };
+    } else if (consultorFiltroTexto.length) {
+      consultorInclude.where = {
+        [Op.or]: consultorFiltroTexto.map((termo) => ({
+          nome: {
+            [Op.iLike]: `%${termo}%`
           }
-        : {
-            where: {
-              nome: {
-                [Op.iLike]: `%${consultorFiltro}%`
-              }
-            }
-          }
-      : {})
-  });
+        }))
+      };
+    }
+  }
+
+  includeBase.push(consultorInclude);
 
   const contemplacaoRequest = { ...contemplacaoInclude };
-  const normalizedTipoContemplacao = (tipoContemplacao || '').toString().toUpperCase();
+  const tiposFiltro = sanitizeStringArray(tipoContemplacao)
+    .map(tipo => tipo.toUpperCase())
+    .map((tipo) => (tipo === 'LANCE' ? 'LANCE_LIVRE' : tipo))
+    .filter(tipo => TIPOS_CONTEMPLACAO.includes(tipo));
 
   if (somenteContempladas === 'true') {
     contemplacaoRequest.required = true;
   }
 
-  if (normalizedTipoContemplacao) {
-    const tipoValido = TIPOS_CONTEMPLACAO.includes(normalizedTipoContemplacao);
-    if (tipoValido) {
-      contemplacaoRequest.required = true;
-      contemplacaoRequest.where = {
-        tipo: normalizedTipoContemplacao
-      };
-    }
+  if (tiposFiltro.length) {
+    contemplacaoRequest.required = true;
+    contemplacaoRequest.where = {
+      tipo: tiposFiltro.length === 1 ? tiposFiltro[0] : { [Op.in]: tiposFiltro }
+    };
   }
 
   includeBase.push(contemplacaoRequest);
@@ -307,8 +392,6 @@ async function buscarCotasComFiltros({
     totalValorTotal: somaValorTotal
   };
 }
-
-const TIPOS_CONTEMPLACAO = ['LANCE_FIXO', 'LANCE_LIVRE', 'SORTEIO'];
 
 function normalizarTipoContemplacao(tipo) {
   const normalized = (tipo || '').toString().toUpperCase();

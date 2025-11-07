@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Checkbox,
@@ -54,13 +55,15 @@ const MESES = [
   { value: '12', label: 'Dezembro' }
 ];
 
+const MESES_OPCOES = MESES.filter(mes => mes.value);
+
 const initialFilters = {
   cliente: '',
-  consultor: '',
-  mes: '',
-  ano: '',
+  consultor: [],
+  mes: [],
+  ano: [],
   administradora: '',
-  tipoContemplacao: '',
+  tipoContemplacao: [],
   grupo: '',
   cota: '',
   somenteContempladas: ''
@@ -72,6 +75,27 @@ const TIPOS_CONTEMPLACAO = [
   { value: 'LANCE_LIVRE', label: 'Lance Livre' },
   { value: 'SORTEIO', label: 'Sorteio' }
 ];
+
+const TIPOS_CONTEMPLACAO_OPCOES = TIPOS_CONTEMPLACAO.filter(tipo => tipo.value);
+
+const FILTER_FIELD_SX = {
+  '& .MuiInputBase-root': {
+    borderRadius: 2,
+    minHeight: 44
+  }
+};
+
+const appendFiltersToParams = (params, filtersValues = {}) => {
+  Object.entries(filtersValues).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      value
+        .filter(item => item !== null && item !== undefined && item !== '')
+        .forEach(item => params.append(key, item));
+    } else if (value !== null && value !== undefined && value !== '') {
+      params.append(key, value);
+    }
+  });
+};
 
 
 
@@ -102,8 +126,16 @@ function CotasPage() {
   const description = 'Listagem geral de cotas com filtros e paginação.';
 
   const [storedUser, setStoredUserState] = useState(() => getStoredUser());
-  const [filters, setFilters] = useState(initialFilters);
-  const [appliedFilters, setAppliedFilters] = useState(initialFilters);
+  const cloneFilters = (source) => ({
+    ...source,
+    consultor: [...(source.consultor || [])],
+    mes: [...(source.mes || [])],
+    ano: [...(source.ano || [])],
+    tipoContemplacao: [...(source.tipoContemplacao || [])]
+  });
+
+  const [filters, setFilters] = useState(() => cloneFilters(initialFilters));
+  const [appliedFilters, setAppliedFilters] = useState(() => cloneFilters(initialFilters));
   const [consultores, setConsultores] = useState([]);
   const [cotas, setCotas] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -124,6 +156,52 @@ function CotasPage() {
     observacao: ''
   });
   const [salvandoContemplacao, setSalvandoContemplacao] = useState(false);
+
+  const consultorOptions = useMemo(() => {
+    const normalized = consultores.map(consultor => ({
+      ...consultor,
+      id: consultor?.id !== undefined && consultor?.id !== null ? String(consultor.id) : ''
+    }));
+    const selectedIds = (filters.consultor || [])
+      .map(value => (value !== null && value !== undefined ? String(value) : ''))
+      .filter(Boolean);
+    const extras = selectedIds
+      .filter(id => !normalized.some(option => option.id === id))
+      .map(id => ({
+        id,
+        nome: storedUser?.consultorId && String(storedUser.consultorId) === id
+          ? storedUser?.nome || 'Você'
+          : `Consultor #${id}`
+      }));
+    return [...normalized, ...extras];
+  }, [consultores, filters.consultor, storedUser]);
+
+  const selectedConsultores = useMemo(() => {
+    const selectedIds = new Set(
+      (filters.consultor || [])
+        .map(value => (value !== null && value !== undefined ? String(value) : ''))
+        .filter(Boolean)
+    );
+    return consultorOptions.filter(option => selectedIds.has(option.id));
+  }, [consultorOptions, filters.consultor]);
+
+  const selectedMeses = useMemo(() => {
+    const valoresSelecionados = new Set(
+      (filters.mes || [])
+        .map(value => (value !== null && value !== undefined ? String(value) : ''))
+        .filter(Boolean)
+    );
+    return MESES_OPCOES.filter(mes => valoresSelecionados.has(mes.value));
+  }, [filters.mes]);
+
+  const selectedTiposContemplacao = useMemo(() => {
+    const valoresSelecionados = new Set(
+      (filters.tipoContemplacao || [])
+        .map(value => (value !== null && value !== undefined ? String(value) : ''))
+        .filter(Boolean)
+    );
+    return TIPOS_CONTEMPLACAO_OPCOES.filter(tipo => valoresSelecionados.has(tipo.value));
+  }, [filters.tipoContemplacao]);
  
 
   useEffect(() => {
@@ -190,13 +268,13 @@ function CotasPage() {
       return;
     }
 
-    setFilters(prev => (prev.consultor === consultorIdLogado
+    setFilters(prev => (Array.isArray(prev.consultor) && prev.consultor.length === 1 && prev.consultor[0] === consultorIdLogado
       ? prev
-      : { ...prev, consultor: consultorIdLogado }));
+      : { ...prev, consultor: [consultorIdLogado] }));
 
-    setAppliedFilters(prev => (prev.consultor === consultorIdLogado
+    setAppliedFilters(prev => (Array.isArray(prev.consultor) && prev.consultor.length === 1 && prev.consultor[0] === consultorIdLogado
       ? prev
-      : { ...prev, consultor: consultorIdLogado }));
+      : { ...prev, consultor: [consultorIdLogado] }));
   }, [isConsultorPerfil, consultorIdLogado]);
 
   const sortLista = useCallback((dados, coluna, direcao) => {
@@ -252,13 +330,7 @@ function CotasPage() {
       params.append('orderBy', orderBy);
       params.append('order', order);
 
-      Object.entries(appliedFilters).forEach(([key, value]) => {
-        if (value !== null && value !== undefined && value !== '') {
-          params.append(key, value);
-        }
-      });
-      params.append('orderBy', orderBy);
-      params.append('order', order);
+      appendFiltersToParams(params, appliedFilters);
 
       if (isConsultorPerfil && consultorIdLogado) {
         params.set('consultor', consultorIdLogado);
@@ -297,7 +369,7 @@ function CotasPage() {
     } finally {
       setLoading(false);
     }
-  }, [appliedFilters, page, rowsPerPage, orderBy, order, showSnackbar, sortLista]);
+  }, [appliedFilters, page, rowsPerPage, orderBy, order, showSnackbar, sortLista, isConsultorPerfil, consultorIdLogado]);
 
   useEffect(() => {
     fetchCotas();
@@ -309,17 +381,17 @@ function CotasPage() {
   };
 
   const handleSearch = () => {
-    setAppliedFilters(filters);
+    setAppliedFilters(cloneFilters(filters));
     setPage(0);
   };
 
   const handleClear = () => {
     const baseFilters = isConsultorPerfil && consultorIdLogado
-      ? { ...initialFilters, consultor: consultorIdLogado }
+      ? { ...initialFilters, consultor: [consultorIdLogado] }
       : initialFilters;
 
-    setFilters(baseFilters);
-    setAppliedFilters(baseFilters);
+    setFilters(cloneFilters(baseFilters));
+    setAppliedFilters(cloneFilters(baseFilters));
     setPage(0);
     setRowsPerPage(10);
   };
@@ -347,11 +419,7 @@ function CotasPage() {
     setExporting(true);
     try {
       const params = new URLSearchParams();
-      Object.entries(appliedFilters).forEach(([key, value]) => {
-        if (value !== null && value !== undefined && value !== '') {
-          params.append(key, value);
-        }
-      });
+      appendFiltersToParams(params, appliedFilters);
 
       if (isConsultorPerfil && consultorIdLogado) {
         params.set('consultor', consultorIdLogado);
@@ -485,113 +553,220 @@ function CotasPage() {
 
       <PapperBlock title="Cotas" icon="ion-ios-list" desc="Visualize todas as cotas cadastradas com filtros avançados.">
         <Grid container spacing={2} sx={{ mb: 2 }}>
-          <Grid item xs={12} md={4} lg={3}>
+          <Grid item xs={12} sm={6} md={3}>
             <TextField
               label="Cliente"
               value={filters.cliente}
               onChange={handleFilterChange('cliente')}
               fullWidth
+              size="small"
+              sx={FILTER_FIELD_SX}
             />
           </Grid>
 
-          <Grid item xs={12} md={4} lg={3}>
-            <FormControl fullWidth disabled={isConsultorPerfil}>
-              <InputLabel>Consultor</InputLabel>
-              <Select
-                value={isConsultorPerfil ? '' : filters.consultor}
-                onChange={handleFilterChange('consultor')}
-                label="Consultor"
-                disabled={isConsultorPerfil}
-              >
-                <MenuItem value="">Todos</MenuItem>
-                {consultores.map(consultor => (
-                  <MenuItem key={consultor.id} value={consultor.id}>{consultor.nome}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={2} lg={2}>
-            <FormControl fullWidth>
-              <InputLabel>Mês</InputLabel>
-              <Select
-                value={filters.mes}
-                onChange={handleFilterChange('mes')}
-                label="Mês"
-              >
-                {MESES.map(mes => (
-                  <MenuItem key={mes.value || 'todos'} value={mes.value}>{mes.label}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={2} lg={2}>
-            <TextField
-              label="Ano"
-              type="number"
-              value={filters.ano}
-              onChange={handleFilterChange('ano')}
+          <Grid item xs={12} sm={6} md={3}>
+            <Autocomplete
+              multiple
+              disableCloseOnSelect
+              options={consultorOptions}
+              value={selectedConsultores}
+              getOptionLabel={option => option?.nome || ''}
+              isOptionEqualToValue={(option, value) => String(option.id) === String(value.id)}
+              onChange={(event, newValue) => {
+                setFilters(prev => ({
+                  ...prev,
+                  consultor: newValue
+                    .map(option => (option?.id !== undefined && option?.id !== null ? String(option.id) : ''))
+                    .filter(Boolean)
+                }));
+              }}
+              size="small"
+              sx={FILTER_FIELD_SX}
+              renderTags={(value, getTagProps) =>
+                value.map((option, index) => (
+                  <Chip
+                    {...getTagProps({ index })}
+                    size="small"
+                    label={option?.nome || option?.label || option?.id || '—'}
+                  />
+                ))
+              }
+              renderOption={(props, option, { selected }) => (
+                <li {...props}>
+                  <Checkbox checked={selected} sx={{ mr: 1 }} />
+                  {option?.nome || option?.label || option?.id}
+                </li>
+              )}
+              renderInput={(params) => (
+                <TextField {...params} label="Consultores" placeholder="Selecione consultores" size="small" />
+              )}
               fullWidth
-              inputProps={{ min: 2000, max: 2100 }}
+              disabled={isConsultorPerfil}
             />
           </Grid>
 
-         <Grid item xs={12} md={4} lg={2}>
+          <Grid item xs={12} sm={6} md={3}>
+            <Autocomplete
+              multiple
+              disableCloseOnSelect
+              options={MESES_OPCOES}
+              value={selectedMeses}
+              getOptionLabel={option => option.label}
+              isOptionEqualToValue={(option, value) => option.value === value.value}
+              onChange={(event, newValue) => {
+                setFilters(prev => ({
+                  ...prev,
+                  mes: newValue
+                    .map(option => option.value)
+                    .filter(Boolean)
+                }));
+              }}
+              size="small"
+              sx={FILTER_FIELD_SX}
+              renderTags={(value, getTagProps) =>
+                value.map((option, index) => (
+                  <Chip
+                    {...getTagProps({ index })}
+                    size="small"
+                    label={option.label}
+                  />
+                ))
+              }
+              renderOption={(props, option, { selected }) => (
+                <li {...props}>
+                  <Checkbox checked={selected} sx={{ mr: 1 }} />
+                  {option.label}
+                </li>
+              )}
+              renderInput={(params) => (
+                <TextField {...params} label="Meses" placeholder="Selecione meses" size="small" />
+              )}
+              fullWidth
+            />
+          </Grid>
+
+          <Grid item xs={12} sm={6} md={3}>
+            <Autocomplete
+              multiple
+              freeSolo
+              options={(() => {
+                const currentYear = new Date().getFullYear();
+                return [currentYear, currentYear - 1, currentYear - 2].map(String);
+              })()}
+              value={filters.ano}
+              onChange={(event, newValue) => {
+                setFilters(prev => ({
+                  ...prev,
+                  ano: newValue.filter(Boolean)
+                }));
+              }}
+              size="small"
+              sx={FILTER_FIELD_SX}
+              renderInput={(params) => (
+                <TextField {...params} label="Anos" placeholder="Selecione ou digite" size="small" />
+              )}
+            />
+          </Grid>
+
+         <Grid item xs={12} sm={6} md={3}>
            <TextField
              label="Administradora"
              value={filters.administradora}
              onChange={handleFilterChange('administradora')}
              fullWidth
+             size="small"
+             sx={FILTER_FIELD_SX}
            />
          </Grid>
 
-          <Grid item xs={12} md={4} lg={2}>
+          <Grid item xs={12} sm={6} md={3}>
             <TextField
               label="Grupo"
               value={filters.grupo}
               onChange={handleFilterChange('grupo')}
               fullWidth
+              size="small"
+              sx={FILTER_FIELD_SX}
             />
           </Grid>
 
-          <Grid item xs={12} md={4} lg={2}>
+          <Grid item xs={12} sm={6} md={3}>
             <TextField
               label="Cota"
               value={filters.cota}
               onChange={handleFilterChange('cota')}
               fullWidth
+              size="small"
+              sx={FILTER_FIELD_SX}
             />
           </Grid>
 
-          <Grid item xs={12} md={4} lg={3}>
-            <FormControl fullWidth>
-              <InputLabel>Tipo de Contemplação</InputLabel>
-              <Select
-                value={filters.tipoContemplacao}
-                onChange={handleFilterChange('tipoContemplacao')}
-                label="Tipo de Contemplação"
-              >
-                {TIPOS_CONTEMPLACAO.map(tipo => (
-                  <MenuItem key={tipo.value || 'todos'} value={tipo.value}>{tipo.label}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-
-          <Grid item xs={12} md={4} lg={3}>
-            <FormControlLabel
-              control={(
-                <Checkbox
-                  checked={filters.somenteContempladas === 'true'}
-                  onChange={(event) => setFilters(prev => ({
-                    ...prev,
-                    somenteContempladas: event.target.checked ? 'true' : ''
-                  }))}
-                />
+          <Grid item xs={12} sm={6} md={3}>
+            <Autocomplete
+              multiple
+              disableCloseOnSelect
+              options={TIPOS_CONTEMPLACAO_OPCOES}
+              value={selectedTiposContemplacao}
+              getOptionLabel={option => option.label}
+              isOptionEqualToValue={(option, value) => option.value === value.value}
+              onChange={(event, newValue) => {
+                setFilters(prev => ({
+                  ...prev,
+                  tipoContemplacao: newValue
+                    .map(option => option.value)
+                    .filter(Boolean)
+                }));
+              }}
+              size="small"
+              sx={FILTER_FIELD_SX}
+              renderTags={(value, getTagProps) =>
+                value.map((option, index) => (
+                  <Chip
+                    {...getTagProps({ index })}
+                    size="small"
+                    label={option.label}
+                  />
+                ))
+              }
+              renderOption={(props, option, { selected }) => (
+                <li {...props}>
+                  <Checkbox checked={selected} sx={{ mr: 1 }} />
+                  {option.label}
+                </li>
               )}
-              label="Somente contempladas"
+              renderInput={(params) => (
+                <TextField {...params} label="Tipo de contemplação" placeholder="Selecione tipos" size="small" />
+              )}
+              fullWidth
             />
+          </Grid>
+
+          <Grid item xs={12} sm={6} md={3}>
+            <Box
+              sx={{
+                border: theme => `1px solid ${theme.palette.divider}`,
+                borderRadius: 2,
+                px: 2,
+                py: 1.4,
+                display: 'flex',
+                alignItems: 'center',
+                height: '100%'
+              }}
+            >
+              <FormControlLabel
+                control={(
+                  <Checkbox
+                    checked={filters.somenteContempladas === 'true'}
+                    onChange={(event) => setFilters(prev => ({
+                      ...prev,
+                      somenteContempladas: event.target.checked ? 'true' : ''
+                    }))}
+                    size="small"
+                  />
+                )}
+                label="Somente contempladas"
+              />
+            </Box>
           </Grid>
 
           <Grid item xs={12} md={8} lg={12}>
