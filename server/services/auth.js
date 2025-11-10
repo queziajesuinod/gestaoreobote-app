@@ -44,6 +44,10 @@ class AuthService {
       throw new Error('Usuário não cadastrado');
     }
 
+    if (usuario.active === false) {
+      throw new Error('Usuário inativo. Entre em contato com o administrador.');
+    }
+
     // Gerar hash da senha enviada com o salt
     const hash = hashSHA256WithSalt(dto.password, usuario.salt);
 
