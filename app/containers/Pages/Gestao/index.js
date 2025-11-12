@@ -556,36 +556,41 @@ function Gestao() {
                   </Button>
 
                   <List>
-                    {integrantes.map((integrante) => (
-                      <ListItem key={integrante.id}>
-                        <ListItemAvatar>
-                          <Avatar sx={{ width: 56, height: 56 }}>
-                           {integrante.consultor.imagem_base64 ?  (
-                             <img
-                               src={`data:image/jpeg;base64,${integrante.consultor.imagem_base64}`}
-                               alt={integrante.consultor.nome}
-                               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                             />
-                           ) : (
-                             <PersonIcon />
-                           )}
-                          </Avatar>
-                        </ListItemAvatar>
-                        <ListItemText
-                          primary={integrante.consultor.nome}
-                          secondary={integrante.funcao}
-                        />
-                        <ListItemSecondaryAction>
-                          <IconButton
-                            edge="end"
-                            color="error"
-                            onClick={() => handleRemoveIntegrante(integrante.id)}
-                          >
-                            <DeleteIcon />
-                          </IconButton>
-                        </ListItemSecondaryAction>
-                      </ListItem>
-                    ))}
+                    {integrantes.map((integrante) => {
+                      const consultor = integrante?.consultor;
+                      const consultorNome = consultor?.nome || 'Consultor não disponível';
+
+                      return (
+                        <ListItem key={integrante.id}>
+                          <ListItemAvatar>
+                            <Avatar sx={{ width: 56, height: 56 }}>
+                              {consultor?.imagem_base64 ? (
+                                <img
+                                  src={`data:image/jpeg;base64,${consultor.imagem_base64}`}
+                                  alt={consultorNome}
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                />
+                              ) : (
+                                <PersonIcon />
+                              )}
+                            </Avatar>
+                          </ListItemAvatar>
+                          <ListItemText
+                            primary={consultorNome}
+                            secondary={integrante.funcao || '—'}
+                          />
+                          <ListItemSecondaryAction>
+                            <IconButton
+                              edge="end"
+                              color="error"
+                              onClick={() => handleRemoveIntegrante(integrante.id)}
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          </ListItemSecondaryAction>
+                        </ListItem>
+                      );
+                    })}
                   </List>
                 </Paper>
               </Grid>

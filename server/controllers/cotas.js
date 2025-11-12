@@ -94,9 +94,11 @@ async function exportar(req, res) {
       { header: 'Cliente', key: 'cliente', width: 25 },
       { header: 'CPF', key: 'cpf', width: 18 },
       { header: 'Email', key: 'email', width: 25 },
-      { header: 'Consultor', key: 'consultor', width: 25 },
+      { header: 'Consultor(es)', key: 'consultores', width: 30 },
+      { header: 'ID Agendor(es)', key: 'idagendors', width: 22 },
       { header: 'Grupo', key: 'grupo', width: 12 },
       { header: 'Cota', key: 'cota', width: 12 },
+      { header: 'Dígito', key: 'digito', width: 8 },
       { header: 'Administradora', key: 'administradora', width: 25 },
       { header: 'Valor', key: 'valor', width: 15 },
       { header: 'Valor Total', key: 'valorTotal', width: 15 },
@@ -108,13 +110,25 @@ async function exportar(req, res) {
 
     // Linhas
     registros.forEach(cota => {
+      const consultoresLista = Array.isArray(cota.consultores) ? cota.consultores : [];
+      const nomesConsultores = consultoresLista.length
+        ? consultoresLista.map(consultor => consultor.nome).filter(Boolean).join(', ')
+        : '';
+      const idagendors = consultoresLista.length
+        ? consultoresLista
+          .map(consultor => consultor.idagendor)
+          .filter(valor => valor && valor.trim())
+          .join(', ')
+        : (cota.idagendor || '');
       sheet.addRow({
         cliente: cota.cliente?.nome || '',
         cpf: cota.cliente?.cpf || '',
         email: cota.cliente?.email || '',
-        consultor: cota.consultor?.nome || '',
+        consultores: nomesConsultores,
+        idagendors,
         grupo: cota.grupo || '',
         cota: cota.cota || '',
+        digito: cota.digito || '',
         administradora: cota.administradora || '',
         valor: Number(cota.valor || 0),
         valorTotal: Number(cota.valorTotal || 0),

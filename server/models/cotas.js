@@ -17,6 +17,14 @@ module.exports = (sequelize, DataTypes) => {
         as: 'contemplacao',
         onDelete: 'CASCADE'
       });
+      if (models.CotaConsultor) {
+        Cota.belongsToMany(models.Consultor, {
+          through: models.CotaConsultor,
+          as: 'consultores',
+          foreignKey: 'cotaId',
+          otherKey: 'consultorId'
+        });
+      }
     }
   }
 
@@ -33,6 +41,10 @@ module.exports = (sequelize, DataTypes) => {
       },
       cota: {
         type: DataTypes.STRING
+      },
+      digito: {
+        type: DataTypes.STRING(5),
+        allowNull: true
       },
       valor: {
         type: DataTypes.DECIMAL(15, 2)

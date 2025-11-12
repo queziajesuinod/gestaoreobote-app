@@ -121,6 +121,30 @@ function formatTipoContemplacao(tipo) {
   return tipo || '—';
 }
 
+function formatCotaIdentificador(cota) {
+  const partes = [cota?.grupo, cota?.cota, cota?.digito]
+    .map(parte => (parte || '').toString().trim())
+    .filter(Boolean);
+  return partes.join('-') || '—';
+}
+
+function mapConsultoresDetalhes(cota) {
+  const lista = Array.isArray(cota?.consultores) ? cota.consultores : [];
+  if (!lista.length) return [];
+  const valorBase = Number(
+    cota?.valorDistribuidoPorConsultor ??
+    (lista.length ? (Number(cota?.valor ?? 0) / lista.length) : 0)
+  );
+  const valorIndividual = Number.isFinite(valorBase) ? valorBase : null;
+  return lista.map((consultor) => ({
+    ...consultor,
+    valorIndividual,
+    valorIndividualFormatado: valorIndividual !== null
+      ? valorIndividual.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+      : null
+  }));
+}
+
 function CotasPage() {
   const title = `${brand.name} - Cotas`;
   const description = 'Listagem geral de cotas com filtros e paginação.';
@@ -824,7 +848,7 @@ function CotasPage() {
                       direction={orderBy === 'consultor' ? order : 'asc'}
                       onClick={() => handleRequestSort('consultor')}
                     >
-                      Consultor
+                      Consultores
                     </TableSortLabel>
                   </TableCell>
                   <TableCell sx={{ fontSize: '0.8rem' }} sortDirection={orderBy === 'cota' ? order : false}>
@@ -833,7 +857,7 @@ function CotasPage() {
                       direction={orderBy === 'cota' ? order : 'asc'}
                       onClick={() => handleRequestSort('cota')}
                     >
-                      Cota
+                     Cota
                     </TableSortLabel>
                   </TableCell>
                   <TableCell sx={{ fontSize: '0.8rem' }} sortDirection={orderBy === 'administradora' ? order : false}>
@@ -899,7 +923,9 @@ function CotasPage() {
                   </TableRow>
                 )}
 
-                {!loading && cotas.map(cota => (
+                {!loading && cotas.map(cota => {
+                  const consultoresResumo = mapConsultoresDetalhes(cota);
+                  return (
                   <TableRow
                     key={cota.id}
                     hover
@@ -908,8 +934,24 @@ function CotasPage() {
                     }}
                   >
                     <TableCell sx={{ fontSize: '0.8rem' }}>{cota.cliente?.nome || '—'}</TableCell>
-                    <TableCell sx={{ fontSize: '0.8rem' }}>{cota.consultor?.nome || '—'}</TableCell>
-                    <TableCell sx={{ fontSize: '0.8rem' }}>{cota.grupo ? `${cota.grupo} / ${cota.cota}` : '—'}</TableCell>
+                    <TableCell sx={{ fontSize: '0.8rem' }}>
+                      {consultoresResumo.length === 0 ? (
+                        '—'
+                      ) : (
+                        consultoresResumo.map((consultor) => (
+                          <Box
+                            key={consultor.id || consultor.nome}
+                            component="span"
+                            sx={{ display: 'block', fontSize: '0.75rem' }}
+                          >
+                            {consultor.nome}
+                            {consultor.idagendor ? ` · ID: ${consultor.idagendor}` : ''}
+                            {consultor.valorIndividualFormatado ? ` (${consultor.valorIndividualFormatado})` : ''}
+                          </Box>
+                        ))
+                      )}
+                    </TableCell>
+                    <TableCell sx={{ fontSize: '0.8rem' }}>{formatCotaIdentificador(cota)}</TableCell>
                     <TableCell sx={{ fontSize: '0.8rem' }}>{cota.administradora || '—'}</TableCell>
                     <TableCell align="right" sx={{ fontSize: '0.8rem' }}>{formatCurrency(cota.valor)}</TableCell>
                     <TableCell align="right" sx={{ fontSize: '0.8rem' }}>{formatCurrency(cota.valorTotal)}</TableCell>
@@ -939,7 +981,8 @@ function CotasPage() {
                       </TableCell>
                     )}
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           </TableContainer>
@@ -972,7 +1015,7 @@ function CotasPage() {
                   {cotaSelecionada?.cliente?.nome || 'Cliente'}
                 </Typography>
                 <Typography variant="body2" color="textSecondary">
-                  {cotaSelecionada ? `${cotaSelecionada.grupo || 'Grupo —'} · ${cotaSelecionada.cota || 'Cota —'}` : ''}
+                  {cotaSelecionada ? formatCotaIdentificador(cotaSelecionada) : ''}
                 </Typography>
               </Grid>
               <Grid item xs={12} sm={6}>

@@ -8,6 +8,14 @@ module.exports = (sequelize) => {
             if (models.Integrante) {
                 Consultor.hasMany(models.Integrante, { foreignKey: 'consultorId' });
             }
+            if (models.Cota && models.CotaConsultor) {
+                Consultor.belongsToMany(models.Cota, {
+                    through: models.CotaConsultor,
+                    as: 'cotas',
+                    foreignKey: 'consultorId',
+                    otherKey: 'cotaId'
+                });
+            }
         }
     }
 

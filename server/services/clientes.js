@@ -1,4 +1,4 @@
-const { Cliente, Cota, Sequelize } = require('../models'); // Importa os models inicializados
+const { Cliente, Cota, Consultor, Sequelize } = require('../models'); // Importa os models inicializados
 
 const { Op } = Sequelize;
 
@@ -118,15 +118,24 @@ async function getClientesPorConsultor(consultorId) {
   return Cliente.findAll({
     attributes: [
       ...atributosBase,
-      [Sequelize.fn('COUNT', Sequelize.col('cotas.id')), 'totalCotas']
+      [Sequelize.fn('COUNT', Sequelize.fn('DISTINCT', Sequelize.col('cotas.id'))), 'totalCotas']
     ],
     include: [
       {
         model: Cota,
         as: 'cotas',
         attributes: [],
-        where: { consultorId },
-        required: true
+        required: true,
+        include: [
+          {
+            model: Consultor,
+            as: 'consultores',
+            attributes: [],
+            through: { attributes: [] },
+            required: true,
+            where: { id: consultorId }
+          }
+        ]
       }
     ],
     group: atributosBase.map(campo => `Cliente.${campo}`),
@@ -140,10 +149,18 @@ async function consultorTemAcessoAoCliente(clienteId, consultorId) {
   }
 
   const total = await Cota.count({
-    where: {
-      clienteId,
-      consultorId
-    }
+    where: { clienteId },
+    include: [
+      {
+        model: Consultor,
+        as: 'consultores',
+        attributes: [],
+        through: { attributes: [] },
+        required: true,
+        where: { id: consultorId }
+      }
+    ],
+    distinct: true
   });
 
   return total > 0;

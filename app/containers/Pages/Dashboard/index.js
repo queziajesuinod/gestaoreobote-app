@@ -27,7 +27,11 @@ import {
   Checkbox,
   FormControlLabel,
   Box,
-  TableSortLabel
+  TableSortLabel,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions
 } from '@mui/material';
 import { PapperBlock } from 'dan-components';
 import {
@@ -94,6 +98,14 @@ const formatDateBR = (value) => {
 };
 
 const formatISODateOnly = (date) => (date ? date.toISOString().slice(0, 10) : '');
+
+const formatarIdentificadorCota = (cota) => {
+  if (!cota) return '—';
+  const partes = [cota.grupo, cota.cota, cota.digito]
+    .map(parte => (parte || '').toString().trim())
+    .filter(Boolean);
+  return partes.join('-') || '—';
+};
 
 const splitPeriodIntoChunks = (inicio, fim, maxDias = 31) => {
   const inicioDate = parseISODateOnly(inicio);
@@ -235,8 +247,14 @@ function DashboardReobote() {
   // ==================== ESTADOS - PERÍODO ATUAL ====================
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
-  const [cotasAtuais, setCotasAtuais] = useState({});
-  const [cotasComp, setCotasComp] = useState({});
+const [cotasAtuais, setCotasAtuais] = useState({});
+const [cotasComp, setCotasComp] = useState({});
+const [rankingCotasDialog, setRankingCotasDialog] = useState({
+  open: false,
+  consultorNome: '',
+  consultorId: '',
+  cotas: []
+});
   const [negociosGanhos, setNegociosGanhos] = useState([]);
   const [negociosEmAndamento, setNegociosEmAndamento] = useState([]);
   const [metaAtiva, setMetaAtiva] = useState(null);
@@ -945,6 +963,39 @@ function DashboardReobote() {
     try {
       console.log(`🔍 Buscando cotas para ${idsAgendor.length} consultores...`);
 
+      const normalizarCotaParaConsultor = (cota, idagendor) => {
+        const consultores = Array.isArray(cota.consultores) ? cota.consultores : [];
+        const consultorRelacionado = consultores.find((consultor) => {
+          const idComparacao = consultor?.CotaConsultor?.idagendor
+            || consultor?.idagendor
+            || consultor?.id;
+          if (!idComparacao) return false;
+          return String(idComparacao).trim() === String(idagendor).trim();
+        });
+
+        const valorConsultor = Number(
+          consultorRelacionado?.valorRecebido
+          ?? cota.valorDistribuidoPorConsultor
+          ?? cota.valor
+          ?? 0
+        );
+
+        return {
+          id: cota.id,
+          grupo: cota.grupo,
+          cota: cota.cota,
+          digito: cota.digito,
+          cliente: cota.cliente?.nome || '',
+          administradora: cota.administradora || '',
+          dtaquisicao: cota.dtaquisicao,
+          valor: Number(cota.valor ?? 0),
+          valorConsultor,
+          idagendorRelacionado: consultorRelacionado?.CotaConsultor?.idagendor
+            || consultorRelacionado?.idagendor
+            || null
+        };
+      };
+
       // Faz uma requisição para CADA consultor
       const resultados = await Promise.all(
         idsAgendor.map(async (idagendor) => {
@@ -963,7 +1014,9 @@ function DashboardReobote() {
 
           console.log(`  ✅ Consultor ${idagendor}: ${cotas.length} cotas encontradas`);
 
-          return { idagendor, cotas };
+          const cotasNormalizadas = cotas.map(cota => normalizarCotaParaConsultor(cota, idagendor));
+
+          return { idagendor, cotas: cotasNormalizadas };
         })
       );
 
@@ -971,16 +1024,20 @@ function DashboardReobote() {
       const cotasPorConsultor = {};
 
       resultados.forEach(({ idagendor, cotas }) => {
-        const somaTotal = cotas.reduce((soma, cota) => {
-          const valor = parseFloat(cota.valor) || 0;
-          console.log(`    Cota ${cota.cota}: valorTotal = ${cota.valor} (${valor})`);
-          return soma + valor;
-        }, 0);
+        const somaTotal = cotas.reduce((soma, cota) => soma + Number(cota.valorConsultor || 0), 0);
+        const chave = String(idagendor || '').trim();
+        if (!chave) {
+          console.warn('⚠️ Consultor sem identificador de Agendor nas cotas retornadas.');
+          return;
+        }
 
         // Usa o idagendor como chave (mesmo ID usado nas tarefas)
-        cotasPorConsultor[idagendor] = somaTotal;
+        cotasPorConsultor[chave] = {
+          total: somaTotal,
+          cotas
+        };
 
-        console.log(`  💰 Total do consultor ${idagendor}: ${somaTotal} centavos = R$ ${(somaTotal).toFixed(2)}`);
+        console.log(`  💰 Total do consultor ${idagendor}: ${somaTotal} (valor atribuído ao consultor)`);
       });
 
       console.log('✅ Valores finais por consultor:', cotasPorConsultor);
@@ -1092,23 +1149,21 @@ function DashboardReobote() {
       : null;
 
     // Busca o valor total das cotas do consultor
-    const consultorId = dados.consultorId;
-    const valorCotaAtual = cotasAtuais[consultorId] || 0;
-    const valorCotaComp = cotasComp[consultorId] || 0;
-
-    // Converte de centavos para reais (se necessário)
-    // Como valorTotal já vem como string "1000000", parseFloat converte para número
-    // Dividir por 100 se estiver em centavos
+    const consultorId = dados.consultorId ? String(dados.consultorId).trim() : '';
+    const valorCotaAtual = cotasAtuais?.[consultorId]?.total || 0;
+    const valorCotaComp = cotasComp?.[consultorId]?.total || 0;
     const valorCota = valorCotaAtual;
 
     return {
       consultor,
+      consultorId,
       visitas: dados.visitas,
       reunioes: dados.reunioes,
       propostas: dados.propostas,
       total: totalAtual,
       variacao,
-      valorCota
+      valorCota,
+      valorCotaComparacao: valorCotaComp
     };
   });
 
@@ -1155,9 +1210,33 @@ function DashboardReobote() {
   // ✅ NOVO: Calcula soma total de cotas
   const somaValorCotas = ranking.reduce((soma, r) => soma + (r.valorCota || 0), 0);
   const totalValorCotas = useMemo(
-    () => Object.values(cotasAtuais).reduce((soma, valor) => soma + Number(valor || 0), 0),
+    () => Object.values(cotasAtuais).reduce((soma, valor) => soma + Number(valor?.total || 0), 0),
     [cotasAtuais]
   );
+  const totalCotasConsultorDialog = useMemo(
+    () => rankingCotasDialog.cotas.reduce((soma, cota) => soma + Number(cota.valorConsultor || 0), 0),
+    [rankingCotasDialog]
+  );
+
+  const handleAbrirCotasConsultor = useCallback((rankingItem) => {
+    if (!rankingItem) return;
+    const consultorId = rankingItem.consultorId ? String(rankingItem.consultorId).trim() : '';
+    if (!consultorId) return;
+    const dadosConsultor = cotasAtuais?.[consultorId];
+    setRankingCotasDialog({
+      open: true,
+      consultorNome: rankingItem.consultor,
+      consultorId,
+      cotas: Array.isArray(dadosConsultor?.cotas) ? dadosConsultor.cotas : []
+    });
+  }, [cotasAtuais]);
+
+  const handleFecharCotasConsultor = useCallback(() => {
+    setRankingCotasDialog((prev) => ({
+      ...prev,
+      open: false
+    }));
+  }, []);
   const metaValorNumero = metaAtiva && metaAtiva.valor !== undefined && metaAtiva.valor !== null
     ? Number(metaAtiva.valor)
     : 0;
@@ -1790,6 +1869,9 @@ function DashboardReobote() {
                           const posicao = rankingRowsPerPage === -1
                             ? index + 1
                             : rankingPage * rankingRowsPerPage + index + 1;
+                          const consultorIdLinha = r.consultorId ? String(r.consultorId).trim() : '';
+                          const temCotasDetalhadas = Boolean(cotasAtuais?.[consultorIdLinha]?.cotas?.length);
+                          const valorFormatadoRanking = formatCurrencyBR(r.valorCota);
 
                           return (
                             <TableRow key={`${r.consultor}-${posicao}`}>
@@ -1800,7 +1882,14 @@ function DashboardReobote() {
                               <TableCell align="center">{r.propostas}</TableCell>
                               <TableCell align="center"><strong>{r.total}</strong></TableCell>
                               <TableCell align="center">
-                                R$ {r.valorCota.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                <Button
+                                  variant="text"
+                                  size="small"
+                                  onClick={() => handleAbrirCotasConsultor(r)}
+                                  disabled={!temCotasDetalhadas}
+                                >
+                                  {valorFormatadoRanking}
+                                </Button>
                               </TableCell>
                               <TableCell
                                 align="center"
@@ -1850,6 +1939,61 @@ function DashboardReobote() {
               </Grid>
            
             </Grid>
+
+            <Dialog
+              open={rankingCotasDialog.open}
+              onClose={handleFecharCotasConsultor}
+              fullWidth
+              maxWidth="md"
+            >
+              <DialogTitle>
+                Vendas de {rankingCotasDialog.consultorNome || 'Consultor'}
+              </DialogTitle>
+              <DialogContent dividers>
+                {rankingCotasDialog.cotas.length === 0 ? (
+                  <Typography align="center" color="textSecondary">
+                    Nenhuma cota registrada para este consultor no período selecionado.
+                  </Typography>
+                ) : (
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Cliente</TableCell>
+                        <TableCell>Grupo/Cota</TableCell>
+                        <TableCell>Administradora</TableCell>
+                        <TableCell align="right">Valor da Cota</TableCell>
+                        <TableCell align="right">Valor do Consultor</TableCell>
+                        <TableCell align="center">Data</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {rankingCotasDialog.cotas.map((cota) => (
+                        <TableRow key={`${cota.id}-${cota.grupo}-${cota.cota}`}>
+                          <TableCell>{cota.cliente || '—'}</TableCell>
+                          <TableCell>{formatarIdentificadorCota(cota)}</TableCell>
+                          <TableCell>{cota.administradora || '—'}</TableCell>
+                          <TableCell align="right">{formatCurrencyBR(cota.valor)}</TableCell>
+                          <TableCell align="right">{formatCurrencyBR(cota.valorConsultor)}</TableCell>
+                          <TableCell align="center">{formatDateBR(cota.dtaquisicao) || '—'}</TableCell>
+                        </TableRow>
+                      ))}
+                      <TableRow>
+                        <TableCell colSpan={4} align="right">
+                          <strong>Total</strong>
+                        </TableCell>
+                        <TableCell align="right">
+                          <strong>{formatCurrencyBR(totalCotasConsultorDialog)}</strong>
+                        </TableCell>
+                        <TableCell />
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                )}
+              </DialogContent>
+              <DialogActions>
+                <Button onClick={handleFecharCotasConsultor}>Fechar</Button>
+              </DialogActions>
+            </Dialog>
           </>
         )}
 

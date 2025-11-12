@@ -5,6 +5,7 @@ import {
   Box,
   Button,
   Chip,
+  Checkbox,
   CircularProgress,
   Dialog,
   DialogActions,
@@ -15,6 +16,7 @@ import {
   IconButton,
   InputAdornment,
   InputLabel,
+  ListItemText,
   MenuItem,
   Paper,
   Select,
@@ -105,12 +107,13 @@ function Clientes() {
   const [cotaForm, setCotaForm] = useState({
     grupo: '',
     cota: '',
+    digito: '',
     valor: '',
     valorTotal: '',
     dtaquisicao: '',
     administradora: '',
-    consultorId: '',
-    idagendor: ''
+    consultorIds: [],
+    consultoresInfo: {}
   });
 
   const [snackbar, setSnackbar] = useState({
@@ -161,12 +164,13 @@ function Clientes() {
     setCotaForm({
       grupo: '',
       cota: '',
+      digito: '',
       valor: '',
       valorTotal: '',
       dtaquisicao: '',
       administradora: '',
-      consultorId: '',
-      idagendor: ''
+      consultorIds: [],
+      consultoresInfo: {}
     });
   };
 
@@ -194,6 +198,31 @@ const formatTipoContemplacao = (tipo) => {
   const chave = (tipo || '').toUpperCase();
   return mapa[chave] || tipo || '—';
 };
+
+  const formatCotaIdentificador = (cota) => {
+    if (!cota) return '—';
+    const partes = [cota.grupo, cota.cota, cota.digito]
+      .map(parte => (parte || '').toString().trim())
+      .filter(Boolean);
+    return partes.join('-') || '—';
+  };
+
+  const obterConsultoresComValores = (cota) => {
+    const lista = Array.isArray(cota?.consultores) ? cota.consultores : [];
+    if (!lista.length) return [];
+    const valorBase = Number(
+      cota?.valorDistribuidoPorConsultor ??
+      (lista.length ? (Number(cota?.valor ?? 0) / lista.length) : 0)
+    );
+    const valorIndividual = Number.isFinite(valorBase) ? valorBase : null;
+    return lista.map(consultor => ({
+      ...consultor,
+      valorIndividual,
+      valorIndividualFormatado: valorIndividual !== null
+        ? valorIndividual.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+        : null
+    }));
+  };
 
   const toNumberOrNull = (value) => {
     if (value === '' || value === null || value === undefined) return null;
@@ -306,6 +335,34 @@ const formatTipoContemplacao = (tipo) => {
       showSnackbar('Falha ao carregar consultores', 'error');
     }
   };
+
+  const consultorOptionsParaSelect = useMemo(() => {
+    const lista = Array.isArray(consultores) ? consultores : [];
+    const ativos = lista.filter(consultor => consultor?.ativo);
+    const resultado = [...ativos];
+    const selecionadosIds = (cotaForm.consultorIds || []).map(id => String(id)).filter(Boolean);
+    const consultoresEmEdicao = (cotaEditando?.consultores || []).map(c => ({
+      ...c,
+      id: c.id ?? c.consultorId
+    }));
+
+    selecionadosIds.forEach((idSelecionado) => {
+      if (resultado.some(consultor => String(consultor.id) === idSelecionado)) {
+        return;
+      }
+      const consultorEncontrado =
+        lista.find(consultor => String(consultor.id) === idSelecionado)
+        || consultoresEmEdicao.find(consultor => String(consultor.id) === idSelecionado);
+      if (consultorEncontrado) {
+        resultado.push({
+          ...consultorEncontrado,
+          ativo: consultorEncontrado.ativo ?? false
+        });
+      }
+    });
+
+    return resultado;
+  }, [consultores, cotaForm.consultorIds, cotaEditando]);
 
   const loadCotas = async (clienteId) => {
     setLoadingCotas(true);
@@ -494,12 +551,44 @@ const formatTipoContemplacao = (tipo) => {
     }
   };
 
-  const handleConsultorChange = (valorSelecionado) => {
-    const consultor = consultores.find(c => String(c.id) === String(valorSelecionado));
+  const handleConsultoresChange = (valoresSelecionados) => {
+    const listaNormalizada = Array.isArray(valoresSelecionados)
+      ? valoresSelecionados.map(valor => String(valor)).filter(Boolean)
+      : typeof valoresSelecionados === 'string'
+        ? valoresSelecionados.split(',').map(valor => valor.trim()).filter(Boolean)
+        : [];
+
+    setCotaForm(prev => {
+      const infoAtualizada = {};
+      listaNormalizada.forEach((id) => {
+        const existente = prev.consultoresInfo?.[id];
+        if (existente) {
+          infoAtualizada[id] = existente;
+        } else {
+          const consultor = consultorOptionsParaSelect.find(c => String(c.id) === id);
+          infoAtualizada[id] = {
+            idagendor: consultor?.id_agendor || ''
+          };
+        }
+      });
+      return {
+        ...prev,
+        consultorIds: listaNormalizada,
+        consultoresInfo: infoAtualizada
+      };
+    });
+  };
+
+  const handleConsultorIdagendorChange = (consultorId, value) => {
     setCotaForm(prev => ({
       ...prev,
-      consultorId: valorSelecionado,
-      idagendor: consultor?.id_agendor || ''
+      consultoresInfo: {
+        ...(prev.consultoresInfo || {}),
+        [consultorId]: {
+          ...(prev.consultoresInfo?.[consultorId] || {}),
+          idagendor: value
+        }
+      }
     }));
   };
 
@@ -522,12 +611,30 @@ const formatTipoContemplacao = (tipo) => {
     setCotaForm({
       grupo: cota.grupo || '',
       cota: cota.cota || '',
+      digito: cota.digito || '',
       valor: toCurrencyDigits(cota.valor),
       valorTotal: toCurrencyDigits(cota.valorTotal),
       dtaquisicao: formatDateForInput(cota.dtaquisicao),
       administradora: cota.administradora || '',
-      consultorId: cota.consultorId ? String(cota.consultorId) : '',
-      idagendor: cota.idagendor || ''
+      consultorIds: Array.isArray(cota.consultores) && cota.consultores.length
+        ? cota.consultores.map(consultor => String(consultor.id))
+        : (cota.consultorId ? [String(cota.consultorId)] : []),
+      consultoresInfo: (() => {
+        const info = {};
+        if (Array.isArray(cota.consultores) && cota.consultores.length) {
+          cota.consultores.forEach((consultor) => {
+            const chave = String(consultor.id);
+            info[chave] = {
+              idagendor: consultor.idagendor || consultor.CotaConsultor?.idagendor || ''
+            };
+          });
+        } else if (cota.consultorId) {
+          info[String(cota.consultorId)] = {
+            idagendor: cota.idagendor || ''
+          };
+        }
+        return info;
+      })()
     });
     setOpenCotaDialog(true);
   };
@@ -552,16 +659,24 @@ const formatTipoContemplacao = (tipo) => {
     const mensagemSucesso = emEdicao ? 'Cota atualizada com sucesso' : 'Cota cadastrada com sucesso';
 
     try {
-      const consultorId = cotaForm.consultorId ? Number(cotaForm.consultorId) : null;
+      const consultorIds = (cotaForm.consultorIds || [])
+        .map(id => Number(id))
+        .filter(id => Number.isFinite(id));
+      const consultoresPayload = (cotaForm.consultorIds || []).map(id => ({
+        consultorId: Number(id),
+        idagendor: (cotaForm.consultoresInfo?.[id]?.idagendor || '').trim() || null
+      })).filter(item => Number.isFinite(item.consultorId));
       const payload = {
         grupo: cotaForm.grupo,
         cota: cotaForm.cota || null,
+        digito: cotaForm.digito || null,
         valor: toNumberOrNull(cotaForm.valor),
         valorTotal: toNumberOrNull(cotaForm.valorTotal),
         dtaquisicao: cotaForm.dtaquisicao ? new Date(`${cotaForm.dtaquisicao}T00:00:00`).toISOString() : null,
         administradora: cotaForm.administradora,
-        consultorId,
-        idagendor: cotaForm.idagendor,
+        consultorIds,
+        consultores: consultoresPayload,
+        idagendor: consultoresPayload[0]?.idagendor || null,
         clienteId: selectedCliente.id
       };
 
@@ -691,7 +806,8 @@ const formatTipoContemplacao = (tipo) => {
       return;
     }
     if (!selectedCliente) return;
-    const confirmar = window.confirm(`Deseja remover a cota ${cota.grupo}${cota.cota ? `/${cota.cota}` : ''}?`);
+    const descricaoCota = formatCotaIdentificador(cota);
+    const confirmar = window.confirm(`Deseja remover a cota ${descricaoCota}?`);
     if (!confirmar) return;
 
     try {
@@ -796,7 +912,10 @@ const formatTipoContemplacao = (tipo) => {
       const campos = [
         cota.grupo,
         cota.cota,
-        cota.administradora
+        cota.digito,
+        formatCotaIdentificador(cota),
+        cota.administradora,
+        ...(Array.isArray(cota.consultores) ? cota.consultores.flatMap(consultor => [consultor.nome, consultor.idagendor]) : [])
       ].map(valor => (valor || '').toString().toLowerCase());
       return campos.some(valor => valor.includes(termo));
     });
@@ -1109,10 +1228,10 @@ const formatTipoContemplacao = (tipo) => {
             <Box display="flex" gap={1} alignItems="center" flexWrap="wrap">
               <TextField
                 size="small"
-                label="Buscar cota/grupo"
+                label="Buscar cota/grupo/dígito"
                 value={cotaSearchTerm}
                 onChange={e => setCotaSearchTerm(e.target.value)}
-                placeholder="Digite o grupo ou cota"
+                placeholder="Digite grupo, cota, dígito ou administradora"
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -1138,13 +1257,12 @@ const formatTipoContemplacao = (tipo) => {
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell>Grupo</TableCell>
-                  <TableCell>Cota</TableCell>
+                  <TableCell>Grupo/Cota/Dígito</TableCell>
                   <TableCell>Valor Líquido</TableCell>
                   <TableCell>Valor Bruto</TableCell>
                   <TableCell>Data Aquisição</TableCell>
                   <TableCell>Administradora</TableCell>
-                  <TableCell>Consultor</TableCell>
+                  <TableCell>Consultores</TableCell>
                   <TableCell>Contemplação</TableCell>
                   <TableCell align="center">Ações</TableCell>
                 </TableRow>
@@ -1152,26 +1270,27 @@ const formatTipoContemplacao = (tipo) => {
               <TableBody>
                 {loadingCotas ? (
                   <TableRow>
-                    <TableCell colSpan={9} align="center">
+                    <TableCell colSpan={8} align="center">
                       <CircularProgress size={24} />
                     </TableCell>
                   </TableRow>
                 ) : cotasFiltradas.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} align="center">
+                    <TableCell colSpan={8} align="center">
                       Nenhuma cota encontrada com o critério informado.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  cotasPaginadas.map(cota => (
+                  cotasPaginadas.map(cota => {
+                    const consultoresResumo = obterConsultoresComValores(cota);
+                    return (
                     <TableRow
                       key={cota.id}
                       sx={{
                         backgroundColor: cota.contemplacao ? 'rgba(34,197,94,0.08)' : 'inherit'
                       }}
                     >
-                      <TableCell>{cota.grupo}</TableCell>
-                      <TableCell>{cota.cota || '—'}</TableCell>
+                      <TableCell>{formatCotaIdentificador(cota)}</TableCell>
                       <TableCell>
                         {cota.valor !== null && cota.valor !== undefined
                           ? Number(cota.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -1188,7 +1307,22 @@ const formatTipoContemplacao = (tipo) => {
                           : '—'}
                       </TableCell>
                       <TableCell>{cota.administradora}</TableCell>
-                      <TableCell>{cota.consultor?.nome || '—'}</TableCell>
+                      <TableCell>
+                        {consultoresResumo.length === 0 ? (
+                          '—'
+                        ) : (
+                          consultoresResumo.map((consultor) => (
+                            <Box
+                              key={consultor.id || consultor.nome}
+                              sx={{ fontSize: '0.75rem' }}
+                            >
+                              {consultor.nome}
+                              {consultor.idagendor ? ` · ID: ${consultor.idagendor}` : ''}
+                              {consultor.valorIndividualFormatado ? ` (${consultor.valorIndividualFormatado})` : ''}
+                            </Box>
+                          ))
+                        )}
+                      </TableCell>
                       <TableCell>
                         {cota.contemplacao ? (
                           <Chip
@@ -1221,7 +1355,8 @@ const formatTipoContemplacao = (tipo) => {
                         )}
                       </TableCell>
                     </TableRow>
-                  ))
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
@@ -1262,12 +1397,21 @@ const formatTipoContemplacao = (tipo) => {
                   required
                 />
               </Grid>
-              <Grid item xs={12} sm={6}>
+              <Grid item xs={12} sm={3}>
                 <TextField
                   label="Cota"
                   value={cotaForm.cota}
                   onChange={e => setCotaForm(prev => ({ ...prev, cota: e.target.value }))}
                   fullWidth
+                />
+              </Grid>
+              <Grid item xs={12} sm={3}>
+                <TextField
+                  label="Dígito"
+                  value={cotaForm.digito}
+                  onChange={e => setCotaForm(prev => ({ ...prev, digito: e.target.value }))}
+                  fullWidth
+                  inputProps={{ maxLength: 5 }}
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
@@ -1316,32 +1460,49 @@ const formatTipoContemplacao = (tipo) => {
               </Grid>
               <Grid item xs={12} sm={6}>
                 <FormControl fullWidth>
-                  <InputLabel>Consultor</InputLabel>
+                  <InputLabel>Consultores</InputLabel>
                   <Select
-                    value={cotaForm.consultorId}
-                    label="Consultor"
-                    onChange={e => handleConsultorChange(e.target.value)}
+                    multiple
+                    value={cotaForm.consultorIds}
+                    label="Consultores"
+                    onChange={e => handleConsultoresChange(e.target.value)}
+                    renderValue={(selected) => {
+                      if (!selected || selected.length === 0) {
+                        return 'Não informado';
+                      }
+                      const nomes = selected.map((id) => {
+                        const consultor = consultorOptionsParaSelect.find(option => String(option.id) === String(id));
+                        return consultor ? consultor.nome : `ID ${id}`;
+                      });
+                      return nomes.join(', ');
+                    }}
                   >
-                    <MenuItem value="">
-                      <em>Não informado</em>
-                    </MenuItem>
-                    {consultores.map(consultor => (
-                      <MenuItem key={consultor.id} value={consultor.id}>
-                        {consultor.nome}
+                    {consultorOptionsParaSelect.map(consultor => (
+                      <MenuItem key={consultor.id} value={String(consultor.id)}>
+                        <Checkbox
+                          size="small"
+                          checked={(cotaForm.consultorIds || []).map(String).includes(String(consultor.id))}
+                          sx={{ mr: 1 }}
+                        />
+                        <ListItemText primary={`${consultor.nome}${consultor.ativo ? '' : ' (inativo)'}`} />
                       </MenuItem>
                     ))}
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="ID Agendor"
-                  value={cotaForm.idagendor}
-                  onChange={e => setCotaForm(prev => ({ ...prev, idagendor: e.target.value }))}
-                  fullWidth
-                  required
-                />
-              </Grid>
+              {cotaForm.consultorIds.map(id => {
+                const consultor = consultorOptionsParaSelect.find(option => String(option.id) === String(id));
+                return (
+                  <Grid item xs={12} sm={6} key={`idagendor-${id}`}>
+                    <TextField
+                      label={`ID Agendor ${consultor?.nome ? `- ${consultor.nome}` : ''}`}
+                      value={cotaForm.consultoresInfo?.[id]?.idagendor || ''}
+                      onChange={e => handleConsultorIdagendorChange(id, e.target.value)}
+                      fullWidth
+                    />
+                  </Grid>
+                );
+              })}
             </Grid>
           </DialogContent>
           <DialogActions>
@@ -1367,7 +1528,7 @@ const formatTipoContemplacao = (tipo) => {
             <Grid container spacing={2}>
               <Grid item xs={12}>
                 <Typography variant="subtitle2" color="textSecondary">
-                  {cotaSelecionadaParaContemplacao?.grupo || 'Grupo —'} · {cotaSelecionadaParaContemplacao?.cota || 'Cota —'}
+                  {formatCotaIdentificador(cotaSelecionadaParaContemplacao)}
                 </Typography>
               </Grid>
               <Grid item xs={12} sm={6}>

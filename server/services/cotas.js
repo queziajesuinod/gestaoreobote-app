@@ -3,7 +3,8 @@ const {
   Cota,
   Consultor,
   Cliente,
-  Contemplacao
+  Contemplacao,
+  CotaConsultor
 } = require('../models');
 
 const TIPOS_CONTEMPLACAO = ['LANCE_FIXO', 'LANCE_LIVRE', 'SORTEIO'];
@@ -14,59 +15,247 @@ const contemplacaoInclude = {
   attributes: ['id', 'dataContemplacao', 'tipo', 'observacao']
 };
 
+const CONSULTOR_ATTRIBUTES = ['id', 'nome', 'id_agendor', 'ativo'];
+
+const buildConsultoresInclude = (overrides = {}) => {
+  const { throughWhere, ...rest } = overrides;
+  return {
+    model: Consultor,
+    as: 'consultores',
+    attributes: CONSULTOR_ATTRIBUTES,
+    through: {
+      attributes: ['idagendor'],
+      ...(throughWhere ? { where: throughWhere } : {})
+    },
+    required: false,
+    ...rest
+  };
+};
+
+function normalizeConsultorAssociacoes(value, fallbackIdagendor = null) {
+  const lista = normalizeToArray(value);
+  const resultado = [];
+  lista.forEach((item) => {
+    if (item === null || item === undefined) return;
+    if (typeof item === 'object' && !Array.isArray(item)) {
+      const consultorId = toInt(item.consultorId ?? item.id);
+      if (consultorId === null) return;
+      const idagendor = Object.prototype.hasOwnProperty.call(item, 'idagendor')
+        ? (item.idagendor === null || item.idagendor === undefined ? null : String(item.idagendor).trim())
+        : (fallbackIdagendor !== null && fallbackIdagendor !== undefined ? String(fallbackIdagendor).trim() : null);
+      resultado.push({ consultorId, idagendor: idagendor || null });
+      return;
+    }
+    const consultorId = toInt(item);
+    if (consultorId === null) return;
+    const idagendor = fallbackIdagendor !== null && fallbackIdagendor !== undefined
+      ? String(fallbackIdagendor).trim()
+      : null;
+    resultado.push({ consultorId, idagendor: idagendor || null });
+  });
+
+  const mapa = new Map();
+  resultado.forEach((item) => {
+    mapa.set(item.consultorId, item);
+  });
+  return Array.from(mapa.values());
+}
+
+function extrairConsultoresDoPayload(payload = {}, { considerarConsultorId = false } = {}) {
+  if (!payload || typeof payload !== 'object') {
+    return null;
+  }
+
+  const fallbackIdagendor = Object.prototype.hasOwnProperty.call(payload, 'idagendor')
+    ? (payload.idagendor === null || payload.idagendor === undefined ? null : payload.idagendor)
+    : null;
+
+  const fontes = [
+    payload.consultoresDetalhes,
+    payload.consultores,
+    payload.consultorAssociacoes,
+    payload.consultorIds,
+    considerarConsultorId ? payload.consultorId : null
+  ];
+
+  for (let i = 0; i < fontes.length; i += 1) {
+    const fonte = fontes[i];
+    if (fonte === null || fonte === undefined || (Array.isArray(fonte) && fonte.length === 0)) {
+      continue;
+    }
+    const normalizados = normalizeConsultorAssociacoes(fonte, fallbackIdagendor);
+    if (normalizados.length) {
+      return normalizados;
+    }
+  }
+
+  return null;
+}
+
+async function sincronizarConsultoresDaCota(cota, consultoresAssociados = null) {
+  const associados = normalizeConsultorAssociacoes(
+    consultoresAssociados ?? [],
+    cota.idagendor ?? null
+  );
+  const ids = associados.map(item => item.consultorId);
+
+  if (typeof cota.setConsultores === 'function') {
+    await cota.setConsultores(ids);
+  }
+
+  await Promise.all(
+    associados.map(({ consultorId, idagendor }) =>
+      CotaConsultor.update(
+        { idagendor: idagendor || null },
+        { where: { cotaId: cota.id, consultorId } }
+      )
+    )
+  );
+
+  const primeiroConsultor = ids[0] ?? null;
+  const primeiroIdagendor = associados[0]?.idagendor ?? null;
+  const precisaAtualizar = cota.consultorId !== primeiroConsultor || cota.idagendor !== primeiroIdagendor;
+  if (precisaAtualizar) {
+    await cota.update({
+      consultorId: primeiroConsultor,
+      idagendor: primeiroIdagendor || null
+    });
+  }
+
+  return associados;
+}
+
+function formatarCotaParaResposta(instancia) {
+  if (!instancia) return null;
+  const plain = instancia.toJSON ? instancia.toJSON() : instancia;
+  const consultores = Array.isArray(plain.consultores) ? plain.consultores : [];
+  const quantidadeConsultores = consultores.length;
+  const valorLiquido = Number(plain.valor ?? 0);
+  const valorDistribuido = quantidadeConsultores > 0
+    ? valorLiquido / quantidadeConsultores
+    : (valorLiquido || 0);
+
+  const consultoresEnriquecidos = consultores.map((consultor) => {
+    const idagendor = consultor?.CotaConsultor?.idagendor ?? consultor?.idagendor ?? null;
+    return {
+      ...consultor,
+      idagendor: idagendor || null,
+      valorRecebido: quantidadeConsultores > 0 ? valorDistribuido : valorLiquido || 0
+    };
+  });
+
+  return {
+    ...plain,
+    quantidadeConsultores,
+    valorDistribuidoPorConsultor: valorDistribuido,
+    consultores: consultoresEnriquecidos,
+    idagendors: consultoresEnriquecidos
+      .map(consultor => consultor.idagendor)
+      .filter((valor, index, array) => Boolean(valor) && array.indexOf(valor) === index)
+  };
+}
+
+function mapearCotasParaResposta(lista) {
+  return (lista || []).map(item => formatarCotaParaResposta(item)).filter(Boolean);
+}
+
 // 🔹 Criar nova cota
-async function criarCota(data) {
-  return Cota.create(data);
+async function criarCota(data = {}) {
+  const payload = { ...data };
+  const consultoresAssociados = extrairConsultoresDoPayload(payload, { considerarConsultorId: true }) || [];
+  delete payload.consultorIds;
+  delete payload.consultores;
+  delete payload.consultoresDetalhes;
+  delete payload.consultorAssociacoes;
+
+  payload.consultorId = consultoresAssociados[0]?.consultorId ?? null;
+  if (consultoresAssociados[0]?.idagendor !== undefined) {
+    payload.idagendor = consultoresAssociados[0]?.idagendor || null;
+  }
+
+  const novaCota = await Cota.create(payload);
+  await sincronizarConsultoresDaCota(novaCota, consultoresAssociados);
+  return obterCotaPorId(novaCota.id);
 }
 
 // 🔹 Listar todas as cotas
 async function listarCotas(consultorId = null) {
-  const where = {};
-  if (consultorId) {
-    where.consultorId = consultorId;
-  }
+  const consultoresInclude = buildConsultoresInclude(
+    consultorId
+      ? { required: true, where: { id: consultorId } }
+      : {}
+  );
 
-  return Cota.findAll({
-    where,
+  const registros = await Cota.findAll({
     include: [
+      consultoresInclude,
       {
-        model: Consultor,
-        as: 'consultor',
+        model: Cliente,
+        as: 'cliente',
         attributes: ['id', 'nome']
       },
       contemplacaoInclude
-    ]
+    ],
+    distinct: true
   });
+
+  return mapearCotasParaResposta(registros);
 }
 
 // 🔹 Buscar por clienteId
 async function buscarPorCliente(clienteId, consultorId = null) {
-  const where = { clienteId };
-  if (consultorId) {
-    where.consultorId = consultorId;
-  }
+  const consultoresInclude = buildConsultoresInclude(
+    consultorId
+      ? { required: true, where: { id: consultorId } }
+      : {}
+  );
 
-  return Cota.findAll({
-    where,
+  const registros = await Cota.findAll({
+    where: { clienteId },
     include: [
+      consultoresInclude,
       {
-        model: Consultor,
-        as: 'consultor',
+        model: Cliente,
+        as: 'cliente',
         attributes: ['id', 'nome']
       },
       contemplacaoInclude
-    ]
+    ],
+    order: [['dtaquisicao', 'DESC']],
+    distinct: true
   });
+
+  return mapearCotasParaResposta(registros);
 }
 
 // 🔹 Atualizar cota
-async function atualizarCota(id, dadosAtualizados) {
+async function atualizarCota(id, dadosAtualizados = {}) {
   const cota = await Cota.findByPk(id);
   if (!cota) {
     throw new Error('Cota não encontrada');
   }
-  await cota.update(dadosAtualizados);
-  return cota;
+
+  const payload = { ...dadosAtualizados };
+  const consultoresAssociados = extrairConsultoresDoPayload(payload, { considerarConsultorId: true });
+  delete payload.consultorIds;
+  delete payload.consultores;
+  delete payload.consultoresDetalhes;
+  delete payload.consultorAssociacoes;
+
+  if (consultoresAssociados !== null) {
+    payload.consultorId = consultoresAssociados[0]?.consultorId ?? null;
+    if (consultoresAssociados[0]?.idagendor !== undefined) {
+      payload.idagendor = consultoresAssociados[0]?.idagendor || null;
+    }
+  }
+
+  await cota.update(payload);
+
+  if (consultoresAssociados !== null) {
+    await sincronizarConsultoresDaCota(cota, consultoresAssociados);
+  }
+
+  return obterCotaPorId(id);
 }
 
 // 🔹 Deletar cota
@@ -80,15 +269,38 @@ async function deletarCota(id) {
 }
 
 async function obterCotaPorId(id) {
-  return Cota.findByPk(id);
+  const cota = await Cota.findByPk(id, {
+    include: [
+      buildConsultoresInclude(),
+      {
+        model: Cliente,
+        as: 'cliente',
+        attributes: ['id', 'nome', 'cpf', 'email']
+      },
+      contemplacaoInclude
+    ]
+  });
+  return formatarCotaParaResposta(cota);
 }
 
 // 🔹 Buscar por consultorId
 async function buscarPorConsultor(consultorId) {
-  return Cota.findAll({
-    where: { consultorId },
-    include: [contemplacaoInclude]
+  if (!consultorId) {
+    return [];
+  }
+  const registros = await Cota.findAll({
+    include: [
+      buildConsultoresInclude({ required: true, where: { id: consultorId } }),
+      {
+        model: Cliente,
+        as: 'cliente',
+        attributes: ['id', 'nome']
+      },
+      contemplacaoInclude
+    ],
+    distinct: true
   });
+  return mapearCotasParaResposta(registros);
 }
 
 // 🔹 Buscar por range de data e (opcionalmente) idagendor
@@ -98,13 +310,37 @@ async function buscarPorPeriodo(inicio, fim, idagendor = null, consultorId = nul
       [Op.between]: [new Date(inicio), new Date(fim)]
     }
   };
-  if (idagendor) where.idagendor = idagendor;
-  if (consultorId) where.consultorId = consultorId;
 
-  return Cota.findAll({
+  const consultoresInclude = buildConsultoresInclude(
+    consultorId
+      ? { required: true, where: { id: consultorId } }
+      : {}
+  );
+
+  if (idagendor) {
+    consultoresInclude.required = true;
+    consultoresInclude.through = consultoresInclude.through || {};
+    consultoresInclude.through.where = {
+      ...(consultoresInclude.through.where || {}),
+      idagendor
+    };
+  }
+
+  const registros = await Cota.findAll({
     where,
-    include: [contemplacaoInclude]
+    include: [
+      consultoresInclude,
+      {
+        model: Cliente,
+        as: 'cliente',
+        attributes: ['id', 'nome']
+      },
+      contemplacaoInclude
+    ],
+    distinct: true
   });
+
+  return mapearCotasParaResposta(registros);
 }
 
 function toInt(value, fallback = null) {
@@ -227,10 +463,6 @@ async function buscarCotasComFiltros({
 
   const where = {};
 
-  if (consultorRestrito) {
-    where.consultorId = consultorRestrito;
-  }
-
   if (administradora) {
     where.administradora = {
       [Op.iLike]: `%${administradora.trim()}%`
@@ -267,7 +499,7 @@ async function buscarCotasComFiltros({
   ];
   const consultorIdsSet = new Set(consultorIds);
   const consultorFiltroTexto = consultorFiltroLista.filter(item => !consultorIdsSet.has(toInt(item)));
-  const possuiFiltroConsultor = consultorIds.length > 0 || consultorFiltroTexto.length > 0;
+
   const includeBase = [{
     model: Cliente,
     as: 'cliente',
@@ -284,29 +516,38 @@ async function buscarCotasComFiltros({
       : {})
   }];
 
-  const consultorInclude = {
-    model: Consultor,
-    as: 'consultor',
-    attributes: ['id', 'nome', 'id_agendor'],
-    required: possuiFiltroConsultor
-  };
+  const consultorInclude = buildConsultoresInclude();
+  let consultorWhere = null;
 
-  if (possuiFiltroConsultor) {
-    if (consultorIds.length) {
-      consultorInclude.where = {
-        id: {
-          [Op.in]: consultorIds
+  if (consultorIds.length) {
+    consultorWhere = {
+      id: {
+        [Op.in]: consultorIds
+      }
+    };
+  } else if (consultorFiltroTexto.length) {
+    consultorWhere = {
+      [Op.or]: consultorFiltroTexto.map((termo) => ({
+        nome: {
+          [Op.iLike]: `%${termo}%`
         }
-      };
-    } else if (consultorFiltroTexto.length) {
-      consultorInclude.where = {
-        [Op.or]: consultorFiltroTexto.map((termo) => ({
-          nome: {
-            [Op.iLike]: `%${termo}%`
-          }
-        }))
-      };
-    }
+      }))
+    };
+  }
+
+  if (consultorRestrito) {
+    const restricao = { id: consultorRestrito };
+    consultorWhere = consultorWhere
+      ? { [Op.and]: [consultorWhere, restricao] }
+      : restricao;
+  }
+
+  if (consultorWhere) {
+    consultorInclude.where = consultorWhere;
+    consultorInclude.required = true;
+  } else if (consultorRestrito) {
+    consultorInclude.where = { id: consultorRestrito };
+    consultorInclude.required = true;
   }
 
   includeBase.push(consultorInclude);
@@ -335,7 +576,7 @@ async function buscarCotasComFiltros({
 
   const orderMapping = {
     cliente: [{ model: Cliente, as: 'cliente' }, 'nome'],
-    consultor: [{ model: Consultor, as: 'consultor' }, 'nome'],
+    consultor: [{ model: Consultor, as: 'consultores' }, 'nome'],
     grupo: ['grupo'],
     cota: ['cota'],
     administradora: ['administradora'],
@@ -353,7 +594,7 @@ async function buscarCotasComFiltros({
     orderClauses.push(['dtaquisicao', 'DESC']);
   }
 
-  const resultado = await Cota.findAndCountAll({
+  const consultaPrincipal = await Cota.findAll({
     where,
     include: includeBase,
     order: orderClauses,
@@ -363,31 +604,62 @@ async function buscarCotasComFiltros({
     subQuery: false
   });
 
-  const total = resultado.count;
+  const includeCount = includeBase.map((item) => {
+    const clone = {
+      ...item,
+      attributes: [],
+      duplicating: false
+    };
+    if (item.through) {
+      clone.through = {
+        ...item.through,
+        attributes: []
+      };
+    }
+    return clone;
+  });
+
+  const total = await Cota.count({
+    where,
+    include: includeCount,
+    distinct: true
+  });
   const totalPaginas = usarTodos ? 1 : Math.max(Math.ceil(total / realLimit), 1);
 
-  const includeTotals = includeBase.map((item) => ({
-    ...item,
-    attributes: [],
-    duplicating: false
-  }));
+  const includeTotals = includeBase.map((item) => {
+    const clone = {
+      ...item,
+      attributes: [],
+      duplicating: false
+    };
+    if (item.through) {
+      clone.through = {
+        ...item.through,
+        attributes: []
+      };
+    }
+    return clone;
+  });
 
-  const somaValor = Number(await Cota.sum('valor', {
+  const somaResultados = await Cota.findAll({
+    attributes: [
+      [Cota.sequelize.fn('SUM', Cota.sequelize.col('Cota.valor')), 'somaValor'],
+      [Cota.sequelize.fn('SUM', Cota.sequelize.col('Cota.valorTotal')), 'somaValorTotal']
+    ],
     where,
-    include: includeTotals
-  }) || 0);
+    include: includeTotals,
+    raw: true
+  });
 
-  const somaValorTotal = Number(await Cota.sum('valorTotal', {
-    where,
-    include: includeTotals
-  }) || 0);
+  const somaValor = Number(somaResultados[0]?.somaValor || 0);
+  const somaValorTotal = Number(somaResultados[0]?.somaValorTotal || 0);
 
   return {
     total,
     pagina,
     totalPaginas,
     limite: usarTodos ? total : realLimit,
-    registros: resultado.rows,
+    registros: mapearCotasParaResposta(consultaPrincipal),
     totalValor: somaValor,
     totalValorTotal: somaValorTotal
   };
