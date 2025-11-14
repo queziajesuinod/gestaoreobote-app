@@ -72,6 +72,14 @@ class AuthService {
       ['GESTAO', 'CLIENTES_ALL', 'USERS_MANAGE'].forEach((permissao) => permissoesSet.add(permissao));
     }
 
+    if (perfilDescricao === 'RH') {
+      permissoesSet.add('CLIENTES_ALL');
+    }
+
+    if (perfilDescricao === 'GESTOR') {
+      permissoesSet.add('CLIENTES_ALL');
+    }
+
     if (perfilDescricao === 'CONSULTOR') {
       permissoesSet.add('CLIENTES_OWN');
     }

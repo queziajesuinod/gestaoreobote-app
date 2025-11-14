@@ -1,12 +1,17 @@
 const clienteService = require('../services/clientes');
 
+const usuarioPodeGerenciarClientes = (perfil) => {
+  const perfilNormalizado = (perfil || '').toUpperCase();
+  return perfilNormalizado === 'ADMIN' || perfilNormalizado === 'RH';
+};
+
 module.exports = {
   // 🔹 GET /clientes
   async listar(req, res) {
     try {
       const perfil = req.user?.perfil ? req.user.perfil.toUpperCase() : '';
       const consultorId = req.user?.consultorId ? Number(req.user.consultorId) : null;
-      const isConsultor = consultorId && perfil !== 'ADMIN' && perfil !== 'GESTOR';
+      const isConsultor = consultorId && perfil !== 'ADMIN' && perfil !== 'GESTOR' && perfil !== 'RH';
 
       let clientes;
       if (isConsultor) {
@@ -38,7 +43,7 @@ module.exports = {
       const { id } = req.params;
       const perfil = req.user?.perfil ? req.user.perfil.toUpperCase() : '';
       const consultorId = req.user?.consultorId ? Number(req.user.consultorId) : null;
-      const isConsultor = consultorId && perfil !== 'ADMIN' && perfil !== 'GESTOR';
+      const isConsultor = consultorId && perfil !== 'ADMIN' && perfil !== 'GESTOR' && perfil !== 'RH';
 
       const cliente = await clienteService.getClienteById(id);
       if (!cliente) {
@@ -65,8 +70,8 @@ module.exports = {
   async criar(req, res) {
     try {
       const perfil = req.user?.perfil ? req.user.perfil.toUpperCase() : '';
-      if (perfil !== 'ADMIN') {
-        return res.status(403).json({ sucesso: false, mensagem: 'Apenas administradores podem criar clientes.' });
+      if (!usuarioPodeGerenciarClientes(perfil)) {
+        return res.status(403).json({ sucesso: false, mensagem: 'Apenas administradores ou RH podem criar clientes.' });
       }
 
       const novo = await clienteService.createCliente(req.body);
@@ -85,8 +90,8 @@ module.exports = {
   async atualizar(req, res) {
     try {
       const perfil = req.user?.perfil ? req.user.perfil.toUpperCase() : '';
-      if (perfil !== 'ADMIN') {
-        return res.status(403).json({ sucesso: false, mensagem: 'Apenas administradores podem atualizar clientes.' });
+      if (!usuarioPodeGerenciarClientes(perfil)) {
+        return res.status(403).json({ sucesso: false, mensagem: 'Apenas administradores ou RH podem atualizar clientes.' });
       }
 
       const { id } = req.params;
@@ -106,8 +111,8 @@ module.exports = {
   async deletar(req, res) {
     try {
       const perfil = req.user?.perfil ? req.user.perfil.toUpperCase() : '';
-      if (perfil !== 'ADMIN') {
-        return res.status(403).json({ sucesso: false, mensagem: 'Apenas administradores podem remover clientes.' });
+      if (!usuarioPodeGerenciarClientes(perfil)) {
+        return res.status(403).json({ sucesso: false, mensagem: 'Apenas administradores ou RH podem remover clientes.' });
       }
 
       const { id } = req.params;

@@ -1,9 +1,19 @@
 const cotaService = require('../services/cotas');
 const ExcelJS = require('exceljs');
 
+const normalizarPerfil = (perfil) => (perfil ? String(perfil).toUpperCase() : '');
+const usuarioEhAdminOuRh = (perfil) => {
+  const normalizado = normalizarPerfil(perfil);
+  return normalizado === 'ADMIN' || normalizado === 'RH';
+};
+const usuarioEhGestor = (perfil) => normalizarPerfil(perfil) === 'GESTOR';
+const usuarioEhConsultorRestrito = (perfil, consultorId) => Boolean(consultorId)
+  && !usuarioEhAdminOuRh(perfil)
+  && !usuarioEhGestor(perfil);
+
 function usuarioPodeGerirContemplacao(req) {
-  const perfil = req.user?.perfil ? req.user.perfil.toUpperCase() : '';
-  if (perfil === 'ADMIN') return true;
+  const perfil = normalizarPerfil(req.user?.perfil);
+  if (usuarioEhAdminOuRh(perfil)) return true;
   const permissoes = Array.isArray(req.user?.permissoes) ? req.user.permissoes.map(p => p.toUpperCase()) : [];
   if (permissoes.includes('GESTAO') || permissoes.includes('CLIENTES_ALL')) return true;
   return false;
@@ -12,9 +22,9 @@ function usuarioPodeGerirContemplacao(req) {
 // 🔹 Criar nova cota
 async function criar(req, res) {
   try {
-    const perfil = req.user?.perfil ? req.user.perfil.toUpperCase() : '';
-    if (perfil !== 'ADMIN') {
-      return res.status(403).json({ message: 'Apenas administradores podem criar cotas.' });
+    const perfil = normalizarPerfil(req.user?.perfil);
+    if (!usuarioEhAdminOuRh(perfil)) {
+      return res.status(403).json({ message: 'Apenas administradores ou RH podem criar cotas.' });
     }
 
     const novaCota = await cotaService.criarCota(req.body);
@@ -28,9 +38,9 @@ async function criar(req, res) {
 // 🔹 Listar todas
 async function listar(req, res) {
   try {
-    const perfil = req.user?.perfil ? req.user.perfil.toUpperCase() : '';
+    const perfil = normalizarPerfil(req.user?.perfil);
     const consultorId = req.user?.consultorId ? Number(req.user.consultorId) : null;
-    const isConsultor = Boolean(consultorId) && perfil !== 'ADMIN' && perfil !== 'GESTOR';
+    const isConsultor = usuarioEhConsultorRestrito(perfil, consultorId);
     const cotas = await cotaService.listarCotas(isConsultor ? consultorId : null);
     return res.json(cotas);
   } catch (error) {
@@ -40,9 +50,9 @@ async function listar(req, res) {
 
 async function buscarComFiltros(req, res) {
   try {
-    const perfil = req.user?.perfil ? req.user.perfil.toUpperCase() : '';
+    const perfil = normalizarPerfil(req.user?.perfil);
     const consultorId = req.user?.consultorId ? Number(req.user.consultorId) : null;
-    const isConsultor = Boolean(consultorId) && perfil !== 'ADMIN' && perfil !== 'GESTOR';
+    const isConsultor = usuarioEhConsultorRestrito(perfil, consultorId);
 
     const resultado = await cotaService.buscarCotasComFiltros(
       req.query,
@@ -68,9 +78,9 @@ async function buscarComFiltros(req, res) {
 
 async function exportar(req, res) {
   try {
-    const perfil = req.user?.perfil ? req.user.perfil.toUpperCase() : '';
+    const perfil = normalizarPerfil(req.user?.perfil);
     const consultorId = req.user?.consultorId ? Number(req.user.consultorId) : null;
-    const isConsultor = Boolean(consultorId) && perfil !== 'ADMIN' && perfil !== 'GESTOR';
+    const isConsultor = usuarioEhConsultorRestrito(perfil, consultorId);
 
     const filtros = {
       ...req.query,
@@ -176,9 +186,9 @@ async function exportar(req, res) {
 // 🔹 Buscar por cliente
 async function buscarPorCliente(req, res) {
   try {
-    const perfil = req.user?.perfil ? req.user.perfil.toUpperCase() : '';
+    const perfil = normalizarPerfil(req.user?.perfil);
     const consultorId = req.user?.consultorId ? Number(req.user.consultorId) : null;
-    const isConsultor = Boolean(consultorId) && perfil !== 'ADMIN' && perfil !== 'GESTOR';
+    const isConsultor = usuarioEhConsultorRestrito(perfil, consultorId);
 
     if (perfil === 'CONSULTOR' && !consultorId) {
       return res.json([]);
@@ -197,9 +207,9 @@ async function buscarPorCliente(req, res) {
 // 🔹 Atualizar cota
 async function atualizar(req, res) {
   try {
-    const perfil = req.user?.perfil ? req.user.perfil.toUpperCase() : '';
-    if (perfil !== 'ADMIN') {
-      return res.status(403).json({ message: 'Apenas administradores podem atualizar cotas.' });
+    const perfil = normalizarPerfil(req.user?.perfil);
+    if (!usuarioEhAdminOuRh(perfil)) {
+      return res.status(403).json({ message: 'Apenas administradores ou RH podem atualizar cotas.' });
     }
 
     const { id } = req.params;
@@ -213,9 +223,9 @@ async function atualizar(req, res) {
 
 async function mover(req, res) {
   try {
-    const perfil = req.user?.perfil ? req.user.perfil.toUpperCase() : '';
-    if (perfil !== 'ADMIN') {
-      return res.status(403).json({ message: 'Apenas administradores podem mover cotas.' });
+    const perfil = normalizarPerfil(req.user?.perfil);
+    if (!usuarioEhAdminOuRh(perfil)) {
+      return res.status(403).json({ message: 'Apenas administradores ou RH podem mover cotas.' });
     }
 
     const { id } = req.params;
@@ -236,9 +246,9 @@ async function mover(req, res) {
 // 🔹 Deletar cota
 async function deletar(req, res) {
   try {
-    const perfil = req.user?.perfil ? req.user.perfil.toUpperCase() : '';
-    if (perfil !== 'ADMIN') {
-      return res.status(403).json({ message: 'Apenas administradores podem remover cotas.' });
+    const perfil = normalizarPerfil(req.user?.perfil);
+    if (!usuarioEhAdminOuRh(perfil)) {
+      return res.status(403).json({ message: 'Apenas administradores ou RH podem remover cotas.' });
     }
 
     const { id } = req.params;
@@ -253,9 +263,9 @@ async function deletar(req, res) {
 // 🔹 Buscar por consultor
 async function buscarPorConsultor(req, res) {
   try {
-    const perfil = req.user?.perfil ? req.user.perfil.toUpperCase() : '';
+    const perfil = normalizarPerfil(req.user?.perfil);
     const consultorId = req.user?.consultorId ? Number(req.user.consultorId) : null;
-    const isConsultor = Boolean(consultorId) && perfil !== 'ADMIN' && perfil !== 'GESTOR';
+    const isConsultor = usuarioEhConsultorRestrito(perfil, consultorId);
     const parametroId = Number(req.params.consultorId);
 
     if (isConsultor) {
@@ -279,9 +289,9 @@ async function buscarPorPeriodo(req, res) {
       return res.status(400).json({ message: 'Parâmetros "inicio" e "fim" são obrigatórios' });
     }
 
-    const perfil = req.user?.perfil ? req.user.perfil.toUpperCase() : '';
+    const perfil = normalizarPerfil(req.user?.perfil);
     const consultorId = req.user?.consultorId ? Number(req.user.consultorId) : null;
-    const isConsultor = Boolean(consultorId) && perfil !== 'ADMIN';
+    const isConsultor = usuarioEhConsultorRestrito(perfil, consultorId);
 
     const cotas = await cotaService.buscarPorPeriodo(
       inicio,

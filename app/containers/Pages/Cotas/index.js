@@ -275,6 +275,7 @@ function CotasPage() {
   const consultorIdLogado = storedUser?.consultorId ? String(storedUser.consultorId) : '';
   const permissoesUsuario = storedUser?.permissoes?.map(p => p.toUpperCase()) || [];
   const podeGerirContemplacao = perfilUsuario === 'ADMIN'
+    || perfilUsuario === 'RH'
     || permissoesUsuario.includes('GESTAO')
     || permissoesUsuario.includes('CLIENTES_ALL');
 

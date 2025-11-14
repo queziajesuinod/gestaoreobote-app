@@ -146,8 +146,11 @@ function Clientes() {
     return () => window.removeEventListener('app:user-updated', handleUserUpdated);
   }, []);
 
+  const perfilUsuario = storedUser?.perfil?.toUpperCase() || '';
   const permissoesUsuario = storedUser?.permissoes || [];
-  const podeGerenciarClientes = permissoesUsuario.includes('CLIENTES_ALL') || permissoesUsuario.includes('GESTAO');
+  const podeGerenciarClientes = permissoesUsuario.includes('CLIENTES_ALL')
+    || permissoesUsuario.includes('GESTAO')
+    || perfilUsuario === 'RH';
 
   const showSnackbar = (message, severity = 'success') => {
     setSnackbar({ open: true, message, severity });
