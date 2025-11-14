@@ -266,6 +266,25 @@ async function atualizarCota(id, dadosAtualizados = {}) {
   return obterCotaPorId(id);
 }
 
+async function moverCota(id, novoClienteId) {
+  if (!novoClienteId) {
+    throw new Error('Cliente destino é obrigatório.');
+  }
+
+  const cota = await Cota.findByPk(id);
+  if (!cota) {
+    throw new Error('Cota não encontrada');
+  }
+
+  const clienteDestino = await Cliente.findByPk(novoClienteId);
+  if (!clienteDestino) {
+    throw new Error('Cliente destino não encontrado');
+  }
+
+  await cota.update({ clienteId: novoClienteId });
+  return obterCotaPorId(id);
+}
+
 // 🔹 Deletar cota
 async function deletarCota(id) {
   const cota = await Cota.findByPk(id);
@@ -777,4 +796,5 @@ module.exports = {
   somarCotasPorPeriodo,
   registrarContemplacao,
   removerContemplacao
+  , moverCota
 };

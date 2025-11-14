@@ -211,6 +211,28 @@ async function atualizar(req, res) {
   }
 }
 
+async function mover(req, res) {
+  try {
+    const perfil = req.user?.perfil ? req.user.perfil.toUpperCase() : '';
+    if (perfil !== 'ADMIN') {
+      return res.status(403).json({ message: 'Apenas administradores podem mover cotas.' });
+    }
+
+    const { id } = req.params;
+    const { clienteDestinoId } = req.body || {};
+
+    if (!clienteDestinoId) {
+      return res.status(400).json({ message: 'Cliente destino é obrigatório.' });
+    }
+
+    const cotaMovida = await cotaService.moverCota(id, clienteDestinoId);
+    return res.json({ mensagem: 'Cota movida com sucesso', dados: cotaMovida });
+  } catch (error) {
+    console.error('❌ Erro ao mover cota:', error);
+    return res.status(500).json({ message: 'Erro ao mover cota', error: error.message });
+  }
+}
+
 // 🔹 Deletar cota
 async function deletar(req, res) {
   try {
@@ -333,4 +355,5 @@ module.exports = {
   exportar,
   registrarContemplacao,
   removerContemplacao
+  , mover
 };

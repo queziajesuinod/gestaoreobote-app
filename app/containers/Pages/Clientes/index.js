@@ -40,7 +40,8 @@ import {
   EmojiEvents as EmojiEventsIcon,
   Refresh as RefreshIcon,
   Search as SearchIcon,
-  Visibility as VisibilityIcon
+  Visibility as VisibilityIcon,
+  SwapHoriz as SwapHorizIcon
 } from '@mui/icons-material';
 import brand from 'dan-api/dummy/brand';
 import { PapperBlock } from 'dan-components';
@@ -54,6 +55,7 @@ const ESTADOS = [
 ];
 
 const TIPOS_CONTEMPLACAO = [
+  {value: 'LANCE_FIDELIDADE', label: 'Lance Fidelidade' },
   { value: 'LANCE_FIXO', label: 'Lance Fixo' },
   { value: 'LANCE_LIVRE', label: 'Lance Livre' },
   { value: 'SORTEIO', label: 'Sorteio' }
@@ -117,6 +119,10 @@ function Clientes() {
     consultorLegado: '',
     idagendor: ''
   });
+  const [openMoverCotaDialog, setOpenMoverCotaDialog] = useState(false);
+  const [cotaParaMover, setCotaParaMover] = useState(null);
+  const [clienteDestinoMovimento, setClienteDestinoMovimento] = useState('');
+  const [clienteDestinoMovimentoSearch, setClienteDestinoMovimentoSearch] = useState('');
 
   const [snackbar, setSnackbar] = useState({
     open: false,
@@ -870,6 +876,68 @@ const formatTipoContemplacao = (tipo) => {
     }
   };
 
+  const handleOpenMoverCota = (cota) => {
+    if (!podeGerenciarClientes) {
+      showSnackbar('Você não tem permissão para mover cotas.', 'error');
+      return;
+    }
+    setCotaParaMover(cota);
+    setClienteDestinoMovimento('');
+    setClienteDestinoMovimentoSearch('');
+    setOpenMoverCotaDialog(true);
+  };
+
+  const handleCloseMoverCotaDialog = () => {
+    setOpenMoverCotaDialog(false);
+    setCotaParaMover(null);
+    setClienteDestinoMovimento('');
+    setClienteDestinoMovimentoSearch('');
+  };
+
+  const handleConfirmMoverCota = async () => {
+    if (!cotaParaMover || !clienteDestinoMovimento) {
+      showSnackbar('Selecione o cliente destino para mover a cota.', 'error');
+      return;
+    }
+    if (selectedCliente && clienteDestinoMovimento === selectedCliente.id) {
+      showSnackbar('Selecione um cliente diferente para movimentar a cota.', 'error');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/cotas/${cotaParaMover.id}/mover`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${getToken()}`
+        },
+        body: JSON.stringify({ clienteDestinoId: clienteDestinoMovimento })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.message || 'Erro ao mover cota');
+      }
+
+      if (selectedCliente) {
+        await loadCotas(selectedCliente.id);
+      }
+      const listaAtualizada = await loadClientes();
+      setClientes(listaAtualizada);
+      setSelectedCliente((prev) => {
+        if (!prev) return prev;
+        const atualizado = listaAtualizada.find(cliente => cliente.id === prev.id);
+        return atualizado || prev;
+      });
+
+      showSnackbar('Cota movida com sucesso.');
+      handleCloseMoverCotaDialog();
+    } catch (error) {
+      console.error('❌ Erro ao mover cota:', error);
+      showSnackbar(error.message || 'Falha ao mover cota', 'error');
+    }
+  };
+
   const clientesFiltradosOrdenados = useMemo(() => {
     const termo = searchTerm.trim().toLowerCase();
     const filtrados = termo
@@ -1376,6 +1444,11 @@ const formatTipoContemplacao = (tipo) => {
                                 <EmojiEventsIcon fontSize="small" />
                               </IconButton>
                             </Tooltip>
+                            <Tooltip title="Mover cota para outro cliente">
+                              <IconButton size="small" color="secondary" onClick={() => handleOpenMoverCota(cota)}>
+                                <SwapHorizIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
                             <IconButton size="small" color="primary" onClick={() => handleEditCota(cota)}>
                               <EditIcon fontSize="small" />
                             </IconButton>
@@ -1554,6 +1627,72 @@ const formatTipoContemplacao = (tipo) => {
             </Button>
           </DialogActions>
         </form>
+      </Dialog>
+
+      <Dialog
+        open={openMoverCotaDialog}
+        onClose={handleCloseMoverCotaDialog}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Mover Cota</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" color="textSecondary" gutterBottom>
+            {cotaParaMover ? `Cota ${formatCotaIdentificador(cotaParaMover)}` : 'Selecione a cota'}
+          </Typography>
+          <FormControl fullWidth>
+            <InputLabel>Cliente destino</InputLabel>
+            <Select
+              label="Cliente destino"
+              value={clienteDestinoMovimento}
+              onChange={e => setClienteDestinoMovimento(e.target.value)}
+              MenuProps={{
+                autoFocus: false,
+                PaperProps: {
+                  style: { maxHeight: 48 * 10, width: 360 }
+                }
+              }}
+              renderValue={(value) => {
+                const cliente = clientes.find(c => c.id === value);
+                return cliente ? cliente.nome : 'Selecione';
+              }}
+            >
+              <MenuItem disabled value="">
+                <TextField
+                  autoFocus
+                  placeholder="Buscar cliente..."
+                  fullWidth
+                  size="small"
+                  value={clienteDestinoMovimentoSearch}
+                  onChange={e => setClienteDestinoMovimentoSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    e.stopPropagation();
+                  }}
+                />
+              </MenuItem>
+              {clientes
+                .filter(cliente => !selectedCliente || cliente.id !== selectedCliente.id)
+                .filter(cliente => {
+                  if (!clienteDestinoMovimentoSearch.trim()) return true;
+                  const termo = clienteDestinoMovimentoSearch.trim().toLowerCase();
+                  return cliente.nome.toLowerCase().includes(termo)
+                    || (cliente.email || '').toLowerCase().includes(termo)
+                    || (cliente.cpf || '').toLowerCase().includes(termo);
+                })
+                .map(cliente => (
+                  <MenuItem key={cliente.id} value={cliente.id}>
+                    {cliente.nome}
+                  </MenuItem>
+                ))}
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseMoverCotaDialog}>Cancelar</Button>
+          <Button onClick={handleConfirmMoverCota} variant="contained" color="primary" disabled={!clienteDestinoMovimento}>
+            Mover
+          </Button>
+        </DialogActions>
       </Dialog>
 
       <Dialog
