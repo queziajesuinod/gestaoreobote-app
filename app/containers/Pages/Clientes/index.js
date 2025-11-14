@@ -113,7 +113,9 @@ function Clientes() {
     dtaquisicao: '',
     administradora: '',
     consultorIds: [],
-    consultoresInfo: {}
+    consultoresInfo: {},
+    consultorLegado: '',
+    idagendor: ''
   });
 
   const [snackbar, setSnackbar] = useState({
@@ -170,7 +172,9 @@ function Clientes() {
       dtaquisicao: '',
       administradora: '',
       consultorIds: [],
-      consultoresInfo: {}
+      consultoresInfo: {},
+      consultorLegado: '',
+      idagendor: ''
     });
   };
 
@@ -209,7 +213,29 @@ const formatTipoContemplacao = (tipo) => {
 
   const obterConsultoresComValores = (cota) => {
     const lista = Array.isArray(cota?.consultores) ? cota.consultores : [];
-    if (!lista.length) return [];
+    if (!lista.length) {
+      if (cota?.consultor?.nome) {
+        return [{
+          id: cota.consultor.id ?? `consultor-${cota.id}`,
+          nome: cota.consultor.nome,
+          idagendor: cota.idagendor || cota.consultor?.id_agendor || null,
+          valorIndividual: cota.valor ?? null,
+          valorIndividualFormatado: cota.valor
+            ? Number(cota.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+            : null
+        }];
+      }
+      if (cota?.consultorLegado) {
+        return [{
+          id: `legado-${cota.id}`,
+          nome: cota.consultorLegado,
+          idagendor: null,
+          valorIndividual: null,
+          valorIndividualFormatado: null
+        }];
+      }
+      return [];
+    }
     const valorBase = Number(
       cota?.valorDistribuidoPorConsultor ??
       (lista.length ? (Number(cota?.valor ?? 0) / lista.length) : 0)
@@ -634,7 +660,9 @@ const formatTipoContemplacao = (tipo) => {
           };
         }
         return info;
-      })()
+      })(),
+      consultorLegado: cota.consultorLegado || '',
+      idagendor: cota.idagendor || ''
     });
     setOpenCotaDialog(true);
   };
@@ -676,6 +704,7 @@ const formatTipoContemplacao = (tipo) => {
         administradora: cotaForm.administradora,
         consultorIds,
         consultores: consultoresPayload,
+        consultorLegado: cotaForm.consultorLegado?.trim() || null,
         idagendor: consultoresPayload[0]?.idagendor || null,
         clienteId: selectedCliente.id
       };
@@ -915,6 +944,8 @@ const formatTipoContemplacao = (tipo) => {
         cota.digito,
         formatCotaIdentificador(cota),
         cota.administradora,
+        cota.consultor?.nome,
+        cota.consultorLegado,
         ...(Array.isArray(cota.consultores) ? cota.consultores.flatMap(consultor => [consultor.nome, consultor.idagendor]) : [])
       ].map(valor => (valor || '').toString().toLowerCase());
       return campos.some(valor => valor.includes(termo));
@@ -1309,7 +1340,7 @@ const formatTipoContemplacao = (tipo) => {
                       <TableCell>{cota.administradora}</TableCell>
                       <TableCell>
                         {consultoresResumo.length === 0 ? (
-                          '—'
+                          cota.consultorLegado || '—'
                         ) : (
                           consultoresResumo.map((consultor) => (
                             <Box
@@ -1489,6 +1520,15 @@ const formatTipoContemplacao = (tipo) => {
                     ))}
                   </Select>
                 </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Consultor legado (texto)"
+                  value={cotaForm.consultorLegado}
+                  onChange={e => setCotaForm(prev => ({ ...prev, consultorLegado: e.target.value }))}
+                  fullWidth
+                  helperText="Use quando não existir consultor cadastrado para esta cota importada."
+                />
               </Grid>
               {cotaForm.consultorIds.map(id => {
                 const consultor = consultorOptionsParaSelect.find(option => String(option.id) === String(id));

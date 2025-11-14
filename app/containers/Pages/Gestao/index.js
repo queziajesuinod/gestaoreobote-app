@@ -95,6 +95,7 @@ function Gestao() {
     id: null,
     nome: '',
     id_agendor: '',
+    email: '',
     imagem_base64: '',
     ativo: true,
   });
@@ -235,6 +236,15 @@ function Gestao() {
   // Funções de CRUD - Consultores
   const handleSaveConsultor = async () => {
     try {
+      if (!consultorForm.email) {
+        showSnackbar('Email é obrigatório', 'error');
+        return;
+      }
+      const payload = {
+        ...consultorForm,
+        email: consultorForm.email.trim()
+      };
+
       if (consultorForm.id) {
         await fetch(`${API_URL}/consultor/${consultorForm.id}`, {
           method: 'PUT',
@@ -242,7 +252,7 @@ function Gestao() {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${getToken()}`
           },
-          body: JSON.stringify(consultorForm),
+          body: JSON.stringify(payload),
         });
         showSnackbar('Consultor atualizado com sucesso', 'success');
       } else {
@@ -252,7 +262,7 @@ function Gestao() {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${getToken()}`
           },
-          body: JSON.stringify(consultorForm),
+          body: JSON.stringify(payload),
         });
         showSnackbar('Consultor cadastrado com sucesso', 'success');
       }
@@ -298,6 +308,7 @@ function Gestao() {
       id: null,
       nome: '',
       id_agendor: '',
+      email: '',
       imagem_base64: '',
       ativo: true,
     });
@@ -617,8 +628,8 @@ function Gestao() {
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>Nome</TableCell>
-                  <TableCell>ID Agendor</TableCell>
+                    <TableCell>Nome</TableCell>
+                    <TableCell>ID Agendor</TableCell>
                   <TableCell>Status</TableCell>
                   <TableCell align="right">Ações</TableCell>
                 </TableRow>
@@ -686,6 +697,15 @@ function Gestao() {
             fullWidth
             value={consultorForm.nome}
             onChange={(e) => setConsultorForm({ ...consultorForm, nome: e.target.value })}
+          />
+          <TextField
+            margin="dense"
+            label="Email"
+            type="email"
+            fullWidth
+            required
+            value={consultorForm.email}
+            onChange={(e) => setConsultorForm({ ...consultorForm, email: e.target.value })}
           />
           <TextField
             margin="dense"

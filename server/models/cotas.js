@@ -62,9 +62,13 @@ module.exports = (sequelize, DataTypes) => {
       consultorId: {
         type: DataTypes.INTEGER
       },
+      consultorLegado: {
+        type: DataTypes.STRING,
+        allowNull: true
+      },
       idagendor: {
         type: DataTypes.STRING,
-        allowNull: false
+        allowNull: true
       },
       administradora: {
         type: DataTypes.STRING,

@@ -113,7 +113,7 @@ async function exportar(req, res) {
       const consultoresLista = Array.isArray(cota.consultores) ? cota.consultores : [];
       const nomesConsultores = consultoresLista.length
         ? consultoresLista.map(consultor => consultor.nome).filter(Boolean).join(', ')
-        : '';
+        : (cota.consultorLegado || '');
       const idagendors = consultoresLista.length
         ? consultoresLista
           .map(consultor => consultor.idagendor)

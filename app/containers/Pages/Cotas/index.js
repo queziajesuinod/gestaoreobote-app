@@ -71,6 +71,7 @@ const initialFilters = {
 
 const TIPOS_CONTEMPLACAO = [
   { value: '', label: 'Todos os tipos' },
+  { value: 'LANCE_FIDELIDADE', label: 'Lance Fidelidade' },
   { value: 'LANCE_FIXO', label: 'Lance Fixo' },
   { value: 'LANCE_LIVRE', label: 'Lance Livre' },
   { value: 'SORTEIO', label: 'Sorteio' }
@@ -115,6 +116,7 @@ function formatDate(value) {
 
 function formatTipoContemplacao(tipo) {
   const normalized = (tipo || '').toUpperCase();
+  if (normalized === 'LANCE_FIDELIDADE') return 'Lance Fidelidade';
   if (normalized === 'LANCE_FIXO') return 'Lance Fixo';
   if (normalized === 'LANCE_LIVRE' || normalized === 'LANCE') return 'Lance Livre';
   if (normalized === 'SORTEIO') return 'Sorteio';
@@ -130,7 +132,31 @@ function formatCotaIdentificador(cota) {
 
 function mapConsultoresDetalhes(cota) {
   const lista = Array.isArray(cota?.consultores) ? cota.consultores : [];
-  if (!lista.length) return [];
+  if (!lista.length) {
+    if (cota?.consultor?.nome) {
+      return [{
+        id: cota.consultor.id ?? `consultor-${cota.id}`,
+        nome: cota.consultor.nome,
+        idagendor: cota.idagendor || cota.consultor?.id_agendor || null,
+        valorIndividual: cota.valor ?? null,
+        valorIndividualFormatado: cota.valor
+          ? Number(cota.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+          : null
+      }];
+    }
+    if (cota?.consultorLegado) {
+      return [{
+        id: `legado-${cota.id}`,
+        nome: cota.consultorLegado,
+        valorIndividual: cota.valor,
+        valorIndividualFormatado: cota.valor
+          ? Number(cota.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+          : null,
+        idagendor: null
+      }];
+    }
+    return [];
+  }
   const valorBase = Number(
     cota?.valorDistribuidoPorConsultor ??
     (lista.length ? (Number(cota?.valor ?? 0) / lista.length) : 0)
@@ -309,7 +335,7 @@ function CotasPage() {
         case 'cliente':
           return (item.cliente?.nome || '').toString().toLowerCase();
         case 'consultor':
-          return (item.consultor?.nome || '').toString().toLowerCase();
+          return (item.consultor?.nome || item.consultorLegado || '').toString().toLowerCase();
         case 'grupo':
           return (item.grupo || '').toString().toLowerCase();
         case 'cota':
@@ -936,7 +962,7 @@ function CotasPage() {
                     <TableCell sx={{ fontSize: '0.8rem' }}>{cota.cliente?.nome || '—'}</TableCell>
                     <TableCell sx={{ fontSize: '0.8rem' }}>
                       {consultoresResumo.length === 0 ? (
-                        '—'
+                        cota.consultor?.nome || cota.consultorLegado || '—'
                       ) : (
                         consultoresResumo.map((consultor) => (
                           <Box

@@ -17,6 +17,12 @@ const contemplacaoInclude = {
 
 const CONSULTOR_ATTRIBUTES = ['id', 'nome', 'id_agendor', 'ativo'];
 
+const consultorSingularInclude = {
+  model: Consultor,
+  as: 'consultor',
+  attributes: CONSULTOR_ATTRIBUTES
+};
+
 const buildConsultoresInclude = (overrides = {}) => {
   const { throughWhere, ...rest } = overrides;
   return {
@@ -189,6 +195,7 @@ async function listarCotas(consultorId = null) {
   const registros = await Cota.findAll({
     include: [
       consultoresInclude,
+      consultorSingularInclude,
       {
         model: Cliente,
         as: 'cliente',
@@ -214,6 +221,7 @@ async function buscarPorCliente(clienteId, consultorId = null) {
     where: { clienteId },
     include: [
       consultoresInclude,
+      consultorSingularInclude,
       {
         model: Cliente,
         as: 'cliente',
@@ -291,6 +299,7 @@ async function buscarPorConsultor(consultorId) {
   const registros = await Cota.findAll({
     include: [
       buildConsultoresInclude({ required: true, where: { id: consultorId } }),
+      consultorSingularInclude,
       {
         model: Cliente,
         as: 'cliente',
@@ -330,6 +339,7 @@ async function buscarPorPeriodo(inicio, fim, idagendor = null, consultorId = nul
     where,
     include: [
       consultoresInclude,
+      consultorSingularInclude,
       {
         model: Cliente,
         as: 'cliente',
@@ -551,6 +561,7 @@ async function buscarCotasComFiltros({
   }
 
   includeBase.push(consultorInclude);
+  includeBase.push({ ...consultorSingularInclude });
 
   const contemplacaoRequest = { ...contemplacaoInclude };
   const tiposFiltro = sanitizeStringArray(tipoContemplacao)

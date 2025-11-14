@@ -110,7 +110,7 @@ async function getUserById(id) {
   return sanitizeUser(user);
 }
 
-async function createUser(body) {
+async function createUser(body, options = {}) {
   const {
     name,
     email,
@@ -124,6 +124,10 @@ async function createUser(body) {
 
   if (!perfilId) {
     throw new Error('Perfil é obrigatório.');
+  }
+
+  if (!email) {
+    throw new Error('Email é obrigatório.');
   }
 
   if (!password || password.length < 6) {
@@ -144,6 +148,8 @@ async function createUser(body) {
     image,
     username,
     consultorId: consultorId ? Number(consultorId) : null
+  }, {
+    transaction: options.transaction
   });
   return sanitizeUser(newUser);
 }
