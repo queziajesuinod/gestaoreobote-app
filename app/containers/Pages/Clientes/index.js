@@ -213,12 +213,14 @@ const formatTipoContemplacao = (tipo) => {
 
   const obterConsultoresComValores = (cota) => {
     const lista = Array.isArray(cota?.consultores) ? cota.consultores : [];
+    const LEGADO_IDAGENDOR = '640301';
     if (!lista.length) {
       if (cota?.consultor?.nome) {
+        const usarLegado = (cota.idagendor || '').trim() === LEGADO_IDAGENDOR && cota.consultorLegado;
         return [{
           id: cota.consultor.id ?? `consultor-${cota.id}`,
-          nome: cota.consultor.nome,
-          idagendor: cota.idagendor || cota.consultor?.id_agendor || null,
+          nome: usarLegado ? cota.consultorLegado : cota.consultor.nome,
+          idagendor: usarLegado ? null : (cota.idagendor || cota.consultor?.id_agendor || null),
           valorIndividual: cota.valor ?? null,
           valorIndividualFormatado: cota.valor
             ? Number(cota.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
