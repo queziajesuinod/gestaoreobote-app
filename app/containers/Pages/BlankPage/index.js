@@ -526,7 +526,7 @@ function BlankPage() {
               <MetricCard
                 subtitle="Cotas Vendidas"
                 title="Valor líquido no mês"
-                value={formatCurrencyCompact(resumoCotasMesAtual.liquido)}
+                value={formatCurrencyBR(resumoCotasMesAtual.liquido)}
                 icon={MonetizationOnIcon}
                 gradient="linear-gradient(135deg, #00C6FF 0%, #0078FF 100%)"
                 footerPrimary={`Bruto: ${formatCurrencyBR(resumoCotasMesAtual.bruto)}`}
