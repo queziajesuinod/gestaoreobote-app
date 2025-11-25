@@ -244,6 +244,13 @@ async function atualizarCliente(id, dadosAtualizados) {
 async function deletarCliente(id) {
   const cliente = await Cliente.findByPk(id);
   if (!cliente) throw new Error('Cliente não encontrado');
+  const totalCotasDoCliente = await Cota.count({ where: { clienteId: id } });
+  if (totalCotasDoCliente > 0) {
+    const erro = new Error('Este cliente possui cotas vinculadas. Remova ou mova as cotas antes de excluir o cliente.');
+    erro.status = 409;
+    erro.codigo = 'CLIENTE_POSSUI_COTAS';
+    throw erro;
+  }
   await cliente.destroy();
   return { mensagem: 'Cliente removido com sucesso' };
 }

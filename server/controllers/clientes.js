@@ -119,7 +119,13 @@ module.exports = {
       const resultado = await clienteService.deletarCliente(id);
       return res.status(200).json({ sucesso: true, mensagem: resultado.mensagem });
     } catch (error) {
-      return res.status(500).json({ sucesso: false, erro: error.message });
+      const status = error.status || 500;
+      return res.status(status).json({
+        sucesso: false,
+        erro: error.message,
+        mensagem: error.message,
+        codigo: error.codigo || null
+      });
     }
   }
 };

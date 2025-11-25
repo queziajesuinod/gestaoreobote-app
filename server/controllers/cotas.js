@@ -260,6 +260,23 @@ async function deletar(req, res) {
   }
 }
 
+async function deletarPorCliente(req, res) {
+  try {
+    const perfil = normalizarPerfil(req.user?.perfil);
+    if (!usuarioEhAdminOuRh(perfil)) {
+      return res.status(403).json({ sucesso: false, mensagem: 'Apenas administradores ou RH podem remover cotas.' });
+    }
+
+    const { clienteId } = req.params;
+    const resultado = await cotaService.deletarCotasPorCliente(clienteId);
+    return res.status(200).json({ sucesso: true, ...resultado });
+  } catch (error) {
+    console.error('❌ Erro ao deletar cotas do cliente:', error);
+    const status = error.status || 500;
+    return res.status(status).json({ sucesso: false, mensagem: error.message });
+  }
+}
+
 // 🔹 Buscar por consultor
 async function buscarPorConsultor(req, res) {
   try {
@@ -358,12 +375,13 @@ module.exports = {
   buscarPorCliente,
   atualizar,
   deletar,
+  deletarPorCliente,
   buscarPorConsultor,
   buscarPorPeriodo,
   buscarComFiltros,
   totalPorPeriodo,
   exportar,
   registrarContemplacao,
-  removerContemplacao
-  , mover
+  removerContemplacao,
+  mover
 };
