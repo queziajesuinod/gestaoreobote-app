@@ -769,7 +769,11 @@ async function somarCotasPorPeriodo(dataInicio, dataFim) {
     dtaquisicao: {
       [Op.gte]: inicio,
       [Op.lt]: fimExclusive
+    },
+    consultorId: {
+      [Op.ne]: 2
     }
+
   };
 
   const [valor, valorTotal] = await Promise.all([
