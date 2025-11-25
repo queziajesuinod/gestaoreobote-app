@@ -123,6 +123,7 @@ function Clientes() {
   const [cotaParaMover, setCotaParaMover] = useState(null);
   const [clienteDestinoMovimento, setClienteDestinoMovimento] = useState('');
   const [clienteDestinoMovimentoSearch, setClienteDestinoMovimentoSearch] = useState('');
+  const [removendoCotasCliente, setRemovendoCotasCliente] = useState(false);
 
   const [snackbar, setSnackbar] = useState({
     open: false,
@@ -474,10 +475,11 @@ const formatTipoContemplacao = (tipo) => {
     setOpenDetalhes(false);
     setSelectedCliente(null);
     setCotas([]);
-     setCotaSearchTerm('');
+    setCotaSearchTerm('');
     setCotaEditando(null);
     setOpenCotaDialog(false);
     resetCotaForm();
+    setRemovendoCotasCliente(false);
   };
 
   const handleSubmitCliente = async (event) => {
@@ -574,7 +576,11 @@ const formatTipoContemplacao = (tipo) => {
 
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data?.erro || data?.mensagem || 'Erro ao remover cliente');
+        let mensagemErro = data?.erro || data?.mensagem || 'Erro ao remover cliente';
+        if (data?.codigo === 'CLIENTE_POSSUI_COTAS') {
+          mensagemErro = `${mensagemErro} Utilize a opção "Excluir todas as cotas" nos detalhes do cliente antes de tentar remover.`;
+        }
+        throw new Error(mensagemErro);
       }
 
       await loadClientes();
@@ -879,6 +885,51 @@ const formatTipoContemplacao = (tipo) => {
     }
   };
 
+  const handleDeleteTodasCotasDoCliente = async () => {
+    if (!podeGerenciarClientes) {
+      showSnackbar('Você não tem permissão para remover cotas.', 'error');
+      return;
+    }
+    if (!selectedCliente) return;
+    const possuiCotas = Number(selectedCliente.totalCotas ?? cotas.length ?? 0) > 0;
+    if (!possuiCotas) {
+      showSnackbar('Este cliente não possui cotas para remover.', 'info');
+      return;
+    }
+    const confirmar = window.confirm(`Esta ação removerá todas as cotas do cliente ${selectedCliente.nome}. Deseja continuar?`);
+    if (!confirmar) return;
+
+    setRemovendoCotasCliente(true);
+    try {
+      const response = await fetch(`${API_URL}/cotas/cliente/${selectedCliente.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${getToken()}`
+        }
+      });
+
+      const data = await response.json();
+      if (!response.ok || data?.sucesso === false) {
+        throw new Error(data?.mensagem || data?.erro || 'Erro ao remover cotas do cliente');
+      }
+
+      showSnackbar(data?.mensagem || 'Todas as cotas foram removidas com sucesso.');
+      await loadCotas(selectedCliente.id);
+      const listaAtualizada = await loadClientes();
+      setSelectedCliente(prev => {
+        if (!prev) return prev;
+        const encontrado = listaAtualizada.find(c => c.id === prev.id);
+        return encontrado || prev;
+      });
+    } catch (error) {
+      console.error('❌ Erro ao remover todas as cotas do cliente:', error);
+      showSnackbar(error.message || 'Falha ao remover todas as cotas do cliente', 'error');
+    } finally {
+      setRemovendoCotasCliente(false);
+    }
+  };
+
   const handleOpenMoverCota = (cota) => {
     if (!podeGerenciarClientes) {
       showSnackbar('Você não tem permissão para mover cotas.', 'error');
@@ -1029,6 +1080,8 @@ const formatTipoContemplacao = (tipo) => {
     const inicio = cotasPage * cotasRowsPerPage;
     return cotasFiltradas.slice(inicio, inicio + cotasRowsPerPage);
   }, [cotasFiltradas, cotasPage, cotasRowsPerPage]);
+
+  const clienteTemCotas = (selectedCliente?.totalCotas ?? cotas.length ?? 0) > 0;
 
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
@@ -1353,6 +1406,21 @@ const formatTipoContemplacao = (tipo) => {
                 >
                   Nova Cota
                 </Button>
+              )}
+              {podeGerenciarClientes && (
+                <Tooltip title={clienteTemCotas ? 'Remover todas as cotas deste cliente' : 'Cliente sem cotas para remover'}>
+                  <span>
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      startIcon={<DeleteIcon />}
+                      onClick={handleDeleteTodasCotasDoCliente}
+                      disabled={!clienteTemCotas || removendoCotasCliente || loadingCotas}
+                    >
+                      Excluir todas as cotas
+                    </Button>
+                  </span>
+                </Tooltip>
               )}
             </Box>
           </Box>

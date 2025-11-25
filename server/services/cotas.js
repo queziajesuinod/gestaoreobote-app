@@ -295,6 +295,35 @@ async function deletarCota(id) {
   return { mensagem: 'Cota removida com sucesso' };
 }
 
+async function deletarCotasPorCliente(clienteId) {
+  if (!clienteId) {
+    const erro = new Error('Cliente inválido.');
+    erro.status = 400;
+    throw erro;
+  }
+
+  const cliente = await Cliente.findByPk(clienteId);
+  if (!cliente) {
+    const erro = new Error('Cliente não encontrado.');
+    erro.status = 404;
+    throw erro;
+  }
+
+  const totalRemover = await Cota.count({ where: { clienteId } });
+  if (totalRemover === 0) {
+    return { mensagem: 'Nenhuma cota encontrada para este cliente.', totalRemovidas: 0 };
+  }
+
+  await Cota.destroy({ where: { clienteId } });
+
+  return {
+    mensagem: totalRemover === 1
+      ? '1 cota removida com sucesso.'
+      : `${totalRemover} cotas removidas com sucesso.`,
+    totalRemovidas: totalRemover
+  };
+}
+
 async function obterCotaPorId(id) {
   const cota = await Cota.findByPk(id, {
     include: [
@@ -793,12 +822,13 @@ module.exports = {
   buscarPorCliente,
   atualizarCota,
   deletarCota,
+  deletarCotasPorCliente,
   obterCotaPorId,
   buscarPorConsultor,
   buscarPorPeriodo,
   buscarCotasComFiltros,
   somarCotasPorPeriodo,
   registrarContemplacao,
-  removerContemplacao
-  , moverCota
+  removerContemplacao,
+  moverCota
 };
