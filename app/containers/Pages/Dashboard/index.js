@@ -271,7 +271,6 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
   const [integrantes, setIntegrantes] = useState([]);
   const [consultorSelecionado, setConsultorSelecionado] = useState('');
   const [tipo, setTipo] = useState('Todos');
-  const [status, setStatus] = useState('Todos');
 
   // ==================== ESTADOS - DADOS ====================
   const [tarefas, setTarefas] = useState([]);
@@ -1054,11 +1053,10 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
   useEffect(() => {
     let f = [...tarefas];
     if (tipo !== 'Todos') f = f.filter(t => t.tipo === tipo);
-    if (status !== 'Todos') f = f.filter(t => t.status === status);
     if (consultorSelecionado)
       f = f.filter(t => String(t.consultorId ?? '').trim() === String(consultorSelecionado ?? '').trim());
     setFiltradas(f);
-  }, [tipo, status, consultorSelecionado, tarefas]);
+  }, [tipo, consultorSelecionado, tarefas]);
 
   // ==================== LIMPAR FILTROS ====================
   function limparFiltros() {
@@ -1072,7 +1070,6 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
       ? consultorAgendorLogado
       : '');
     setTipo('Todos');
-    setStatus('Todos');
     setTarefas([]);
     setTarefasComparacao([]);
     setFiltradas([]);
@@ -1083,12 +1080,27 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
   }
 
   // ==================== MÉTRICAS - PERÍODO ATUAL ====================
+  const pendentesAtuais = filtradas.filter(t => t.status === 'Pendente');
+  const pendentesComparacao = tarefasComparacao.filter(t => t.status === 'Pendente');
+
+  // Totais usados nos indicadores principais (somente pendentes)
+  const totalVisitasPendentes = pendentesAtuais.filter(t => t.tipo === 'Visita').length;
+  const totalReunioesPendentes = pendentesAtuais.filter(t => t.tipo === 'Reunião').length;
+  const totalPropostasPendentes = pendentesAtuais.filter(t => t.tipo === 'Proposta').length;
+  const totalGeralPendentes = totalVisitasPendentes + totalReunioesPendentes;
+
+  // Totais gerais (pendentes + concluídas) para os demais cálculos
   const totalVisitas = filtradas.filter(t => t.tipo === 'Visita').length;
   const totalReunioes = filtradas.filter(t => t.tipo === 'Reunião').length;
   const totalPropostas = filtradas.filter(t => t.tipo === 'Proposta').length;
   const totalGeral = totalVisitas + totalReunioes;
 
   // ==================== MÉTRICAS - PERÍODO DE COMPARAÇÃO ====================
+  const totalVisitasCompPendentes = pendentesComparacao.filter(t => t.tipo === 'Visita').length;
+  const totalReunioesCompPendentes = pendentesComparacao.filter(t => t.tipo === 'Reunião').length;
+  const totalPropostasCompPendentes = pendentesComparacao.filter(t => t.tipo === 'Proposta').length;
+  const totalGeralCompPendentes = totalVisitasCompPendentes + totalReunioesCompPendentes;
+
   const totalVisitasComp = tarefasComparacao.filter(t => t.tipo === 'Visita').length;
   const totalReunioesComp = tarefasComparacao.filter(t => t.tipo === 'Reunião').length;
   const totalPropostasComp = tarefasComparacao.filter(t => t.tipo === 'Proposta').length;
@@ -1490,8 +1502,8 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
               <Grid item xs={12} sm={6} md={3}>
                 <IndicadorComparativo
                   titulo="Visitas e Reuniões"
-                  valorAtual={totalGeral}
-                  valorComparativo={totalGeralComp}
+                  valorAtual={totalGeralPendentes}
+                  valorComparativo={totalGeralCompPendentes}
                   cor="#007AFF"
                   mostrarComparacao={habilitarComparacao}
                 />
@@ -1500,8 +1512,8 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
               <Grid item xs={12} sm={6} md={3}>
                 <IndicadorComparativo
                   titulo="Número de Visitas"
-                  valorAtual={totalVisitas}
-                  valorComparativo={totalVisitasComp}
+                  valorAtual={totalVisitasPendentes}
+                  valorComparativo={totalVisitasCompPendentes}
                   cor="#00C7BE"
                   mostrarComparacao={habilitarComparacao}
                 />
@@ -1510,8 +1522,8 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
               <Grid item xs={12} sm={6} md={3}>
                 <IndicadorComparativo
                   titulo="Número de Reuniões"
-                  valorAtual={totalReunioes}
-                  valorComparativo={totalReunioesComp}
+                  valorAtual={totalReunioesPendentes}
+                  valorComparativo={totalReunioesCompPendentes}
                   cor="#FF9500"
                   mostrarComparacao={habilitarComparacao}
                 />
@@ -1520,8 +1532,8 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
               <Grid item xs={12} sm={6} md={3}>
                 <IndicadorComparativo
                   titulo="Número de Propostas"
-                  valorAtual={totalPropostas}
-                  valorComparativo={totalPropostasComp}
+                  valorAtual={totalPropostasPendentes}
+                  valorComparativo={totalPropostasCompPendentes}
                   cor="#34C759"
                   mostrarComparacao={habilitarComparacao}
                 />
