@@ -41,6 +41,7 @@ const API_URL = process.env.REACT_APP_API_URL?.replace(/\/$/, '') || 'http://loc
 const getToken = () => localStorage.getItem('token');
 
 const NOMES_MESES_CURTOS = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
+const CONSULTOR_EXCLUIDO_IDAGENDOR = '640301';
 
 const agruparClientesPorEstado = (clientes = []) => {
   const mapaEstados = new Map();
@@ -140,6 +141,11 @@ const formatCurrencyCompact = (valor) => new Intl.NumberFormat('pt-BR', {
 }).format(Number(valor || 0));
 
 const formatPercent = (valor) => `${Number(valor || 0).toFixed(1)}%`;
+
+const calcularValorDesconsiderandoConsultor = (totalGeral, totalExcluido) => {
+  const resultado = Number(totalGeral || 0) - Number(totalExcluido || 0);
+  return resultado > 0 ? resultado : 0;
+};
 
 const calcularIdade = (dataNascimento, referencia) => {
   if (!dataNascimento || Number.isNaN(dataNascimento.getTime())) return null;
@@ -302,9 +308,17 @@ function BlankPage() {
       const paramsCotas = new URLSearchParams();
       paramsCotas.append('dataInicio', intervaloMesAtual.inicioISO);
       paramsCotas.append('dataFim', intervaloMesAtual.fimISO);
+      const paramsCotasExcluido = new URLSearchParams(paramsCotas);
+      paramsCotasExcluido.append('consultor', CONSULTOR_EXCLUIDO_IDAGENDOR);
 
-      const [totaisResp, clientesResp] = await Promise.all([
+      const [totaisResp, totaisExcluidoResp, clientesResp] = await Promise.all([
         fetch(`${API_URL}/cotas/total?${paramsCotas.toString()}`, {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${getToken()}`
+          }
+        }),
+        fetch(`${API_URL}/cotas/total?${paramsCotasExcluido.toString()}`, {
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${getToken()}`
@@ -325,9 +339,19 @@ function BlankPage() {
 
       const totaisPayload = await totaisResp.json();
       const totaisDados = totaisPayload?.dados || {};
+      let totaisExcluidoDados = { valor: 0, valorTotal: 0 };
+
+      if (totaisExcluidoResp.ok) {
+        const totaisExcluidoPayload = await totaisExcluidoResp.json();
+        totaisExcluidoDados = totaisExcluidoPayload?.dados || {};
+      } else {
+        const texto = await totaisExcluidoResp.text();
+        console.warn(`Falha ao buscar cotas do consultor excluido: ${totaisExcluidoResp.status} - ${texto.slice(0, 200)}`);
+      }
+
       setResumoCotasMesAtual({
-        liquido: Number(totaisDados.valor || 0),
-        bruto: Number(totaisDados.valorTotal || 0)
+        liquido: calcularValorDesconsiderandoConsultor(totaisDados.valor, totaisExcluidoDados.valor),
+        bruto: calcularValorDesconsiderandoConsultor(totaisDados.valorTotal, totaisExcluidoDados.valorTotal)
       });
 
       if (!clientesResp.ok) {
@@ -419,8 +443,10 @@ function BlankPage() {
           const paramsMes = new URLSearchParams();
           paramsMes.append('dataInicio', mes.inicioISO);
           paramsMes.append('dataFim', mes.fimISO);
+          const paramsMesExcluido = new URLSearchParams(paramsMes);
+          paramsMesExcluido.append('consultor', CONSULTOR_EXCLUIDO_IDAGENDOR);
 
-          const [metaResp, totaisMesResp] = await Promise.all([
+          const [metaResp, totaisMesResp, totaisMesExcluidoResp] = await Promise.all([
             fetch(`${API_URL}/metas/referencia?${paramsMes.toString()}`, {
               headers: {
                 'Content-Type': 'application/json',
@@ -428,6 +454,12 @@ function BlankPage() {
               }
             }),
             fetch(`${API_URL}/cotas/total?${paramsMes.toString()}`, {
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${getToken()}`
+              }
+            }),
+            fetch(`${API_URL}/cotas/total?${paramsMesExcluido.toString()}`, {
               headers: {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${getToken()}`
@@ -444,12 +476,18 @@ function BlankPage() {
             const texto = await totaisMesResp.text();
             throw new Error(`Erro cotas ${mes.rotulo}: ${totaisMesResp.status} - ${texto.slice(0, 200)}`);
           }
+          if (!totaisMesExcluidoResp.ok) {
+            const texto = await totaisMesExcluidoResp.text();
+            console.warn(`Falha ao buscar cotas do consultor excluido em ${mes.rotulo}: ${totaisMesExcluidoResp.status} - ${texto.slice(0, 200)}`);
+          }
 
           const metaPayload = await metaResp.json();
           const metaValor = Number(metaPayload?.meta?.valor || 0);
 
           const totaisMesPayload = await totaisMesResp.json();
-          const realizado = Number(totaisMesPayload?.dados?.valor || 0);
+          const totaisExcluidoPayload = totaisMesExcluidoResp.ok ? await totaisMesExcluidoResp.json() : null;
+          const valorExcluido = totaisExcluidoPayload?.dados ? Number(totaisExcluidoPayload.dados.valor || 0) : 0;
+          const realizado = calcularValorDesconsiderandoConsultor(totaisMesPayload?.dados?.valor, valorExcluido);
 
           const percentual = metaValor > 0 ? Math.min(100, (realizado / metaValor) * 100) : 0;
 
