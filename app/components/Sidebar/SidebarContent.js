@@ -11,7 +11,20 @@ import logo from 'dan-images/logo.svg';
 import MainMenu from './MainMenu';
 import useStyles from './sidebar-jss';
 
-function SidebarContent(props) {
+function SidebarContent({
+  turnDarker = false,
+  drawerPaper,
+  toggleDrawerOpen = () => {},
+  loadTransition = () => {},
+  leftSidebar,
+  dataMenu,
+  status,
+  anchorEl = null,
+  openMenuStatus,
+  closeMenuStatus,
+  changeStatus,
+  isLogin = true
+}) {
   const { classes, cx } = useStyles();
   const [transform, setTransform] = useState(0);
 
@@ -27,21 +40,6 @@ function SidebarContent(props) {
       window.removeEventListener('scroll', handleScroll);
     };
   }, []);
-
-  const {
-    turnDarker,
-    drawerPaper,
-    toggleDrawerOpen,
-    loadTransition,
-    leftSidebar,
-    dataMenu,
-    status,
-    anchorEl,
-    openMenuStatus,
-    closeMenuStatus,
-    changeStatus,
-    isLogin
-  } = props;
 
   const setStatus = st => {
     switch (st) {
@@ -107,14 +105,6 @@ SidebarContent.propTypes = {
   closeMenuStatus: PropTypes.func.isRequired,
   changeStatus: PropTypes.func.isRequired,
   isLogin: PropTypes.bool
-};
-
-SidebarContent.defaultProps = {
-  turnDarker: false,
-  toggleDrawerOpen: () => {},
-  loadTransition: () => {},
-  anchorEl: null,
-  isLogin: true,
 };
 
 export default SidebarContent;

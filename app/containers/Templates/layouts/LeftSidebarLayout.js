@@ -1,5 +1,5 @@
 import React, { Fragment } from 'react';
-import { PropTypes } from 'prop-types';
+import PropTypes from 'prop-types';
 import { useLocation } from 'react-router-dom';
 
 import Fade from '@mui/material/Fade';
@@ -14,25 +14,24 @@ import useMenuData from '../../../utils/useMenuData';
 import Decoration from '../Decoration';
 import useStyles from '../appStyles-jss';
 
-function LeftSidebarLayout(props) {
+function LeftSidebarLayout({
+  children,
+  toggleDrawer,
+  sidebarOpen,
+  loadTransition,
+  pageLoaded = false,
+  mode,
+  gradient,
+  deco,
+  goTo,
+  bgPosition,
+  changeMode,
+  place,
+  titleException,
+  handleOpenGuide
+}) {
   const { classes, cx } = useStyles();
   const location = useLocation();
-  const {
-    children,
-    toggleDrawer,
-    sidebarOpen,
-    loadTransition,
-    pageLoaded,
-    mode,
-    gradient,
-    deco,
-    goTo,
-    bgPosition,
-    changeMode,
-    place,
-    titleException,
-    handleOpenGuide
-  } = props;
 
   // Cria um objeto history compatível para componentes legados
   const history = {
@@ -109,10 +108,6 @@ LeftSidebarLayout.propTypes = {
   place: PropTypes.string.isRequired,
   titleException: PropTypes.array.isRequired,
   handleOpenGuide: PropTypes.func.isRequired
-};
-
-LeftSidebarLayout.defaultProps = {
-  pageLoaded: false,
 };
 
 export default LeftSidebarLayout;

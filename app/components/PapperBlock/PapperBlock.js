@@ -5,18 +5,17 @@ import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
 import useStyles from './papperStyle-jss';
 
-function PapperBlock(props) {
+function PapperBlock({
+  title,
+  desc,
+  children,
+  whiteBg = false,
+  noMargin = false,
+  colorMode = false,
+  overflowX = false,
+  icon = 'ion-ios-bookmark-outline'
+}) {
   const { classes, cx } = useStyles();
-  const {
-    title,
-    desc,
-    children,
-    whiteBg,
-    noMargin,
-    colorMode,
-    overflowX,
-    icon
-  } = props;
   return (
     <div>
       <Paper className={cx(classes.root, noMargin && classes.noMargin, colorMode && classes.colorMode)} elevation={0}>
@@ -51,14 +50,6 @@ PapperBlock.propTypes = {
   colorMode: PropTypes.bool,
   noMargin: PropTypes.bool,
   overflowX: PropTypes.bool,
-};
-
-PapperBlock.defaultProps = {
-  whiteBg: false,
-  noMargin: false,
-  colorMode: false,
-  overflowX: false,
-  icon: 'ion-ios-bookmark-outline'
 };
 
 export default PapperBlock;
