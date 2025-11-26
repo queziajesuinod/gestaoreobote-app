@@ -1119,8 +1119,9 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
   const taxaConversaoNegociosPendentesGanhos = (totalNegociosGanhos) > 0
     ? Math.round((totalNegociosGanhos / (totalNegociosEmAndamento)) * 100)
     : 0;
-  const taxaConversao = (totalReunioes + totalVisitas) > 0
-    ? Math.round((totalNegociosGanhos / (totalReunioes + totalVisitas)) * 100)
+  const totalReunioesVisitasConcluidas = totalReunioesConcluidas + totalVisitasConcluidas;
+  const taxaConversao = totalReunioesVisitasConcluidas > 0
+    ? Math.round((totalNegociosGanhos / totalReunioesVisitasConcluidas) * 100)
     : 0;
 
   const conversaoPorConsultor = Object.entries(
@@ -1276,12 +1277,12 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
     ? Math.ceil((new Date(dataFim) - new Date(dataInicio)) / (1000 * 60 * 60 * 24)) + 1
     : 0;
   const mediaTarefasPorDia = diasPeriodo > 0
-    ? ((totalReunioes + totalVisitas + totalPropostas) / diasPeriodo).toFixed(1)
+    ? (totalTarefasConcluidas / diasPeriodo).toFixed(1)
     : 0;
 
 
   const mediaTarefasReuniaoVisitaPorDia = diasPeriodo > 0
-    ? ((totalReunioes + totalVisitas) / diasPeriodo).toFixed(1)
+    ? (totalReunioesVisitasConcluidas / diasPeriodo).toFixed(1)
     : 0;
 
 
@@ -1711,7 +1712,7 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
                       {taxaConversao}%
                     </Typography>
                     <Typography variant="body2" color="textSecondary">
-                      {totalNegociosGanhos} Negócios Ganhos/ {totalReunioes + totalVisitas} Reuniões+Visitas
+                      {totalNegociosGanhos} Negócios Ganhos/ {totalReunioesVisitasConcluidas} Reuniões+Visitas concluídas
                     </Typography>
                   </Paper>
 
@@ -1723,7 +1724,7 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
                       {mediaTarefasPorDia}
                     </Typography>
                     <Typography variant="body2" color="textSecondary">
-                      {totalPropostas + totalReunioes + totalVisitas} tarefas / {diasPeriodo} dias
+                      {totalTarefasConcluidas} tarefas concluídas / {diasPeriodo} dias
                     </Typography>
                   </Paper>
                 </Box>
@@ -1739,7 +1740,7 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
                       {mediaTarefasReuniaoVisitaPorDia}
                     </Typography>
                     <Typography variant="body2" color="textSecondary">
-                      {totalReunioes + totalVisitas} Reuniões + Visitas / {diasPeriodo} dias
+                      {totalReunioesVisitasConcluidas} Reuniões + Visitas concluídas / {diasPeriodo} dias
                     </Typography>
                   </Paper>
 
