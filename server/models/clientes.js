@@ -51,10 +51,7 @@ module.exports = (sequelize) => {
     },
     email: {
       type: DataTypes.STRING,
-      allowNull: false,
-      validate: {
-        isEmail: { msg: 'E-mail inválido' }
-      }
+      allowNull: false
     },
     createdAt: {
       type: DataTypes.DATE,

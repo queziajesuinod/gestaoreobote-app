@@ -12,26 +12,18 @@ const normalizeEmail = (value) => {
   return value.toString().trim();
 };
 
-const normalizeEmailLower = (value) => normalizeEmail(value).toLowerCase();
-
-function buildDuplicateWhere({ cpf, emailLower }) {
+function buildDuplicateWhere({ cpf }) {
   const conditions = [];
 
   if (cpf) {
     conditions.push({ cpf });
   }
 
-  if (emailLower) {
-    conditions.push(
-      Sequelize.where(Sequelize.fn('LOWER', Sequelize.col('email')), emailLower)
-    );
-  }
-
   return conditions;
 }
 
-async function assertClienteNaoDuplicado({ cpf = '', emailLower = '' }, ignoreId = null) {
-  const orConditions = buildDuplicateWhere({ cpf, emailLower });
+async function assertClienteNaoDuplicado({ cpf = '' }, ignoreId = null) {
+  const orConditions = buildDuplicateWhere({ cpf });
 
   if (orConditions.length === 0) {
     return;
@@ -48,12 +40,8 @@ async function assertClienteNaoDuplicado({ cpf = '', emailLower = '' }, ignoreId
   const existente = await Cliente.findOne({ where });
   if (existente) {
     let mensagem = 'Já existe um cliente cadastrado com os mesmos dados informados.';
-    if (cpf && emailLower) {
-      mensagem = 'Já existe um cliente cadastrado com este CPF ou e-mail.';
-    } else if (cpf) {
-      mensagem = 'Já existe um cliente cadastrado com este CPF.';
-    } else if (emailLower) {
-      mensagem = 'Já existe um cliente cadastrado com este e-mail.';
+    if (cpf) {
+      mensagem = 'Já existe um cliente cadastrado com este CPF/CNPJ.';
     }
 
     const erro = new Error(mensagem);
@@ -189,9 +177,8 @@ async function createCliente(body) {
   const cpfSanitizado = sanitizeDigits(cpf);
   const celularSanitizado = sanitizeDigits(celular);
   const emailNormalizado = normalizeEmail(email);
-  const emailLower = normalizeEmailLower(email);
 
-  await assertClienteNaoDuplicado({ cpf: cpfSanitizado, emailLower });
+  await assertClienteNaoDuplicado({ cpf: cpfSanitizado });
 
   const novoCliente = await Cliente.create({
     nome,
@@ -229,12 +216,7 @@ async function atualizarCliente(id, dadosAtualizados) {
     ? (payload.cpf || '')
     : (cliente.cpf || '');
 
-  const possuiEmailNoPayload = Object.prototype.hasOwnProperty.call(payload, 'email');
-  const emailLower = possuiEmailNoPayload
-    ? normalizeEmailLower(payload.email || '')
-    : normalizeEmailLower(cliente.email || '');
-
-  await assertClienteNaoDuplicado({ cpf: cpfSanitizado, emailLower }, cliente.id);
+  await assertClienteNaoDuplicado({ cpf: cpfSanitizado }, cliente.id);
 
   await cliente.update(payload);
   return cliente;

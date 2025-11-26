@@ -278,13 +278,20 @@ const formatTipoContemplacao = (tipo) => {
     return value.toString().replace(/\D/g, '');
   };
 
-  const formatCpf = (value = '') => {
-    const digits = sanitizeDigits(value).slice(0, 11);
+  const formatDocumento = (value = '') => {
+    const digits = sanitizeDigits(value).slice(0, 14);
     if (!digits) return '';
+    if (digits.length <= 11) {
+      return digits
+        .replace(/(\d{3})(\d)/, '$1.$2')
+        .replace(/(\d{3})(\d)/, '$1.$2')
+        .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+    }
     return digits
+      .replace(/(\d{2})(\d)/, '$1.$2')
       .replace(/(\d{3})(\d)/, '$1.$2')
-      .replace(/(\d{3})(\d)/, '$1.$2')
-      .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+      .replace(/(\d{3})(\d)/, '$1/$2')
+      .replace(/(\d{4})(\d{1,2})$/, '$1-$2');
   };
 
   const formatPhone = (value = '') => {
@@ -447,7 +454,7 @@ const formatTipoContemplacao = (tipo) => {
     setClienteEditando(cliente);
     setClienteForm({
       nome: cliente.nome || '',
-      cpf: formatCpf(cliente.cpf),
+      cpf: formatDocumento(cliente.cpf),
       cidade: cliente.cidade || '',
       estado: cliente.estado || '',
       dtnascimento: formatDateForInput(cliente.dtnascimento),
@@ -497,7 +504,6 @@ const formatTipoContemplacao = (tipo) => {
       const cpfSanitizado = sanitizeDigits(clienteForm.cpf);
       const celularSanitizado = sanitizeDigits(clienteForm.celular);
       const emailTrimmed = (clienteForm.email || '').trim();
-      const emailLower = emailTrimmed.toLowerCase();
 
       const duplicado = clientes.some(cliente => {
         if (emEdicao && cliente.id === clienteEditando.id) {
@@ -505,16 +511,13 @@ const formatTipoContemplacao = (tipo) => {
         }
 
         const cpfExistente = sanitizeDigits(cliente.cpf);
-        const emailExistente = (cliente.email || '').trim().toLowerCase();
-
         const mesmoCpf = cpfSanitizado && cpfExistente && cpfExistente === cpfSanitizado;
-        const mesmoEmail = emailLower && emailExistente === emailLower;
 
-        return mesmoCpf || mesmoEmail;
+        return mesmoCpf;
       });
 
       if (duplicado) {
-        showSnackbar('Já existe um cliente cadastrado com este CPF ou e-mail.', 'error');
+        showSnackbar('Já existe um cliente cadastrado com este CPF/CNPJ.', 'error');
         return;
       }
 
@@ -1271,9 +1274,9 @@ const formatTipoContemplacao = (tipo) => {
               </Grid>
               <Grid item xs={12} md={6}>
                 <TextField
-                  label="CPF"
+                  label="CPF/CNPJ"
                   value={clienteForm.cpf}
-                  onChange={e => setClienteForm(prev => ({ ...prev, cpf: formatCpf(e.target.value) }))}
+                  onChange={e => setClienteForm(prev => ({ ...prev, cpf: formatDocumento(e.target.value) }))}
                   fullWidth
                 />
               </Grid>
@@ -1289,7 +1292,7 @@ const formatTipoContemplacao = (tipo) => {
               <Grid item xs={12} md={6}>
                 <TextField
                   label="Email"
-                  type="email"
+                  type="text"
                   value={clienteForm.email}
                   onChange={e => setClienteForm(prev => ({ ...prev, email: e.target.value }))}
                   fullWidth
@@ -1366,7 +1369,7 @@ const formatTipoContemplacao = (tipo) => {
                 {selectedCliente.email} · {formatPhone(selectedCliente.celular)}
               </Typography>
               <Typography variant="body2" color="textSecondary">
-                CPF: {formatCpf(selectedCliente.cpf) || '—'} · Nascimento: {selectedCliente.dtnascimento ? new Date(selectedCliente.dtnascimento).toLocaleDateString() : '—'}
+                CPF/CNPJ: {formatDocumento(selectedCliente.cpf) || '—'} · Nascimento: {selectedCliente.dtnascimento ? new Date(selectedCliente.dtnascimento).toLocaleDateString() : '—'}
               </Typography>
               <Typography variant="body2" color="textSecondary">
                 {selectedCliente.cidade ? `${selectedCliente.cidade}/${selectedCliente.estado || '--'}` : 'Cidade não informada'}

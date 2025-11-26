@@ -62,7 +62,8 @@ exports.getTarefas = async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Erro em getTarefas:', error.message);
-    res.status(500).json({ error: 'Erro ao buscar tarefas' });
+    const detalhe = error?.response?.data || error?.message || 'Erro ao buscar tarefas';
+    res.status(500).json({ error: 'Erro ao buscar tarefas', detalhe });
   }
 };
 
