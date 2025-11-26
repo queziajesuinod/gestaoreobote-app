@@ -1083,16 +1083,35 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
   }
 
   // ==================== MÉTRICAS - PERÍODO ATUAL ====================
+  const concluidasAtuais = filtradas.filter(t => t.status === 'Concluída');
+  const concluidasComparacao = tarefasComparacao.filter(t => t.status === 'Concluída');
+
+  const totalVisitasConcluidas = concluidasAtuais.filter(t => t.tipo === 'Visita').length;
+  const totalReunioesConcluidas = concluidasAtuais.filter(t => t.tipo === 'Reunião').length;
+  const totalPropostasConcluidas = concluidasAtuais.filter(t => t.tipo === 'Proposta').length;
+  const totalGeralConcluidas = totalVisitasConcluidas + totalReunioesConcluidas;
+
   const totalVisitas = filtradas.filter(t => t.tipo === 'Visita').length;
   const totalReunioes = filtradas.filter(t => t.tipo === 'Reunião').length;
   const totalPropostas = filtradas.filter(t => t.tipo === 'Proposta').length;
   const totalGeral = totalVisitas + totalReunioes;
+  const totalTarefasConcluidas = concluidasAtuais.length;
 
   // ==================== MÉTRICAS - PERÍODO DE COMPARAÇÃO ====================
+  const totalVisitasCompConcluidas = concluidasComparacao.filter(t => t.tipo === 'Visita').length;
+  const totalReunioesCompConcluidas = concluidasComparacao.filter(t => t.tipo === 'Reunião').length;
+  const totalPropostasCompConcluidas = concluidasComparacao.filter(t => t.tipo === 'Proposta').length;
+  const totalGeralCompConcluidas = totalVisitasCompConcluidas + totalReunioesCompConcluidas;
+
   const totalVisitasComp = tarefasComparacao.filter(t => t.tipo === 'Visita').length;
   const totalReunioesComp = tarefasComparacao.filter(t => t.tipo === 'Reunião').length;
   const totalPropostasComp = tarefasComparacao.filter(t => t.tipo === 'Proposta').length;
   const totalGeralComp = totalVisitasComp + totalReunioesComp;
+  const totalTarefasConcluidasComp = concluidasComparacao.length;
+
+  const variacaoTarefasConcluidas = habilitarComparacao && totalTarefasConcluidasComp > 0
+    ? Math.round(((totalTarefasConcluidas - totalTarefasConcluidasComp) / totalTarefasConcluidasComp) * 100)
+    : null;
 
   // ==================== TAXA DE CONVERSÃO ====================
   const totalNegociosGanhos = negociosGanhos.length;
@@ -1490,8 +1509,8 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
               <Grid item xs={12} sm={6} md={3}>
                 <IndicadorComparativo
                   titulo="Visitas e Reuniões"
-                  valorAtual={totalGeral}
-                  valorComparativo={totalGeralComp}
+                  valorAtual={totalGeralConcluidas}
+                  valorComparativo={totalGeralCompConcluidas}
                   cor="#007AFF"
                   mostrarComparacao={habilitarComparacao}
                 />
@@ -1500,8 +1519,8 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
               <Grid item xs={12} sm={6} md={3}>
                 <IndicadorComparativo
                   titulo="Número de Visitas"
-                  valorAtual={totalVisitas}
-                  valorComparativo={totalVisitasComp}
+                  valorAtual={totalVisitasConcluidas}
+                  valorComparativo={totalVisitasCompConcluidas}
                   cor="#00C7BE"
                   mostrarComparacao={habilitarComparacao}
                 />
@@ -1510,8 +1529,8 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
               <Grid item xs={12} sm={6} md={3}>
                 <IndicadorComparativo
                   titulo="Número de Reuniões"
-                  valorAtual={totalReunioes}
-                  valorComparativo={totalReunioesComp}
+                  valorAtual={totalReunioesConcluidas}
+                  valorComparativo={totalReunioesCompConcluidas}
                   cor="#FF9500"
                   mostrarComparacao={habilitarComparacao}
                 />
@@ -1520,8 +1539,8 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
               <Grid item xs={12} sm={6} md={3}>
                 <IndicadorComparativo
                   titulo="Número de Propostas"
-                  valorAtual={totalPropostas}
-                  valorComparativo={totalPropostasComp}
+                  valorAtual={totalPropostasConcluidas}
+                  valorComparativo={totalPropostasCompConcluidas}
                   cor="#34C759"
                   mostrarComparacao={habilitarComparacao}
                 />
@@ -1739,51 +1758,80 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
               </Grid>
 
               <Grid item xs={12} md={4} style={{ display: 'flex' }}>
-                <Paper elevation={2} style={{ padding: 20, height: '100%', textAlign: 'center', width: '100%' }}>
-                  <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                    Meta de Vendas
-                  </Typography>
-                  {metaAtiva ? (
-                    <>
-                      <Box position="relative" display="inline-flex" sx={{ mt: 2, mb: 2 }}>
-                        <CircularProgress variant="determinate" value={metaPercentual} size={140} thickness={5} />
-                        <Box
-                          top={0}
-                          left={0}
-                          bottom={0}
-                          right={0}
-                          position="absolute"
-                          display="flex"
-                          alignItems="center"
-                          justifyContent="center"
-                        >
-                          <Typography variant="h4" component="div" color="textPrimary">
-                            {`${Math.round(metaPercentual)}%`}
-                          </Typography>
-                        </Box>
-                      </Box>
-                      <Typography variant="body1" color="textSecondary">
-                        {formatCurrencyBR(totalMetaLiquido)} de {formatCurrencyBR(metaValorNumero)}
-                      </Typography>
-                      <Typography variant="caption" color="textSecondary" display="block">
-                        {formatDateBR(metaAtiva.dataInicio)}
-                        {metaAtiva.dataFim ? ` até ${formatDateBR(metaAtiva.dataFim)}` : ' em diante'}
-                      </Typography>
-                      {metaValorNumero > 0 && (
-                        <Typography variant="caption" color="textSecondary" display="block">
-                          Restante: {formatCurrencyBR(metaValorRestante)}
-                        </Typography>
-                      )}
-                      <Typography variant="caption" color="textSecondary" display="block">
-                        Valor Bruto: {formatCurrencyBR(totalMetaBruto)}
-                      </Typography>
-                    </>
-                  ) : (
-                    <Typography variant="body2" color="textSecondary" sx={{ mt: 4 }}>
-                      Nenhuma meta cadastrada para o período selecionado.
+                <Box style={{ display: 'flex', flexDirection: 'column', gap: 24, width: '100%' }}>
+                  <Paper elevation={2} style={{ padding: 20, textAlign: 'center' }}>
+                    <Typography variant="h6" gutterBottom>
+                      Tarefas Concluídas<br /> (Comparativo)
                     </Typography>
-                  )}
-                </Paper>
+                    <Typography variant="h2" color="primary" style={{ fontWeight: 'bold' }}>
+                      {totalTarefasConcluidas}
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      {habilitarComparacao
+                        ? `${totalTarefasConcluidasComp} no período de comparação`
+                        : 'Sem período de comparação'}
+                    </Typography>
+                    {habilitarComparacao && (
+                      <Typography
+                        variant="body2"
+                        style={{
+                          marginTop: 6,
+                          color: variacaoTarefasConcluidas > 0 ? '#34C759' : variacaoTarefasConcluidas < 0 ? '#FF3B30' : '#8E8E93'
+                        }}
+                      >
+                        {variacaoTarefasConcluidas !== null
+                          ? `Variação: ${variacaoTarefasConcluidas > 0 ? '+' : ''}${variacaoTarefasConcluidas}%`
+                          : 'Variação indisponível'}
+                      </Typography>
+                    )}
+                  </Paper>
+
+                  <Paper elevation={2} style={{ padding: 20, height: '100%', textAlign: 'center', width: '100%' }}>
+                    <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                      Meta de Vendas
+                    </Typography>
+                    {metaAtiva ? (
+                      <>
+                        <Box position="relative" display="inline-flex" sx={{ mt: 2, mb: 2 }}>
+                          <CircularProgress variant="determinate" value={metaPercentual} size={140} thickness={5} />
+                          <Box
+                            top={0}
+                            left={0}
+                            bottom={0}
+                            right={0}
+                            position="absolute"
+                            display="flex"
+                            alignItems="center"
+                            justifyContent="center"
+                          >
+                            <Typography variant="h4" component="div" color="textPrimary">
+                              {`${Math.round(metaPercentual)}%`}
+                            </Typography>
+                          </Box>
+                        </Box>
+                        <Typography variant="body1" color="textSecondary">
+                          {formatCurrencyBR(totalMetaLiquido)} de {formatCurrencyBR(metaValorNumero)}
+                        </Typography>
+                        <Typography variant="caption" color="textSecondary" display="block">
+                          {formatDateBR(metaAtiva.dataInicio)}
+                          {metaAtiva.dataFim ? ` até ${formatDateBR(metaAtiva.dataFim)}` : ' em diante'}
+                        </Typography>
+                        {metaValorNumero > 0 && (
+                          <Typography variant="caption" color="textSecondary" display="block">
+                            Restante: {formatCurrencyBR(metaValorRestante)}
+                          </Typography>
+                        )}
+                        <Typography variant="caption" color="textSecondary" display="block">
+                          Valor Bruto: {formatCurrencyBR(totalMetaBruto)}
+                        </Typography>
+                      </>
+                    ) : (
+                      <Typography variant="body2" color="textSecondary" sx={{ mt: 4 }}>
+                        Nenhuma meta cadastrada para o período selecionado.
+                      </Typography>
+                    )}
+                  </Paper>
+                </Box>
               </Grid>
             </Grid>
 
