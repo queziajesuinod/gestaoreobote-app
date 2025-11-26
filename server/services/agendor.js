@@ -8,8 +8,12 @@ const API_AGENDOR_TOKEN = process.env.API_AGENDOR_TOKEN; // ⚠️ deve conter s
 
 const CONFIG = {
   TASKS_PER_PAGE: 100,
-  DELAY_BETWEEN_REQUESTS: 400 // ms entre páginas
+  DELAY_BETWEEN_REQUESTS: 400, // ms entre poginas
+  MAX_RETRIES: 3,
+  RETRY_BASE_DELAY: 1000
 };
+
+const inflightTarefas = new Map();
 
 // ===================== FUNÇÃO PRINCIPAL =====================
 async function buscarTarefas({ consultores = [], tipo, dataInicio, dataFim }) {
@@ -74,43 +78,78 @@ async function buscarTarefas({ consultores = [], tipo, dataInicio, dataFim }) {
 
 // ===================== BUSCAR TAREFAS COM PAGINAÇÃO =====================
 async function buscarTarefasPorRange({ dataInicio, dataFim }) {
-  let todas = [];
-  let page = 1;
-  let hasMoreData = true;
+  const chave = `${dataInicio || 'sem-inicio'}_${dataFim || 'sem-fim'}`;
+  if (inflightTarefas.has(chave)) {
+    console.log(`🔄 Usando chamada em andamento para tarefas (${chave})`);
+    return inflightTarefas.get(chave);
+  }
 
-  while (hasMoreData) {
-    const params = {
-      page,
-      per_page: CONFIG.TASKS_PER_PAGE
-    };
+  const promessa = (async () => {
+    let todas = [];
+    let page = 1;
+    let hasMoreData = true;
 
-    if (dataInicio) params.dueDateGt = dataInicio;
-    if (dataFim) params.dueDateLt = dataFim;
+    while (hasMoreData) {
+      const params = {
+        page,
+        per_page: CONFIG.TASKS_PER_PAGE
+      };
 
-    const url = `${API_AGENDOR_URL}/tasks`;
+      if (dataInicio) params.dueDateGt = dataInicio;
+      if (dataFim) params.dueDateLt = dataFim;
 
-    const response = await axios.get(url, {
+      const url = `${API_AGENDOR_URL}/tasks`;
+
+      const response = await fetchComRetry(url, { params });
+
+      const data = response.data.data || [];
+      todas = [...todas, ...data];
+
+      console.log(`📄 Página ${page}: ${data.length} tarefas`);
+
+      if (data.length < CONFIG.TASKS_PER_PAGE) {
+        hasMoreData = false;
+      } else {
+        page++;
+        await esperar(CONFIG.DELAY_BETWEEN_REQUESTS);
+      }
+    }
+
+    return todas;
+  })();
+
+  inflightTarefas.set(chave, promessa);
+  try {
+    return await promessa;
+  } finally {
+    inflightTarefas.delete(chave);
+  }
+}
+
+async function fetchComRetry(url, { params, tentativa = 1 }) {
+  try {
+    return await axios.get(url, {
       headers: {
-        Authorization: `Token ${API_AGENDOR_TOKEN}`, // ✅ CORRIGIDO: inclui a palavra "Token"
+        Authorization: `Token ${API_AGENDOR_TOKEN}`, // �o. CORRIGIDO: inclui a palavra "Token"
         'Content-Type': 'application/json'
       },
       params
     });
+  } catch (error) {
+    const status = error?.response?.status;
+    const podeTentarNovamente =
+      tentativa < CONFIG.MAX_RETRIES &&
+      (status === 429 || status === 503);
 
-    const data = response.data.data || [];
-    todas = [...todas, ...data];
-
-    console.log(`📄 Página ${page}: ${data.length} tarefas`);
-
-    if (data.length < CONFIG.TASKS_PER_PAGE) {
-      hasMoreData = false;
-    } else {
-      page++;
-      await esperar(CONFIG.DELAY_BETWEEN_REQUESTS);
+    if (podeTentarNovamente) {
+      const espera = CONFIG.RETRY_BASE_DELAY * tentativa;
+      console.warn(`⏳ Retry (${tentativa}/${CONFIG.MAX_RETRIES}) para ${url} após ${espera}ms - status ${status}`);
+      await esperar(espera);
+      return fetchComRetry(url, { params, tentativa: tentativa + 1 });
     }
-  }
 
-  return todas;
+    throw error;
+  }
 }
 
 async function buscarNegociosPorRangePorStatus({ dataInicio, dealStatus }) {
