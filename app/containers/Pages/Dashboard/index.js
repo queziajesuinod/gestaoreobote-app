@@ -31,7 +31,9 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions
+  DialogActions,
+  Snackbar,
+  Alert
 } from '@mui/material';
 import { PapperBlock } from 'dan-components';
 import {
@@ -287,6 +289,30 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
   const [storedUser, setStoredUserState] = useState(() => getStoredUser());
   const [rankingPage, setRankingPage] = useState(0);
   const [rankingRowsPerPage, setRankingRowsPerPage] = useState(10);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
+
+  const showSnackbar = useCallback((message, severity = 'info') => {
+    setSnackbar({ open: true, message, severity });
+  }, []);
+
+  const handleCloseSnackbar = useCallback(() => {
+    setSnackbar(prev => ({ ...prev, open: false }));
+  }, []);
+
+  const extrairMensagemErroAgendor = useCallback((erro) => {
+    const mensagemBruta = erro?.message || (typeof erro === 'string' ? erro : '') || '';
+    const texto = mensagemBruta.toLowerCase();
+
+    if (texto.includes('31 days') || texto.includes('finisheddategt') || texto.includes('finisheddatelt')) {
+      return 'O período máximo permitido pelo Agendor é de 31 dias. Ajuste as datas e tente novamente.';
+    }
+
+    if (texto.includes('network') || texto.includes('fetch') || texto.includes('conex')) {
+      return 'Falha na conexão com o Agendor. Aguarde alguns instantes e tente novamente.';
+    }
+
+    return 'Falha ao buscar dados do Agendor. Aguarde um momento e tente novamente.';
+  }, []);
 
   useEffect(() => {
     const handleUserUpdated = (event) => {
@@ -392,7 +418,7 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
           setConsultorSelecionado('');
         }
       } catch (error) {
-        console.error('❌ Erro ao buscar consultor logado:', error);
+        showSnackbar('Não foi possível carregar os dados do consultor logado.', 'error');
         if (ativo) {
           setConsultorAgendorLogado(null);
           if (isConsultorPerfil) {
@@ -426,12 +452,10 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
         const equipesData = await responseEquipes.json();
 
         if (!isMounted) return;
-        console.log('✅ Equipes carregadas:', equipesData);
         setEquipes(equipesData || []);
 
         // 2. Carregar integrantes de TODAS as equipes em PARALELO
         if (equipesData && equipesData.length > 0) {
-          console.log('🌍 Carregando integrantes de TODAS as equipes em paralelo...');
           const promises = equipesData.map(equipe =>
             fetch(`${API_INTEGRANTES_URL}/${equipe.id}`, {
               headers: {
@@ -459,10 +483,9 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
           });
 
           setMapaConsultoresGlobal(mapaGlobal);
-          console.log('🗺️ Mapa global criado com sucesso:', mapaGlobal);
         }
       } catch (err) {
-        console.error('❌ Erro ao carregar dados iniciais:', err);
+        showSnackbar('Falha ao carregar dados iniciais do dashboard.', 'error');
       }
     }
 
@@ -489,7 +512,6 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
       }
 
       try {
-        console.log('🔍 Carregando integrantes da equipe ID:', equipeSelecionada);
         const response = await fetch(`${API_INTEGRANTES_URL}/${equipeSelecionada}`, {
           headers: {
             'Content-Type': 'application/json',
@@ -499,10 +521,9 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
         const data = await response.json();
 
         if (!isMounted) return;
-        console.log('✅ Integrantes carregados:', data);
         setIntegrantes(data || []);
       } catch (err) {
-        console.error('❌ Erro ao carregar integrantes:', err);
+        showSnackbar('Falha ao carregar integrantes.', 'error');
         if (isMounted) setIntegrantes([]);
       }
     }
@@ -585,7 +606,7 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
       setTotalMetaLiquido(Number(valores.valor || 0));
       setTotalMetaBruto(Number(valores.valorTotal || 0));
     } catch (error) {
-      console.error('❌ Erro ao somar cotas para meta:', error);
+      showSnackbar('Não foi possível calcular as cotas da meta.', 'error');
       setTotalMetaLiquido(0);
       setTotalMetaBruto(0);
     }
@@ -612,7 +633,7 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
       const data = await response.json();
       return data?.meta || null;
     } catch (error) {
-      console.error('❌ Erro ao buscar meta de referência:', error);
+      showSnackbar('Não foi possível buscar a meta do período.', 'error');
       return null;
     }
   }
@@ -717,7 +738,6 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
 
       if (podeUsarCacheGanhos) {
         const filtrados = cacheGanhos.dados.filter(n => idsSet.has(String(n.consultorId ?? '').trim()));
-        console.log(`⚡ Usando cache local ganhos (${filtrados.length})`);
         setNegociosGanhos(filtrados);
         return filtrados;
       }
@@ -730,8 +750,6 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
       }
       params.append('dealStatus', dealStatus);
 
-      console.log('🌐 Buscando da API com params:', params.toString());
-
       const response = await fetch(`${API_URL}/agendor/negocios?${params.toString()}`, {
         headers: {
           'Content-Type': 'application/json',
@@ -741,10 +759,11 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
 
       if (!response.ok) {
         if (response.status === 401) {
-          console.error('❌ Sessão expirada! Token inválido.');
-          alert('Sua sessão expirou. Faça login novamente.');
-          localStorage.removeItem('token');
-          window.location.href = '/login';
+          showSnackbar('Sua sessão expirou. Faça login novamente.', 'error');
+          setTimeout(() => {
+            localStorage.removeItem('token');
+            window.location.href = '/login';
+          }, 1500);
           return [];
         }
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -763,12 +782,11 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
         ? dadosGanhos.filter(n => idsSet.has(String(n.consultorId ?? '').trim()))
         : dadosGanhos;
 
-      console.log(`💾 Negócios carregados: ${filtrados.length} de ${dadosGanhos.length}`);
       setNegociosGanhos(filtrados);
 
       return filtrados;
     } catch (error) {
-      console.error('❌ Erro em buscarNegociosGanhos:', error);
+      showSnackbar('Falha ao carregar negócios ganhos.', 'error');
       return [];
     }
   }
@@ -798,7 +816,6 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
 
       if (podeUsarCacheAndamento) {
         const filtrados = cacheAndamento.dados.filter(n => idsSet.has(String(n.consultorId ?? '').trim()));
-        console.log(`⚡ Usando cache local andamento (${filtrados.length})`);
         setNegociosEmAndamento(filtrados);
         return filtrados;
       }
@@ -811,8 +828,6 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
       }
       params.append('dealStatus', dealStatus);
 
-      console.log('🌐 Buscando da API com params:', params.toString());
-
       const response = await fetch(`${API_URL}/agendor/negocios?${params.toString()}`, {
         headers: {
           'Content-Type': 'application/json',
@@ -822,10 +837,11 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
 
       if (!response.ok) {
         if (response.status === 401) {
-          console.error('❌ Sessão expirada! Token inválido.');
-          alert('Sua sessão expirou. Faça login novamente.');
-          localStorage.removeItem('token');
-          window.location.href = '/login';
+          showSnackbar('Sua sessão expirou. Faça login novamente.', 'error');
+          setTimeout(() => {
+            localStorage.removeItem('token');
+            window.location.href = '/login';
+          }, 1500);
           return [];
         }
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -843,12 +859,11 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
         ? dadosAndamento.filter(n => idsSet.has(String(n.consultorId ?? '').trim()))
         : dadosAndamento;
 
-      console.log(`💾 Negócios carregados: ${filtrados.length} de ${dadosAndamento.length}`);
       setNegociosEmAndamento(filtrados);
 
       return filtrados;
     } catch (error) {
-      console.error('❌ Erro em buscarNegociosEmAndamento:', error);
+      showSnackbar('Falha ao carregar negócios em andamento.', 'error');
       return [];
     }
   }
@@ -858,14 +873,14 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
   // ==================== BUSCAR TAREFAS (OTIMIZADO) ====================
   async function buscarTarefas() {
     if (!dataInicio || !dataFim) {
-      alert('Selecione o período atual');
+      showSnackbar('Selecione o período atual para buscar os dados.', 'warning');
       return;
     }
 
     // ❌ REMOVIDO: NÃO limpar cache aqui, pois as funções verificam se tem cache
 
     if (habilitarComparacao && (!dataInicioComp || !dataFimComp)) {
-      alert('Selecione o período de comparação');
+      showSnackbar('Selecione o período de comparação.', 'warning');
       return;
     }
 
@@ -897,12 +912,6 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
           .filter(Boolean)
       )];
 
-      console.log('✅ Tarefas carregadas:', {
-        tarefasAtuais: tarefasAtuais.length,
-        tarefasComparacao: tarefasComp.length,
-        consultoresUnicos: consultoresUnicos.length
-      });
-
       // ✅ PASSO 3: Buscar cotas apenas para os consultores que aparecem nas tarefas
       let cotasAtuaisData = {};
       let cotasCompData = {};
@@ -921,11 +930,6 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
         const resultadosCotas = await Promise.all(promisesCotas);
         cotasAtuaisData = resultadosCotas[0];
         cotasCompData = habilitarComparacao ? resultadosCotas[1] : {};
-
-        console.log('✅ Cotas carregadas:', {
-          cotasAtuais: Object.keys(cotasAtuaisData).length,
-          cotasComparacao: Object.keys(cotasCompData).length
-        });
       }
 
       // ✅ PASSO 4: Atualizar estados
@@ -948,11 +952,11 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
         setTotalMetaBruto(0);
       }
     } catch (err) {
-      console.error('❌ Erro ao buscar dados:', err);
       setMetaAtiva(null);
       setTotalMetaLiquido(0);
       setTotalMetaBruto(0);
-      alert('Erro ao buscar dados. Verifique o console.');
+      const mensagemErro = extrairMensagemErroAgendor(err);
+      showSnackbar(mensagemErro, 'error');
     } finally {
       setLoading(false);
     }
@@ -961,7 +965,6 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
   // ==================== BUSCAR COTAS ====================
   async function buscarCotasPorPeriodo(inicio, fim, idsAgendor) {
     try {
-      console.log(`🔍 Buscando cotas para ${idsAgendor.length} consultores...`);
 
       const normalizarCotaParaConsultor = (cota, idagendor) => {
         const consultores = Array.isArray(cota.consultores) ? cota.consultores : [];
@@ -1000,7 +1003,6 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
       const resultados = await Promise.all(
         idsAgendor.map(async (idagendor) => {
           const url = `${API_URL}/cotas/periodo?inicio=${inicio}&fim=${fim}&idagendor=${idagendor}`;
-          console.log(`🔗 Buscando cotas do consultor ${idagendor}:`, url);
 
           // ✅ Adiciona o header Authorization
           const resp = await fetch(url, {
@@ -1011,8 +1013,6 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
           });
           const data = await resp.json();
           const cotas = data.dados || [];
-
-          console.log(`  ✅ Consultor ${idagendor}: ${cotas.length} cotas encontradas`);
 
           const cotasNormalizadas = cotas.map(cota => normalizarCotaParaConsultor(cota, idagendor));
 
@@ -1037,14 +1037,12 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
           cotas
         };
 
-        console.log(`  💰 Total do consultor ${idagendor}: ${somaTotal} (valor atribuído ao consultor)`);
+        // Soma total por consultor para o ranking
       });
-
-      console.log('✅ Valores finais por consultor:', cotasPorConsultor);
 
       return cotasPorConsultor;
     } catch (err) {
-      console.error('❌ Erro ao buscar cotas:', err);
+      showSnackbar('Falha ao carregar cotas dos consultores.', 'error');
       return {};
     }
   }
@@ -2052,6 +2050,21 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
           </Typography>
         )}
       </PapperBlock>
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={handleCloseSnackbar}
+          severity={snackbar.severity}
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </div>
   );
 }

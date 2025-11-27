@@ -95,8 +95,8 @@ async function buscarTarefasPorRange({ dataInicio, dataFim }) {
         per_page: CONFIG.TASKS_PER_PAGE
       };
 
-      if (dataInicio) params.finishedDateLt = dataInicio;
-      if (dataFim) params.finishedDateGt = dataFim;
+      if (dataInicio) params.finishedDateGt = dataInicio;
+      if (dataFim) params.finishedDateLt = dataFim;
 
       const url = `${API_AGENDOR_URL}/tasks`;
 
