@@ -2,35 +2,45 @@
 const { data } = require('autoprefixer');
 const { buscarTarefasPorRange, buscarNegociosPorRangePorStatus } = require('../services/agendor');
 
-let cacheTarefas = [];
-let ultimoFiltro = {};
-let cacheNegocios = {};
-let ultimoFiltroNegocios = {};
+const CACHE_TAREFAS_TTL_MS = 5 * 60 * 1000;
+const CACHE_NEGOCIOS_TTL_MS = 5 * 60 * 1000;
+
+const cacheTarefas = new Map();
+const cacheNegocios = new Map();
+
+const limparCacheExpirado = (mapa) => {
+  const agora = Date.now();
+  for (const [chave, entrada] of mapa.entries()) {
+    if (entrada?.expiresAt && entrada.expiresAt <= agora) {
+      mapa.delete(chave);
+    }
+  }
+};
 
 exports.getTarefas = async (req, res) => {
   try {
     const { dataInicio, dataFim, consultores, tipo, force } = req.query;
 
     if (!dataInicio || !dataFim) {
-      return res.status(400).json({ error: 'dataInicio e dataFim são obrigatórios' });
+      return res.status(400).json({ error: 'dataInicio e dataFim sao obrigatorios' });
     }
 
-    // Evita refetch se já existe cache válido
-    if (
-      cacheTarefas.length > 0 &&
-      ultimoFiltro.dataInicio === dataInicio &&
-      ultimoFiltro.dataFim === dataFim &&
-      force !== 'true'
-    ) {
-      console.log('⚡ Servindo tarefas do cache local');
+    const chaveCache = [dataInicio, dataFim].join('_');
+    limparCacheExpirado(cacheTarefas);
+    const entradaCache = cacheTarefas.get(chaveCache);
+
+    let baseTarefas;
+
+    if (entradaCache && force !== 'true') {
+      console.log('Servindo tarefas do cache local');
+      baseTarefas = entradaCache.data;
     } else {
-      console.log('🌀 Atualizando tarefas no cache...');
-      cacheTarefas = await buscarTarefasPorRange({ dataInicio, dataFim });
-      ultimoFiltro = { dataInicio, dataFim };
+      console.log('Atualizando tarefas no cache...');
+      baseTarefas = await buscarTarefasPorRange({ dataInicio, dataFim });
+      cacheTarefas.set(chaveCache, { data: baseTarefas, expiresAt: Date.now() + CACHE_TAREFAS_TTL_MS });
     }
 
-    // Filtros dinâmicos
-    let filtradas = [...cacheTarefas];
+    let filtradas = [...baseTarefas];
 
     if (consultores) {
       const ids = consultores.split(',').map(String);
@@ -41,18 +51,17 @@ exports.getTarefas = async (req, res) => {
       filtradas = filtradas.filter(t => t.type?.toUpperCase() === tipo.toUpperCase());
     }
 
-    // Map simplificado
     const map = filtradas.map(t => ({
       id: t.id,
       tipo: t.type,
-      titulo: t.text || t.title || 'Sem título',
+      titulo: t.text || t.title || 'Sem titulo',
       data: t.dueDate,
       consultor: t.user?.name || 'Desconhecido',
       consultorId: t.user?.id,
       dealId: t.deal?.id,
-      dealTitulo: t.deal?.title || 'Sem título',
-      empresa: t.organization?.name || t.person?.name || '—',
-      status: t.finishedAt ? 'Concluída' : 'Pendente'
+      dealTitulo: t.deal?.title || 'Sem titulo',
+      empresa: t.organization?.name || t.person?.name || '-',
+      status: t.finishedAt ? 'Concluida' : 'Pendente'
     }));
 
     res.json({
@@ -61,7 +70,7 @@ exports.getTarefas = async (req, res) => {
       tarefas: map
     });
   } catch (error) {
-    console.error('❌ Erro em getTarefas:', error.message);
+    console.error('Erro em getTarefas:', error.message);
     const detalhe = error?.response?.data || error?.message || 'Erro ao buscar tarefas';
     res.status(500).json({ error: 'Erro ao buscar tarefas', detalhe });
   }
@@ -72,53 +81,46 @@ exports.getNegocios = async (req, res) => {
     const { dataInicio, force, consultor, dealStatus } = req.query;
 
     if (!dataInicio) {
-      return res.status(400).json({ error: 'dataInicio é obrigatório' });
+      return res.status(400).json({ error: 'dataInicio e obrigatorio' });
     }
 
     const statusKey = dealStatus || 'ALL';
-    const cacheEntrada = cacheNegocios[statusKey] || [];
-    const ultimoFiltroEntrada = ultimoFiltroNegocios[statusKey];
+    const chaveCache = [statusKey, dataInicio].join('_');
+    limparCacheExpirado(cacheNegocios);
+    const entradaCache = cacheNegocios.get(chaveCache);
 
-    // 🔹 Atualiza cache apenas se data mudou ou se force=true
-    if (
-      cacheEntrada.length > 0 &&
-      ultimoFiltroEntrada?.dataInicio === dataInicio &&
-      force !== 'true'
-    ) {
-      console.log(`⚡ Servindo negócios do cache local para dealStatus=${statusKey}`);
+    let baseNegocios;
+
+    if (entradaCache && force !== 'true') {
+      console.log(`Servindo negocios do cache local para dealStatus=${statusKey}`);
+      baseNegocios = entradaCache.data;
     } else {
-      console.log(`🌀 Atualizando negócios no cache para dealStatus=${statusKey}...`);
+      console.log(`Atualizando negocios no cache para dealStatus=${statusKey}...`);
       const negociosAtualizados = await buscarNegociosPorRangePorStatus({ dataInicio, dealStatus });
-      cacheNegocios[statusKey] = Array.isArray(negociosAtualizados) ? negociosAtualizados : [];
-      ultimoFiltroNegocios[statusKey] = { dataInicio };
+      baseNegocios = Array.isArray(negociosAtualizados) ? negociosAtualizados : [];
+      cacheNegocios.set(chaveCache, { data: baseNegocios, expiresAt: Date.now() + CACHE_NEGOCIOS_TTL_MS });
     }
 
-    // 🔹 Filtra os consultores, se informado
-    let negociosFiltrados = cacheNegocios[statusKey] || [];
+    let negociosFiltrados = baseNegocios;
 
     if (consultor) {
-      // Aceita lista de IDs separados por vírgula
       const consultores = consultor.split(',').map(c => c.trim());
-      negociosFiltrados = negociosFiltrados.filter(n =>
-        consultores.includes(String(n.owner?.id))
-      );
-      console.log(`🎯 Filtrando ${negociosFiltrados.length} negócios  por consultores: ${consultores.join(', ')}`);
+      negociosFiltrados = negociosFiltrados.filter(n => consultores.includes(String(n.owner?.id)));
+      console.log(`Filtrando ${negociosFiltrados.length} negocios por consultores: ${consultores.join(', ')}`);
     }
 
-    // 🔹 Mapeamento dos campos
     const map = negociosFiltrados.map(n => ({
       id: n.id,
-      titulo: n.title || 'Sem título',
+      titulo: n.title || 'Sem titulo',
       valor: n.value || 0,
-      dataGanho: n.wonAt || n.endTime || n.updatedAt || '—',
-      dataCriacao: n.createdAt || '—',
+      dataGanho: n.wonAt || n.endTime || n.updatedAt || '-',
+      dataCriacao: n.createdAt || '-',
       consultorId: n.owner?.id || null,
       consultorNome: n.owner?.name || 'Desconhecido',
-      etapa: n.dealStage?.name || '—',
-      status: n.dealStatus?.name || '—'
+      etapa: n.dealStage?.name || '-',
+      status: n.dealStatus?.name || '-'
     }));
 
-    // 🔹 Resumo por consultor
     const resumoPorConsultor = {};
     let totalGeral = 0;
 
@@ -135,7 +137,7 @@ exports.getNegocios = async (req, res) => {
       negocios: map
     });
   } catch (error) {
-    console.error('❌ Erro em getNegocios:', error.message);
-    res.status(500).json({ error: 'Erro ao buscar negócios' });
+    console.error('Erro em getNegocios:', error.message);
+    res.status(500).json({ error: 'Erro ao buscar negocios' });
   }
 };

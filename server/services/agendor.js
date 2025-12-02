@@ -8,12 +8,43 @@ const API_AGENDOR_TOKEN = process.env.API_AGENDOR_TOKEN; // ⚠️ deve conter s
 
 const CONFIG = {
   TASKS_PER_PAGE: 100,
-  DELAY_BETWEEN_REQUESTS: 400, // ms entre poginas
+  DELAY_BETWEEN_REQUESTS: 700, // ms entre paginas
   MAX_RETRIES: 3,
-  RETRY_BASE_DELAY: 1000
+  RETRY_BASE_DELAY: 1000,
+  MIN_DELAY_BETWEEN_CALLS: 500 // espaca chamadas para evitar 429 no upstream
 };
 
 const inflightTarefas = new Map();
+let filaReq = Promise.resolve();
+let ultimoCallAgendor = 0;
+
+const parseRetryAfterMs = (header) => {
+  if (!header) return null;
+  const numeric = Number(header);
+  if (!Number.isNaN(numeric)) {
+    return Math.max(0, numeric * 1000);
+  }
+  const dateVal = new Date(header);
+  if (!Number.isNaN(dateVal.getTime())) {
+    return Math.max(0, dateVal.getTime() - Date.now());
+  }
+  return null;
+};
+
+const agendarChamadaAgendor = async (fn) => {
+  filaReq = filaReq.then(async () => {
+    const agora = Date.now();
+    const esperaRestante = Math.max(0, CONFIG.MIN_DELAY_BETWEEN_CALLS - (agora - ultimoCallAgendor));
+    if (esperaRestante > 0) {
+      await esperar(esperaRestante);
+    }
+    const resultado = await fn();
+    ultimoCallAgendor = Date.now();
+    return resultado;
+  });
+
+  return filaReq;
+};
 
 // ===================== FUNÇÃO PRINCIPAL =====================
 async function buscarTarefas({ consultores = [], tipo, dataInicio, dataFim }) {
@@ -128,22 +159,27 @@ async function buscarTarefasPorRange({ dataInicio, dataFim }) {
 
 async function fetchComRetry(url, { params, tentativa = 1 }) {
   try {
-    return await axios.get(url, {
+    return await agendarChamadaAgendor(() => axios.get(url, {
       headers: {
-        Authorization: `Token ${API_AGENDOR_TOKEN}`, // �o. CORRIGIDO: inclui a palavra "Token"
+        Authorization: `Token ${API_AGENDOR_TOKEN}`, // inclui a palavra "Token"
         'Content-Type': 'application/json'
       },
       params
-    });
+    }));
   } catch (error) {
     const status = error?.response?.status;
+    const retryAfterHeader = error?.response?.headers?.['retry-after'];
+    const retryAfterMs = parseRetryAfterMs(retryAfterHeader);
+
     const podeTentarNovamente =
       tentativa < CONFIG.MAX_RETRIES &&
       (status === 429 || status === 503);
 
     if (podeTentarNovamente) {
-      const espera = CONFIG.RETRY_BASE_DELAY * tentativa;
-      console.warn(`⏳ Retry (${tentativa}/${CONFIG.MAX_RETRIES}) para ${url} após ${espera}ms - status ${status}`);
+      const base = retryAfterMs ?? (CONFIG.RETRY_BASE_DELAY * tentativa);
+      const jitter = Math.floor(Math.random() * 200);
+      const espera = base + jitter;
+      console.warn(`Retry (${tentativa}/${CONFIG.MAX_RETRIES}) para ${url} apos ${espera}ms - status ${status}`);
       await esperar(espera);
       return fetchComRetry(url, { params, tentativa: tentativa + 1 });
     }
@@ -168,13 +204,7 @@ async function buscarNegociosPorRangePorStatus({ dataInicio, dealStatus }) {
 
     const url = `${API_AGENDOR_URL}/deals/stream`;
 
-    const response = await axios.get(url, {
-      headers: {
-        Authorization: `Token ${API_AGENDOR_TOKEN}`, // ✅ CORRIGIDO: inclui a palavra "Token"
-        'Content-Type': 'application/json'
-      },
-      params
-    });
+    const response = await fetchComRetry(url, { params });
 
     const data = response.data.data || [];
     todasNegocios = [...todasNegocios, ...data];

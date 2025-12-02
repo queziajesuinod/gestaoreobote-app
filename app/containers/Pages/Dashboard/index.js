@@ -117,13 +117,23 @@ const splitPeriodIntoChunks = (inicio, fim, maxDias = 31) => {
     return [];
   }
 
+  const totalDias = Math.floor((fimDate - inicioDate) / (1000 * 60 * 60 * 24)) + 1;
+
+  if (totalDias <= maxDias) {
+    return [{
+      inicio: formatISODateOnly(inicioDate),
+      fim: formatISODateOnly(fimDate)
+    }];
+  }
+
+  const limiteDias = Math.max(7, Math.floor(maxDias / 2));
   const intervalos = [];
   let cursor = new Date(inicioDate.getTime());
 
   while (cursor <= fimDate) {
     const segmentoInicio = new Date(cursor.getTime());
     const segmentoFim = new Date(cursor.getTime());
-    segmentoFim.setUTCDate(segmentoFim.getUTCDate() + (maxDias - 1));
+    segmentoFim.setUTCDate(segmentoFim.getUTCDate() + (limiteDias - 1));
 
     if (segmentoFim > fimDate) {
       segmentoFim.setTime(fimDate.getTime());
@@ -139,6 +149,40 @@ const splitPeriodIntoChunks = (inicio, fim, maxDias = 31) => {
   }
 
   return intervalos;
+};
+
+
+const sleep = (ms = 0) => new Promise(resolve => setTimeout(resolve, ms));
+
+const parseRetryAfterMs = (retryAfterHeader) => {
+  if (!retryAfterHeader) return null;
+  const numero = Number(retryAfterHeader);
+  if (!Number.isNaN(numero)) {
+    return Math.max(0, numero * 1000);
+  }
+  const data = new Date(retryAfterHeader);
+  if (!Number.isNaN(data.getTime())) {
+    return Math.max(0, data.getTime() - Date.now());
+  }
+  return null;
+};
+
+const fetchWithRateLimit = async (url, options, { maxTentativas = 3, baseDelay = 700 } = {}) => {
+  let ultimaResposta = null;
+
+  for (let tentativa = 0; tentativa <= maxTentativas; tentativa++) {
+    const resposta = await fetch(url, options);
+    if (resposta.status !== 429) {
+      return resposta;
+    }
+
+    ultimaResposta = resposta;
+    const retryAfterMs = parseRetryAfterMs(resposta.headers?.get?.('Retry-After'));
+    const atraso = (retryAfterMs ?? baseDelay * Math.pow(2, tentativa)) + Math.floor(Math.random() * 150);
+    await sleep(atraso);
+  }
+
+  return ultimaResposta;
 };
 
 
@@ -243,6 +287,7 @@ function DashboardReobote() {
     ganhos: { dataInicio: null, consultores: [], dados: [] },
     andamento: { dataInicio: null, consultores: [], dados: [] }
   });
+  const tarefasAbortController = useRef(null);
   const title = `${brand.name} - Dashboard Reobote`;
   const description = 'Painel de tarefas integradas ao Agendor';
 
@@ -639,7 +684,7 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
   }
 
   // ==================== FUNÇÃO AUXILIAR: BUSCAR TAREFAS POR PERÍODO ====================
-  async function buscarTarefasPorPeriodo(inicio, fim) {
+  async function buscarTarefasPorPeriodo(inicio, fim, signal) {
     // ✅ VALIDAÇÃO: Verificar se tem dados carregados
     if (!inicio || !fim) {
       console.warn('⚠️ Datas não fornecidas');
@@ -668,7 +713,7 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
     const idsSet = deveFiltrarLocalmente ? new Set(idsAgendor.map(id => String(id))) : null;
     const todasTarefas = [];
 
-    for (const intervalo of intervalos) {
+    for (const [index, intervalo] of intervalos.entries()) {
       const params = new URLSearchParams();
       params.append('dataInicio', `${intervalo.inicio}T00:00:00Z`);
       params.append('dataFim', `${intervalo.fim}T23:59:59Z`);
@@ -679,15 +724,26 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
         params.append('consultores', idsAgendor.join(','));
       }
 
-      const response = await fetch(`${API_URL}/agendor/tarefas?${params.toString()}`, {
+      const url = `${API_URL}/agendor/tarefas?${params.toString()}`;
+      const response = await fetchWithRateLimit(url, {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${getToken()}`
-        }
-      });
+        },
+        signal
+      }, { maxTentativas: 2, baseDelay: 800 });
+
+      if (!response) {
+        throw new Error('HTTP 0: Falha ao buscar tarefas (resposta vazia).');
+      }
+
+      if (response.status === 429) {
+        const texto429 = await response.text().catch(() => '');
+        throw new Error(`HTTP 429: Limite de requisicoes atingido - ${texto429.slice(0, 200)}`);
+      }
 
       if (!response.ok) {
-        const texto = await response.text();
+        const texto = await response.text().catch(() => '');
         throw new Error(`HTTP ${response.status}: ${response.statusText} - ${texto.slice(0, 200)}`);
       }
 
@@ -707,6 +763,10 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
         : tarefasEnriquecidas;
 
       todasTarefas.push(...tarefasFiltradas);
+
+      if (intervalos.length > 1 && index < intervalos.length - 1) {
+        await sleep(120);
+      }
     }
 
     return todasTarefas;
@@ -884,14 +944,21 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
       return;
     }
 
+    if (tarefasAbortController.current) {
+      tarefasAbortController.current.abort();
+    }
+    const controller = new AbortController();
+    tarefasAbortController.current = controller;
+    const { signal } = controller;
+
     setLoading(true);
 
     try {
       // ✅ PASSO 1: Buscar tarefas primeiro
-      const promises = [buscarTarefasPorPeriodo(dataInicio, dataFim)];
+      const promises = [buscarTarefasPorPeriodo(dataInicio, dataFim, signal)];
 
       if (habilitarComparacao) {
-        promises.push(buscarTarefasPorPeriodo(dataInicioComp, dataFimComp));
+        promises.push(buscarTarefasPorPeriodo(dataInicioComp, dataFimComp, signal));
       }
 
       const [tarefasAtuais, tarefasComp = []] = await Promise.all(promises);
@@ -952,12 +1019,16 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
         setTotalMetaBruto(0);
       }
     } catch (err) {
+      if (err?.name === 'AbortError') {
+        return;
+      }
       setMetaAtiva(null);
       setTotalMetaLiquido(0);
       setTotalMetaBruto(0);
       const mensagemErro = extrairMensagemErroAgendor(err);
       showSnackbar(mensagemErro, 'error');
     } finally {
+      tarefasAbortController.current = null;
       setLoading(false);
     }
   }
