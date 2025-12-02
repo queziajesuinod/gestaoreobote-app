@@ -58,7 +58,7 @@ async function putUser(req, res) {
     delete payload.currentPassword;
 
     if (!isAdmin) {
-      const allowedFields = ['name', 'email', 'username', 'image'];
+      const allowedFields = ['name', 'email', 'username', 'image', 'agendorToken'];
       payload = allowedFields.reduce((acc, field) => {
         if (payload[field] !== undefined) {
           acc[field] = payload[field];

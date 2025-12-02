@@ -45,13 +45,15 @@ async function updateUser(id, updateData) {
   }
 
   // Apenas atualiza os campos permitidos
-  const fields = ['name', 'email', 'image', 'username', 'perfilId', 'active', 'consultorId'];
+  const fields = ['name', 'email', 'image', 'username', 'perfilId', 'active', 'consultorId', 'agendorToken'];
   fields.forEach(field => {
     if (updateData[field] !== undefined) {
       if (field === 'active') {
         user[field] = Boolean(updateData[field]);
       } else if (field === 'consultorId') {
         user[field] = updateData[field] ? Number(updateData[field]) : null;
+      } else if (field === 'agendorToken') {
+        user[field] = updateData[field] ? String(updateData[field]).trim() : null;
       } else {
         user[field] = updateData[field];
       }
@@ -119,7 +121,8 @@ async function createUser(body, options = {}) {
     password,
     image,
     username,
-    consultorId = null
+    consultorId = null,
+    agendorToken = null
   } = body;
 
   if (!perfilId) {
@@ -147,7 +150,8 @@ async function createUser(body, options = {}) {
     salt,
     image,
     username,
-    consultorId: consultorId ? Number(consultorId) : null
+    consultorId: consultorId ? Number(consultorId) : null,
+    agendorToken: agendorToken ? String(agendorToken).trim() : null
   }, {
     transaction: options.transaction
   });

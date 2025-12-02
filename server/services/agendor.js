@@ -7,16 +7,17 @@ const API_AGENDOR_URL = process.env.API_AGENDOR_URL || 'https://api.agendor.com.
 const API_AGENDOR_TOKEN = process.env.API_AGENDOR_TOKEN; // ⚠️ deve conter só o token (sem a palavra "Token")
 
 const CONFIG = {
-  TASKS_PER_PAGE: 100,
-  DELAY_BETWEEN_REQUESTS: 700, // ms entre paginas
+  TASKS_PER_PAGE: 50,
+  DELAY_BETWEEN_REQUESTS: 2000, // ms entre paginas
   MAX_RETRIES: 3,
-  RETRY_BASE_DELAY: 1000,
-  MIN_DELAY_BETWEEN_CALLS: 500 // espaca chamadas para evitar 429 no upstream
+  RETRY_BASE_DELAY: 1500,
+  MIN_DELAY_BETWEEN_CALLS: 2000 // espaca chamadas para evitar 429 no upstream
 };
 
 const inflightTarefas = new Map();
 let filaReq = Promise.resolve();
 let ultimoCallAgendor = 0;
+let bloqueadoAte = 0;
 
 const parseRetryAfterMs = (header) => {
   if (!header) return null;
@@ -33,6 +34,10 @@ const parseRetryAfterMs = (header) => {
 
 const agendarChamadaAgendor = async (fn) => {
   filaReq = filaReq.then(async () => {
+    if (Date.now() < bloqueadoAte) {
+      const espera = bloqueadoAte - Date.now();
+      await esperar(espera);
+    }
     const agora = Date.now();
     const esperaRestante = Math.max(0, CONFIG.MIN_DELAY_BETWEEN_CALLS - (agora - ultimoCallAgendor));
     if (esperaRestante > 0) {
@@ -47,7 +52,7 @@ const agendarChamadaAgendor = async (fn) => {
 };
 
 // ===================== FUNÇÃO PRINCIPAL =====================
-async function buscarTarefas({ consultores = [], tipo, dataInicio, dataFim }) {
+async function buscarTarefas({ consultores = [], tipo, dataInicio, dataFim, agendorToken }) {
   try {
     console.log(`\n${'='.repeat(60)}`);
     console.log(`🔍 INICIANDO BUSCA DIRETA DE TAREFAS`);
@@ -57,7 +62,12 @@ async function buscarTarefas({ consultores = [], tipo, dataInicio, dataFim }) {
     console.log(`📋 Tipo: ${tipo || 'Todos'}`);
     console.log(`${'='.repeat(60)}\n`);
 
-    const tarefas = await buscarTarefasPorRange({ dataInicio, dataFim });
+    const tokenParaUso = agendorToken || API_AGENDOR_TOKEN;
+    if (!tokenParaUso) {
+      throw new Error('Token do Agendor não configurado para o usuário nem como padrão.');
+    }
+
+    const tarefas = await buscarTarefasPorRange({ dataInicio, dataFim, agendorToken: tokenParaUso });
 
     console.log(`📦 Total bruto retornado: ${tarefas.length}`);
 
@@ -108,8 +118,9 @@ async function buscarTarefas({ consultores = [], tipo, dataInicio, dataFim }) {
 }
 
 // ===================== BUSCAR TAREFAS COM PAGINAÇÃO =====================
-async function buscarTarefasPorRange({ dataInicio, dataFim }) {
-  const chave = `${dataInicio || 'sem-inicio'}_${dataFim || 'sem-fim'}`;
+async function buscarTarefasPorRange({ dataInicio, dataFim, agendorToken }) {
+  const tokenKey = agendorToken ? `tk_${agendorToken.slice(-6)}` : 'default';
+  const chave = `${dataInicio || 'sem-inicio'}_${dataFim || 'sem-fim'}_${tokenKey}`;
   if (inflightTarefas.has(chave)) {
     console.log(`🔄 Usando chamada em andamento para tarefas (${chave})`);
     return inflightTarefas.get(chave);
@@ -131,7 +142,7 @@ async function buscarTarefasPorRange({ dataInicio, dataFim }) {
 
       const url = `${API_AGENDOR_URL}/tasks`;
 
-      const response = await fetchComRetry(url, { params });
+      const response = await fetchComRetry(url, agendorToken, { params });
 
       const data = response.data.data || [];
       todas = [...todas, ...data];
@@ -157,11 +168,11 @@ async function buscarTarefasPorRange({ dataInicio, dataFim }) {
   }
 }
 
-async function fetchComRetry(url, { params, tentativa = 1 }) {
+async function fetchComRetry(url, agendorToken, { params, tentativa = 1 }) {
   try {
     return await agendarChamadaAgendor(() => axios.get(url, {
       headers: {
-        Authorization: `Token ${API_AGENDOR_TOKEN}`, // inclui a palavra "Token"
+        Authorization: `Token ${agendorToken}`, // inclui a palavra "Token"
         'Content-Type': 'application/json'
       },
       params
@@ -181,14 +192,22 @@ async function fetchComRetry(url, { params, tentativa = 1 }) {
       const espera = base + jitter;
       console.warn(`Retry (${tentativa}/${CONFIG.MAX_RETRIES}) para ${url} apos ${espera}ms - status ${status}`);
       await esperar(espera);
-      return fetchComRetry(url, { params, tentativa: tentativa + 1 });
+      return fetchComRetry(url, agendorToken, { params, tentativa: tentativa + 1 });
+    }
+
+    if (status === 429) {
+      bloqueadoAte = Date.now() + 60000; // cooldown de 60s
     }
 
     throw error;
   }
 }
 
-async function buscarNegociosPorRangePorStatus({ dataInicio, dealStatus }) {
+async function buscarNegociosPorRangePorStatus({ dataInicio, dealStatus, agendorToken }) {
+  const tokenParaUso = agendorToken || API_AGENDOR_TOKEN;
+  if (!tokenParaUso) {
+    throw new Error('Token do Agendor não configurado para o usuário nem como padrão.');
+  }
   let todasNegocios = [];
   let page = 1;
   let hasMoreData = true;
@@ -204,7 +223,7 @@ async function buscarNegociosPorRangePorStatus({ dataInicio, dealStatus }) {
 
     const url = `${API_AGENDOR_URL}/deals/stream`;
 
-    const response = await fetchComRetry(url, { params });
+    const response = await fetchComRetry(url, tokenParaUso, { params });
 
     const data = response.data.data || [];
     todasNegocios = [...todasNegocios, ...data];

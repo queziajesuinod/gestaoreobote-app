@@ -34,7 +34,11 @@ module.exports = (sequelize) => {
     passwordHash: DataTypes.STRING,
     salt: DataTypes.STRING,
     image: DataTypes.STRING,
-    username: DataTypes.STRING
+    username: DataTypes.STRING,
+    agendorToken: {
+      type: DataTypes.STRING,
+      allowNull: true
+    }
   }, {
     sequelize,
     modelName: 'User',

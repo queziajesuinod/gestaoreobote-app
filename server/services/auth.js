@@ -17,7 +17,7 @@ class AuthService {
   static async login(dto) {
     // Buscar usuário pelo e-mail
     const usuario = await User.findOne({
-      attributes: ['id', 'name', 'email', 'username', 'passwordHash', 'salt', 'perfilId', 'consultorId', 'active', 'image'],
+      attributes: ['id', 'name', 'email', 'username', 'passwordHash', 'salt', 'perfilId', 'consultorId', 'active', 'image', 'agendorToken'],
       where: { email: dto.email },
       include: [
         {
@@ -89,6 +89,7 @@ class AuthService {
     }
 
     const permissoes = Array.from(permissoesSet);
+    const agendorToken = usuario.agendorToken || null;
 
     if (perfilDescricao === 'CONSULTOR' && !consultorId) {
       const whereClauses = [];
@@ -128,7 +129,8 @@ class AuthService {
         nome: usuario.name,
         perfil: perfilDescricao,
         permissoes,
-        consultorId
+        consultorId,
+        agendorToken
       },
       process.env.JWT_SECRET,
       { expiresIn: '8h' }
@@ -146,6 +148,7 @@ class AuthService {
       permissoes,
       consultorId,
       consultorNome,
+      agendorToken,
       image: usuario.image,
       accessToken
     };

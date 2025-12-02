@@ -2,8 +2,8 @@
 const { data } = require('autoprefixer');
 const { buscarTarefasPorRange, buscarNegociosPorRangePorStatus } = require('../services/agendor');
 
-const CACHE_TAREFAS_TTL_MS = 5 * 60 * 1000;
-const CACHE_NEGOCIOS_TTL_MS = 5 * 60 * 1000;
+const CACHE_TAREFAS_TTL_MS = 15 * 60 * 1000;
+const CACHE_NEGOCIOS_TTL_MS = 15 * 60 * 1000;
 
 const cacheTarefas = new Map();
 const cacheNegocios = new Map();
@@ -17,6 +17,37 @@ const limparCacheExpirado = (mapa) => {
   }
 };
 
+const splitPeriodIntoChunks = (inicio, fim, maxDias = 31) => {
+  const inicioDate = new Date(inicio);
+  const fimDate = new Date(fim);
+  if (Number.isNaN(inicioDate.getTime()) || Number.isNaN(fimDate.getTime()) || inicioDate > fimDate) {
+    return [];
+  }
+
+  const intervalos = [];
+  let cursor = new Date(inicioDate.getTime());
+
+  while (cursor <= fimDate) {
+    const segmentoInicio = new Date(cursor.getTime());
+    const segmentoFim = new Date(cursor.getTime());
+    segmentoFim.setUTCDate(segmentoFim.getUTCDate() + (maxDias - 1));
+
+    if (segmentoFim > fimDate) {
+      segmentoFim.setTime(fimDate.getTime());
+    }
+
+    intervalos.push({
+      inicio: segmentoInicio.toISOString().slice(0, 10),
+      fim: segmentoFim.toISOString().slice(0, 10)
+    });
+
+    cursor = new Date(segmentoFim.getTime());
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+
+  return intervalos;
+};
+
 exports.getTarefas = async (req, res) => {
   try {
     const { dataInicio, dataFim, consultores, tipo, force } = req.query;
@@ -25,7 +56,19 @@ exports.getTarefas = async (req, res) => {
       return res.status(400).json({ error: 'dataInicio e dataFim sao obrigatorios' });
     }
 
-    const chaveCache = [dataInicio, dataFim].join('_');
+    const agendorToken = req.user?.agendorToken || process.env.API_AGENDOR_TOKEN || null;
+    if (!agendorToken) {
+      return res.status(400).json({ error: 'Token do Agendor nao configurado para este usuario.' });
+    }
+
+    const inicioDate = new Date(dataInicio);
+    const fimDate = new Date(dataFim);
+    if (Number.isNaN(inicioDate.getTime()) || Number.isNaN(fimDate.getTime())) {
+      return res.status(400).json({ error: 'Datas invalidas' });
+    }
+
+    const tokenKey = agendorToken ? `tk_${agendorToken.slice(-6)}` : 'default';
+    const chaveCache = [dataInicio, dataFim, tokenKey].join('_');
     limparCacheExpirado(cacheTarefas);
     const entradaCache = cacheTarefas.get(chaveCache);
 
@@ -36,7 +79,24 @@ exports.getTarefas = async (req, res) => {
       baseTarefas = entradaCache.data;
     } else {
       console.log('Atualizando tarefas no cache...');
-      baseTarefas = await buscarTarefasPorRange({ dataInicio, dataFim });
+      const intervalos = splitPeriodIntoChunks(dataInicio, dataFim, 31);
+      if (intervalos.length === 0) {
+        return res.status(400).json({ error: 'Periodo invalido' });
+      }
+
+      const acumulado = [];
+      for (const intervalo of intervalos) {
+        const parcial = await buscarTarefasPorRange({
+          dataInicio: intervalo.inicio,
+          dataFim: intervalo.fim,
+          agendorToken
+        });
+        if (Array.isArray(parcial)) {
+          acumulado.push(...parcial);
+        }
+      }
+
+      baseTarefas = acumulado;
       cacheTarefas.set(chaveCache, { data: baseTarefas, expiresAt: Date.now() + CACHE_TAREFAS_TTL_MS });
     }
 
@@ -84,8 +144,14 @@ exports.getNegocios = async (req, res) => {
       return res.status(400).json({ error: 'dataInicio e obrigatorio' });
     }
 
+    const agendorToken = req.user?.agendorToken || process.env.API_AGENDOR_TOKEN || null;
+    if (!agendorToken) {
+      return res.status(400).json({ error: 'Token do Agendor nao configurado para este usuario.' });
+    }
+
     const statusKey = dealStatus || 'ALL';
-    const chaveCache = [statusKey, dataInicio].join('_');
+    const tokenKey = agendorToken ? `tk_${agendorToken.slice(-6)}` : 'default';
+    const chaveCache = [statusKey, dataInicio, tokenKey].join('_');
     limparCacheExpirado(cacheNegocios);
     const entradaCache = cacheNegocios.get(chaveCache);
 
@@ -96,7 +162,7 @@ exports.getNegocios = async (req, res) => {
       baseNegocios = entradaCache.data;
     } else {
       console.log(`Atualizando negocios no cache para dealStatus=${statusKey}...`);
-      const negociosAtualizados = await buscarNegociosPorRangePorStatus({ dataInicio, dealStatus });
+      const negociosAtualizados = await buscarNegociosPorRangePorStatus({ dataInicio, dealStatus, agendorToken });
       baseNegocios = Array.isArray(negociosAtualizados) ? negociosAtualizados : [];
       cacheNegocios.set(chaveCache, { data: baseNegocios, expiresAt: Date.now() + CACHE_NEGOCIOS_TTL_MS });
     }

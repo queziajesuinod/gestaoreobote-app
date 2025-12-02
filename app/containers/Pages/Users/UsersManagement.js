@@ -50,7 +50,8 @@ const defaultUserForm = {
   password: '',
   confirmPassword: '',
   active: true,
-  consultorId: ''
+  consultorId: '',
+  agendorToken: ''
 };
 
 function UsersManagement() {
@@ -244,7 +245,8 @@ function UsersManagement() {
       password: '',
       confirmPassword: '',
       active: Boolean(usuario.active),
-      consultorId: usuario.consultorId ? String(usuario.consultorId) : ''
+      consultorId: usuario.consultorId ? String(usuario.consultorId) : '',
+      agendorToken: usuario.agendorToken || ''
     });
     setDialogMode('edit');
     setOpenDialog(true);
@@ -290,7 +292,8 @@ function UsersManagement() {
       email: userForm.email,
       username: userForm.username,
       perfilId: userForm.perfilId,
-      active: userForm.active
+      active: userForm.active,
+      agendorToken: userForm.agendorToken ? userForm.agendorToken.trim() : null
     };
 
     if (podeGerenciarUsuarios) {
@@ -549,6 +552,15 @@ function UsersManagement() {
                     </FormControl>
                   </Grid>
                 )}
+                <Grid item xs={12}>
+                  <TextField
+                    label="Token Agendor (opcional)"
+                    value={userForm.agendorToken}
+                    onChange={e => handleFormChange('agendorToken', e.target.value)}
+                    fullWidth
+                    helperText="Informe o token pessoal para acesso ao dashboard via Agendor (se aplicável)."
+                  />
+                </Grid>
                 {dialogMode === 'create' && (
                   <>
                     <Grid item xs={12} sm={6}>
