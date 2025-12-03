@@ -58,6 +58,7 @@ function Login({ setIsAuthenticated = () => {} }) {
         perfil: perfilDescricao,
         permissoes,
         consultorId: data.consultorId || decodedToken.consultorId || null,
+        agendorToken: data.agendorToken || decodedToken.agendorToken || null,
         title: 'Usuário Autenticado',
         avatar: fallbackAvatar || 'default-avatar.png',
         image: fallbackAvatar || null,

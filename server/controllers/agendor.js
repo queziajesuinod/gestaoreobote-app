@@ -8,6 +8,13 @@ const CACHE_NEGOCIOS_TTL_MS = 15 * 60 * 1000;
 const cacheTarefas = new Map();
 const cacheNegocios = new Map();
 
+const resolverAgendorToken = (req) => {
+  // Preferencialmente o token individual do usuário logado; permite override via header, e cai no padrão da env.
+  return req.user?.agendorToken
+    || req.headers['x-agendor-token']
+    || null;
+};
+
 const limparCacheExpirado = (mapa) => {
   const agora = Date.now();
   for (const [chave, entrada] of mapa.entries()) {
@@ -56,7 +63,7 @@ exports.getTarefas = async (req, res) => {
       return res.status(400).json({ error: 'dataInicio e dataFim sao obrigatorios' });
     }
 
-    const agendorToken = req.user?.agendorToken || process.env.API_AGENDOR_TOKEN || null;
+    const agendorToken = resolverAgendorToken(req);
     if (!agendorToken) {
       return res.status(400).json({ error: 'Token do Agendor nao configurado para este usuario.' });
     }
@@ -144,7 +151,7 @@ exports.getNegocios = async (req, res) => {
       return res.status(400).json({ error: 'dataInicio e obrigatorio' });
     }
 
-    const agendorToken = req.user?.agendorToken || process.env.API_AGENDOR_TOKEN || null;
+    const agendorToken = resolverAgendorToken(req);
     if (!agendorToken) {
       return res.status(400).json({ error: 'Token do Agendor nao configurado para este usuario.' });
     }
