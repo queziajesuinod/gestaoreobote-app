@@ -318,7 +318,7 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
   const [integrantes, setIntegrantes] = useState([]);
   const [consultorSelecionado, setConsultorSelecionado] = useState('');
   const [tipo, setTipo] = useState('Todos');
-  const [status, setStatus] = useState('Todos');
+  const [status, setStatus] = useState('Concluídas');
 
   // ==================== ESTADOS - DADOS ====================
   const [tarefas, setTarefas] = useState([]);
@@ -1121,9 +1121,8 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
 
   // ==================== FILTRO LOCAL ====================
   useEffect(() => {
-    let f = [...tarefas];
+    let f = tarefas.filter(ehConcluida);
     if (tipo !== 'Todos') f = f.filter(t => t.tipo === tipo);
-    if (status !== 'Todos') f = f.filter(t => t.status === status);
     if (consultorSelecionado)
       f = f.filter(t => String(t.consultorId ?? '').trim() === String(consultorSelecionado ?? '').trim());
     setFiltradas(f);
@@ -1141,7 +1140,7 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
       ? consultorAgendorLogado
       : '');
     setTipo('Todos');
-    setStatus('Todos');
+    setStatus('Concluídas');
     setTarefas([]);
     setTarefasComparacao([]);
     setFiltradas([]);
@@ -1152,8 +1151,13 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
   }
 
   // ==================== MÉTRICAS - PERÍODO ATUAL ====================
-  const concluidasAtuais = filtradas.filter(t => t.status === 'Concluída');
-  const concluidasComparacao = tarefasComparacao.filter(t => t.status === 'Concluída');
+  const ehConcluida = (tarefa) => {
+    const status = (tarefa.status || '').toLowerCase();
+    return Boolean(tarefa.dataFinalizacao || tarefa.finishedAt) || status.includes('conclu');
+  };
+
+  const concluidasAtuais = filtradas.filter(ehConcluida);
+  const concluidasComparacao = tarefasComparacao.filter(ehConcluida);
 
   const totalVisitasConcluidas = concluidasAtuais.filter(t => t.tipo === 'Visita').length;
   const totalReunioesConcluidas = concluidasAtuais.filter(t => t.tipo === 'Reunião').length;

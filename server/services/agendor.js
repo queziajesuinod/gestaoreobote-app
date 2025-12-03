@@ -130,6 +130,10 @@ async function buscarTarefasPorRange({ dataInicio, dataFim, agendorToken }) {
     let todas = [];
     let page = 1;
     let hasMoreData = true;
+    const fimExclusive = dataFim ? new Date(`${dataFim}T00:00:00Z`) : null;
+    if (fimExclusive) {
+      fimExclusive.setUTCDate(fimExclusive.getUTCDate() + 1);
+    }
 
     while (hasMoreData) {
       const params = {
@@ -138,7 +142,7 @@ async function buscarTarefasPorRange({ dataInicio, dataFim, agendorToken }) {
       };
 
       if (dataInicio) params.finishedDateGt = dataInicio;
-      if (dataFim) params.finishedDateLt = dataFim;
+      if (fimExclusive) params.finishedDateLt = fimExclusive.toISOString().slice(0, 10);
 
       const url = `${API_AGENDOR_URL}/tasks`;
 
