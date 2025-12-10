@@ -1,6 +1,7 @@
 // server/controllers/agendorController.js
 const { data } = require('autoprefixer');
 const { buscarTarefasPorRange, buscarNegociosPorRangePorStatus } = require('../services/agendor');
+const { buildCacheKey, getCache, setCache } = require('../services/agendorCache');
 
 const CACHE_TAREFAS_TTL_MS = 15 * 60 * 1000;
 const CACHE_NEGOCIOS_TTL_MS = 15 * 60 * 1000;
@@ -74,8 +75,14 @@ exports.getTarefas = async (req, res) => {
       return res.status(400).json({ error: 'Datas invalidas' });
     }
 
-    const tokenKey = agendorToken ? `tk_${agendorToken.slice(-6)}` : 'default';
-    const chaveCache = [dataInicio, dataFim, tokenKey].join('_');
+    const { hash: hashParams } = buildCacheKey({
+      tipo: 'tarefas',
+      inicio: dataInicio,
+      fim: dataFim,
+      token: agendorToken
+    });
+
+    const chaveCache = hashParams;
     limparCacheExpirado(cacheTarefas);
     const entradaCache = cacheTarefas.get(chaveCache);
 
@@ -84,7 +91,18 @@ exports.getTarefas = async (req, res) => {
     if (entradaCache && force !== 'true') {
       console.log('Servindo tarefas do cache local');
       baseTarefas = entradaCache.data;
-    } else {
+    }
+
+    if (!baseTarefas && force !== 'true') {
+      const persistido = await getCache(chaveCache);
+      if (persistido) {
+        console.log('Servindo tarefas do cache persistente');
+        baseTarefas = persistido;
+        cacheTarefas.set(chaveCache, { data: baseTarefas, expiresAt: Date.now() + CACHE_TAREFAS_TTL_MS });
+      }
+    }
+
+    if (!baseTarefas) {
       console.log('Atualizando tarefas no cache...');
       const intervalos = splitPeriodIntoChunks(dataInicio, dataFim, 31);
       if (intervalos.length === 0) {
@@ -105,6 +123,15 @@ exports.getTarefas = async (req, res) => {
 
       baseTarefas = acumulado;
       cacheTarefas.set(chaveCache, { data: baseTarefas, expiresAt: Date.now() + CACHE_TAREFAS_TTL_MS });
+      await setCache({
+        hash: chaveCache,
+        tokenSuffix: agendorToken ? agendorToken.slice(-8) : 'default',
+        tipo: 'tarefas',
+        inicio: dataInicio,
+        fim: dataFim,
+        payload: baseTarefas,
+        ttlMs: CACHE_TAREFAS_TTL_MS
+      });
     }
 
     let filtradas = [...baseTarefas];
@@ -157,8 +184,15 @@ exports.getNegocios = async (req, res) => {
     }
 
     const statusKey = dealStatus || 'ALL';
-    const tokenKey = agendorToken ? `tk_${agendorToken.slice(-6)}` : 'default';
-    const chaveCache = [statusKey, dataInicio, dataFim || 'sem-fim', tokenKey].join('_');
+    const { hash: hashParams } = buildCacheKey({
+      tipo: 'negocios',
+      inicio: dataInicio,
+      fim: dataFim,
+      dealStatus: statusKey,
+      token: agendorToken
+    });
+
+    const chaveCache = hashParams;
     limparCacheExpirado(cacheNegocios);
     const entradaCache = cacheNegocios.get(chaveCache);
 
@@ -167,11 +201,32 @@ exports.getNegocios = async (req, res) => {
     if (entradaCache && force !== 'true') {
       console.log(`Servindo negocios do cache local para dealStatus=${statusKey}`);
       baseNegocios = entradaCache.data;
-    } else {
+    }
+
+    if (!baseNegocios && force !== 'true') {
+      const persistido = await getCache(chaveCache);
+      if (persistido) {
+        console.log(`Servindo negocios do cache persistente para dealStatus=${statusKey}`);
+        baseNegocios = persistido;
+        cacheNegocios.set(chaveCache, { data: baseNegocios, expiresAt: Date.now() + CACHE_NEGOCIOS_TTL_MS });
+      }
+    }
+
+    if (!baseNegocios) {
       console.log(`Atualizando negocios no cache para dealStatus=${statusKey}...`);
       const negociosAtualizados = await buscarNegociosPorRangePorStatus({ dataInicio, dataFim, dealStatus, agendorToken });
       baseNegocios = Array.isArray(negociosAtualizados) ? negociosAtualizados : [];
       cacheNegocios.set(chaveCache, { data: baseNegocios, expiresAt: Date.now() + CACHE_NEGOCIOS_TTL_MS });
+      await setCache({
+        hash: chaveCache,
+        tokenSuffix: agendorToken ? agendorToken.slice(-8) : 'default',
+        tipo: 'negocios',
+        inicio: dataInicio,
+        fim: dataFim || null,
+        dealStatus: statusKey,
+        payload: baseNegocios,
+        ttlMs: CACHE_NEGOCIOS_TTL_MS
+      });
     }
 
     let negociosFiltrados = baseNegocios;
