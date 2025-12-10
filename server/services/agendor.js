@@ -8,14 +8,14 @@ const API_AGENDOR_TOKEN = process.env.API_AGENDOR_TOKEN; // ⚠️ deve conter s
 
 const CONFIG = {
   TASKS_PER_PAGE: 100,
-  DELAY_BETWEEN_REQUESTS: 2000, // ms entre paginas de busca
+  DELAY_BETWEEN_REQUESTS: 5000, // ms entre paginas de busca (mais conservador)
   MAX_RETRIES: 3,
-  RETRY_BASE_DELAY: 1500
+  RETRY_BASE_DELAY: 5000 // backoff base mais longo
 };
 
 const RATE_LIMIT = {
-  PER_SECOND: 4,
-  PER_MINUTE: 35
+  PER_SECOND: 1,
+  PER_MINUTE: 15
 };
 
 const MAX_PAGES_SAFETY = 500; // evita loop infinito e garante busca ate o fim
@@ -100,18 +100,23 @@ const haProximaPagina = (response, paginaAtual) => {
 };
 
 const agendarChamadaAgendor = async (fn) => {
-  filaReq = filaReq.then(async () => {
-    if (Date.now() < bloqueadoAte) {
-      const espera = bloqueadoAte - Date.now();
-      await esperar(espera);
-    }
+  // Garante que a fila não fique rejeitada em caso de erro
+  filaReq = filaReq.catch(() => null).then(async () => {
     const agora = Date.now();
+
+    if (agora < bloqueadoAte) {
+      await esperar(bloqueadoAte - agora);
+    }
+
     const esperaLimite = calcularEsperaRateLimit();
-    const esperaEntreChamadas = Math.max(0, 250 - (agora - ultimoCallAgendor)); // evita burst inicial
+    const desdeUltima = agora - ultimoCallAgendor;
+    const esperaEntreChamadas = Math.max(1000 - desdeUltima, 0); // mínimo 1s entre chamadas
     const esperaNecessaria = Math.max(esperaLimite, esperaEntreChamadas);
+
     if (esperaNecessaria > 0) {
       await esperar(esperaNecessaria);
     }
+
     const resultado = await fn();
     ultimoCallAgendor = Date.now();
     registrarChamada();
@@ -292,22 +297,19 @@ async function fetchComRetry(url, agendorToken, { params, tentativa = 1 }) {
     const status = error?.response?.status;
     const retryAfterHeader = error?.response?.headers?.['retry-after'];
     const retryAfterMs = parseRetryAfterMs(retryAfterHeader);
+    const isLimit = status === 429 || status === 503;
 
-    const podeTentarNovamente =
-      tentativa < CONFIG.MAX_RETRIES &&
-      (status === 429 || status === 503);
-
-    if (podeTentarNovamente) {
-      const base = retryAfterMs ?? (CONFIG.RETRY_BASE_DELAY * tentativa);
-      const jitter = Math.floor(Math.random() * 200);
+    if (isLimit) {
+      const base = retryAfterMs ?? Math.min(60000, CONFIG.RETRY_BASE_DELAY * tentativa);
+      const jitter = Math.floor(Math.random() * 400);
       const espera = base + jitter;
-      console.warn(`Retry (${tentativa}/${CONFIG.MAX_RETRIES}) para ${url} apos ${espera}ms - status ${status}`);
+      bloqueadoAte = Math.max(bloqueadoAte, Date.now() + espera);
+      console.warn(`Limite/429 (tentativa ${tentativa}/${CONFIG.MAX_RETRIES}); aguardando ${espera}ms e tentando novamente.`);
       await esperar(espera);
-      return fetchComRetry(url, agendorToken, { params, tentativa: tentativa + 1 });
-    }
 
-    if (status === 429) {
-      bloqueadoAte = Date.now() + 60000; // cooldown de 60s
+      if (tentativa < CONFIG.MAX_RETRIES) {
+        return fetchComRetry(url, agendorToken, { params, tentativa: tentativa + 1 });
+      }
     }
 
     throw error;
