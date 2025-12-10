@@ -7,17 +7,24 @@ const API_AGENDOR_URL = process.env.API_AGENDOR_URL || 'https://api.agendor.com.
 const API_AGENDOR_TOKEN = process.env.API_AGENDOR_TOKEN; // ⚠️ deve conter só o token (sem a palavra "Token")
 
 const CONFIG = {
-  TASKS_PER_PAGE: 50,
-  DELAY_BETWEEN_REQUESTS: 2000, // ms entre paginas
+  TASKS_PER_PAGE: 100,
+  DELAY_BETWEEN_REQUESTS: 2000, // ms entre paginas de busca
   MAX_RETRIES: 3,
-  RETRY_BASE_DELAY: 1500,
-  MIN_DELAY_BETWEEN_CALLS: 2000 // espaca chamadas para evitar 429 no upstream
+  RETRY_BASE_DELAY: 1500
 };
+
+const RATE_LIMIT = {
+  PER_SECOND: 4,
+  PER_MINUTE: 35
+};
+
+const MAX_PAGES_SAFETY = 500; // evita loop infinito e garante busca ate o fim
 
 const inflightTarefas = new Map();
 let filaReq = Promise.resolve();
 let ultimoCallAgendor = 0;
 let bloqueadoAte = 0;
+const historicoChamadas = [];
 
 const parseRetryAfterMs = (header) => {
   if (!header) return null;
@@ -32,6 +39,66 @@ const parseRetryAfterMs = (header) => {
   return null;
 };
 
+const calcularEsperaRateLimit = () => {
+  const agora = Date.now();
+  const limiteMinuto = agora - 60000;
+
+  // Remove chamadas mais antigas que 1 minuto para manter a lista curta
+  while (historicoChamadas.length && historicoChamadas[0] <= limiteMinuto) {
+    historicoChamadas.shift();
+  }
+
+  let espera = 0;
+
+  if (historicoChamadas.length >= RATE_LIMIT.PER_SECOND) {
+    const idxLimiteSegundo = historicoChamadas.length - RATE_LIMIT.PER_SECOND;
+    const proximaDisponivelSegundo = historicoChamadas[idxLimiteSegundo] + 1000 - agora;
+    espera = Math.max(espera, proximaDisponivelSegundo);
+  }
+
+  if (historicoChamadas.length >= RATE_LIMIT.PER_MINUTE) {
+    const idxLimiteMinuto = historicoChamadas.length - RATE_LIMIT.PER_MINUTE;
+    const proximaDisponivelMinuto = historicoChamadas[idxLimiteMinuto] + 60000 - agora;
+    espera = Math.max(espera, proximaDisponivelMinuto);
+  }
+
+  return Math.max(0, espera);
+};
+
+const registrarChamada = () => {
+  historicoChamadas.push(Date.now());
+};
+
+const haProximaPagina = (response, paginaAtual) => {
+  const pag =
+    response?.data?.pagination ||
+    response?.data?.page ||
+    response?.data?.meta?.pagination ||
+    response?.data?.paging ||
+    null;
+
+  const hasMore = pag?.hasMore ?? pag?.has_more ?? pag?.hasNext ?? pag?.has_next ?? pag?.hasNextPage ?? pag?.has_next_page;
+  if (typeof hasMore === 'boolean') return hasMore;
+
+  const nextPage = pag?.nextPage ?? pag?.next_page ?? pag?.next;
+  if (nextPage) return true;
+
+  const links = response?.data?.links;
+  if (links?.next) return true;
+  if (links && !links.next && links.prev) return false;
+
+  const totalPages = pag?.totalPages ?? pag?.total_pages ?? pag?.pages;
+  if (totalPages && paginaAtual < totalPages) return true;
+
+  const totalItems = pag?.total ?? pag?.totalItems ?? pag?.total_items;
+  const perPage = pag?.perPage ?? pag?.per_page ?? pag?.pageSize ?? pag?.page_size;
+  if (totalItems && perPage) {
+    return paginaAtual * perPage < totalItems;
+  }
+
+  return null;
+};
+
 const agendarChamadaAgendor = async (fn) => {
   filaReq = filaReq.then(async () => {
     if (Date.now() < bloqueadoAte) {
@@ -39,12 +106,15 @@ const agendarChamadaAgendor = async (fn) => {
       await esperar(espera);
     }
     const agora = Date.now();
-    const esperaRestante = Math.max(0, CONFIG.MIN_DELAY_BETWEEN_CALLS - (agora - ultimoCallAgendor));
-    if (esperaRestante > 0) {
-      await esperar(esperaRestante);
+    const esperaLimite = calcularEsperaRateLimit();
+    const esperaEntreChamadas = Math.max(0, 250 - (agora - ultimoCallAgendor)); // evita burst inicial
+    const esperaNecessaria = Math.max(esperaLimite, esperaEntreChamadas);
+    if (esperaNecessaria > 0) {
+      await esperar(esperaNecessaria);
     }
     const resultado = await fn();
     ultimoCallAgendor = Date.now();
+    registrarChamada();
     return resultado;
   });
 
@@ -130,35 +200,74 @@ async function buscarTarefasPorRange({ dataInicio, dataFim, agendorToken }) {
     let todas = [];
     let page = 1;
     let hasMoreData = true;
-    const fimExclusive = dataFim ? new Date(`${dataFim}T00:00:00Z`) : null;
-    if (fimExclusive) {
-      fimExclusive.setUTCDate(fimExclusive.getUTCDate() + 1);
-    }
+    let contadorPaginas = 0;
+    const dataInicioIso = dataInicio ? normalizarDataIso(dataInicio) : null;
+    const dataFimIso = dataFim ? normalizarDataIso(dataFim) : null;
 
-    while (hasMoreData) {
+    while (hasMoreData && contadorPaginas < MAX_PAGES_SAFETY) {
       const params = {
         page,
+        perPage: CONFIG.TASKS_PER_PAGE,
         per_page: CONFIG.TASKS_PER_PAGE
       };
 
-      if (dataInicio) params.finishedDateGt = dataInicio;
-      if (fimExclusive) params.finishedDateLt = fimExclusive.toISOString().slice(0, 10);
+      if (dataInicioIso) params.finishedDateGt = dataInicioIso;
+      if (dataFimIso) params.finishedDateLt = dataFimIso;
 
       const url = `${API_AGENDOR_URL}/tasks`;
 
-      const response = await fetchComRetry(url, agendorToken, { params });
+      try {
+        console.log('Agendor GET /tasks', { page, perPage: params.perPage || params.per_page, finishedDateGt: params.finishedDateGt, finishedDateLt: params.finishedDateLt });
+        const response = await fetchComRetry(url, agendorToken, { params });
 
-      const data = response.data.data || [];
-      todas = [...todas, ...data];
+        const data = response.data.data || [];
+        todas = [...todas, ...data];
 
-      console.log(`📄 Página ${page}: ${data.length} tarefas`);
+        console.log(`📄 Página ${page}: ${data.length} tarefas`);
 
-      if (data.length < CONFIG.TASKS_PER_PAGE) {
-        hasMoreData = false;
-      } else {
-        page++;
-        await esperar(CONFIG.DELAY_BETWEEN_REQUESTS);
+      const pagInfo =
+        response?.data?.pagination ||
+        response?.data?.page ||
+        response?.data?.meta?.pagination ||
+        response?.data?.paging ||
+        null;
+      const perPageEsperado =
+        pagInfo?.perPage ||
+        pagInfo?.per_page ||
+        pagInfo?.pageSize ||
+        pagInfo?.page_size ||
+        params.perPage ||
+        params.per_page ||
+        CONFIG.TASKS_PER_PAGE;
+
+        const proxima = haProximaPagina(response, page);
+        const podeTerMais = proxima === true || (proxima === null && data.length >= perPageEsperado);
+        if (podeTerMais) {
+          page++;
+          contadorPaginas++;
+          await esperar(CONFIG.DELAY_BETWEEN_REQUESTS);
+          continue;
+        }
+
+        if (proxima === false || data.length < perPageEsperado) {
+          hasMoreData = false;
+        }
+      } catch (error) {
+        const status = error?.response?.status;
+        if (status === 429 || status === 503) {
+          const retryAfterMs = parseRetryAfterMs(error?.response?.headers?.['retry-after']);
+          const espera = retryAfterMs ?? 60000;
+          console.warn(`Limite ou instabilidade na pagina ${page}; aguardando ${espera}ms e tentando novamente.`);
+          bloqueadoAte = Math.max(bloqueadoAte, Date.now() + espera);
+          await esperar(espera);
+          continue;
+        }
+        throw error;
       }
+    }
+
+    if (contadorPaginas >= MAX_PAGES_SAFETY) {
+      console.warn('Atingiu limite de paginas em tarefas; possivel paginacao interminavel.');
     }
 
     return todas;
@@ -207,7 +316,7 @@ async function fetchComRetry(url, agendorToken, { params, tentativa = 1 }) {
   }
 }
 
-async function buscarNegociosPorRangePorStatus({ dataInicio, dealStatus, agendorToken }) {
+async function buscarNegociosPorRangePorStatus({ dataInicio, dataFim, dealStatus, agendorToken }) {
   const tokenParaUso = agendorToken || API_AGENDOR_TOKEN;
   if (!tokenParaUso) {
     throw new Error('Token do Agendor não configurado para o usuário nem como padrão.');
@@ -215,31 +324,89 @@ async function buscarNegociosPorRangePorStatus({ dataInicio, dealStatus, agendor
   let todasNegocios = [];
   let page = 1;
   let hasMoreData = true;
+  let contadorPaginas = 0;
+  const dataInicioIso = dataInicio ? normalizarDataIso(dataInicio) : null;
+  const dataFimIso = dataFim ? normalizarDataIso(dataFim) : null;
 
-  while (hasMoreData) {
+  while (hasMoreData && contadorPaginas < MAX_PAGES_SAFETY) {
     const params = {
       page,
+      perPage: CONFIG.TASKS_PER_PAGE,
       per_page: CONFIG.TASKS_PER_PAGE
     };
 
-    if (dataInicio) params.since = dataInicio;
-    params.dealStatus = dealStatus;
-
-    const url = `${API_AGENDOR_URL}/deals/stream`;
-
-    const response = await fetchComRetry(url, tokenParaUso, { params });
-
-    const data = response.data.data || [];
-    todasNegocios = [...todasNegocios, ...data];
-
-    console.log(`📄 Página ${page}: ${data.length} negócios`);
-
-    if (data.length < CONFIG.TASKS_PER_PAGE) {
-      hasMoreData = false;
-    } else {
-      page++;
-      await esperar(CONFIG.DELAY_BETWEEN_REQUESTS);
+    if (dataInicioIso) {
+      params.updatedAtGt = dataInicioIso;
+      params.createdAtGt = dataInicioIso;
     }
+    if (dataFimIso) {
+      params.updatedAtLt = dataFimIso;
+      params.createdAtLt = dataFimIso;
+    }
+    if (dealStatus) params.dealStatus = dealStatus;
+
+    const url = `${API_AGENDOR_URL}/deals`;
+
+    try {
+      console.log('Agendor GET /deals', {
+        page,
+        perPage: params.perPage || params.per_page,
+        updatedAtGt: params.updatedAtGt,
+        updatedAtLt: params.updatedAtLt,
+        createdAtGt: params.createdAtGt,
+        createdAtLt: params.createdAtLt,
+        dealStatus
+      });
+      const response = await fetchComRetry(url, tokenParaUso, { params });
+
+      const data = response.data.data || [];
+      todasNegocios = [...todasNegocios, ...data];
+
+      console.log(`📄 Página ${page}: ${data.length} negócios`);
+
+      const pagInfo =
+        response?.data?.pagination ||
+        response?.data?.page ||
+        response?.data?.meta?.pagination ||
+        response?.data?.paging ||
+        null;
+      const perPageEsperado =
+        pagInfo?.perPage ||
+        pagInfo?.per_page ||
+        pagInfo?.pageSize ||
+        pagInfo?.page_size ||
+        params.perPage ||
+        params.per_page ||
+        CONFIG.TASKS_PER_PAGE;
+
+      const proxima = haProximaPagina(response, page);
+      const podeTerMais = proxima === true || (proxima === null && data.length >= perPageEsperado);
+      if (podeTerMais) {
+        page++;
+        contadorPaginas++;
+        await esperar(CONFIG.DELAY_BETWEEN_REQUESTS);
+        continue;
+      }
+
+      if (proxima === false || data.length < perPageEsperado) {
+        hasMoreData = false;
+      }
+    } catch (error) {
+      const status = error?.response?.status;
+      if (status === 429 || status === 503) {
+        const retryAfterMs = parseRetryAfterMs(error?.response?.headers?.['retry-after']);
+        const espera = retryAfterMs ?? 60000;
+        console.warn(`Limite ou instabilidade na pagina ${page}; aguardando ${espera}ms e tentando novamente.`);
+        bloqueadoAte = Math.max(bloqueadoAte, Date.now() + espera);
+        await esperar(espera);
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  if (contadorPaginas >= MAX_PAGES_SAFETY) {
+    console.warn('Atingiu limite de paginas em negÇücios; possivel paginacao interminavel.');
   }
 
   return todasNegocios;
@@ -276,6 +443,14 @@ function mapearTipoTarefa(tipoAgendor) {
 
 function esperar(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function normalizarDataIso(valor) {
+  if (!valor) return null;
+  const iso = valor.includes('T') ? valor : `${valor}T00:00:00Z`;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return valor;
+  return d.toISOString();
 }
 
 function logErroAxios(error, contexto) {

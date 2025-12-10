@@ -1,0 +1,120 @@
+// server/services/agendor.js
+// ?? Versão otimizada e segura — busca direta de tarefas com filtros dinâmicos
+
+const axios = require('axios');
+
+const API_AGENDOR_URL = process.env.API_AGENDOR_URL || 'https://api.agendor.com.br/v3';
+const API_AGENDOR_TOKEN = process.env.API_AGENDOR_TOKEN; // ?? deve conter só o token (sem a palavra "Token")
+
+const CONFIG = {
+  TASKS_PER_PAGE: 100,
+  DELAY_BETWEEN_REQUESTS: 2000, // ms entre paginas de busca
+  MAX_RETRIES: 3,
+  RETRY_BASE_DELAY: 1500
+};
+
+const RATE_LIMIT = {
+  PER_SECOND: 4,
+  PER_MINUTE: 35
+};
+
+const MAX_PAGES_SAFETY = 500; // evita loop infinito e garante busca ate o fim
+
+const inflightTarefas = new Map();
+let filaReq = Promise.resolve();
+let ultimoCallAgendor = 0;
+let bloqueadoAte = 0;
+const historicoChamadas = [];
+
+const parseRetryAfterMs = (header) => {
+  if (!header) return null;
+  const numeric = Number(header);
+  if (!Number.isNaN(numeric)) {
+    return Math.max(0, numeric * 1000);
+  }
+  const dateVal = new Date(header);
+  if (!Number.isNaN(dateVal.getTime())) {
+    return Math.max(0, dateVal.getTime() - Date.now());
+  }
+  return null;
+};
+
+const calcularEsperaRateLimit = () => {
+  const agora = Date.now();
+  const limiteMinuto = agora - 60000;
+
+  // Remove chamadas mais antigas que 1 minuto para manter a lista curta
+  while (historicoChamadas.length && historicoChamadas[0] <= limiteMinuto) {
+    historicoChamadas.shift();
+  }
+
+  let espera = 0;
+
+  if (historicoChamadas.length >= RATE_LIMIT.PER_SECOND) {
+    const idxLimiteSegundo = historicoChamadas.length - RATE_LIMIT.PER_SECOND;
+    const proximaDisponivelSegundo = historicoChamadas[idxLimiteSegundo] + 1000 - agora;
+    espera = Math.max(espera, proximaDisponivelSegundo);
+  }
+
+  if (historicoChamadas.length >= RATE_LIMIT.PER_MINUTE) {
+    const idxLimiteMinuto = historicoChamadas.length - RATE_LIMIT.PER_MINUTE;
+    const proximaDisponivelMinuto = historicoChamadas[idxLimiteMinuto] + 60000 - agora;
+    espera = Math.max(espera, proximaDisponivelMinuto);
+  }
+
+  return Math.max(0, espera);
+};
+
+const registrarChamada = () => {
+  historicoChamadas.push(Date.now());
+};
+
+const agendarChamadaAgendor = async (fn) => {
+  filaReq = filaReq.then(async () => {
+    if (Date.now() < bloqueadoAte) {
+      const espera = bloqueadoAte - Date.now();
+      await esperar(espera);
+    }
+    const agora = Date.now();
+    const esperaLimite = calcularEsperaRateLimit();
+    const esperaEntreChamadas = Math.max(0, 250 - (agora - ultimoCallAgendor)); // evita burst inicial
+    const esperaNecessaria = Math.max(esperaLimite, esperaEntreChamadas);
+    if (esperaNecessaria > 0) {
+      await esperar(esperaNecessaria);
+    }
+    const resultado = await fn();
+    ultimoCallAgendor = Date.now();
+    registrarChamada();
+    return resultado;
+  });
+
+  return filaReq;
+};
+
+// ===================== FUNÇÃO PRINCIPAL =====================
+async function buscarTarefas({ consultores = [], tipo, dataInicio, dataFim, agendorToken }) {
+  try {
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`?? INICIANDO BUSCA DIRETA DE TAREFAS`);
+    console.log(`${'='.repeat(60)}`);
+    console.log(`?? Período: ${dataInicio || 'Sem início'} ? ${dataFim || 'Sem fim'}`);
+    console.log(`?? Consultores: ${consultores.length > 0 ? consultores.join(', ') : 'Todos'}`);
+    console.log(`?? Tipo: ${tipo || 'Todos'}`);
+    console.log(`${'='.repeat(60)}\n`);
+
+    const tokenParaUso = agendorToken || API_AGENDOR_TOKEN;
+    if (!tokenParaUso) {
+      throw new Error('Token do Agendor não configurado para o usuário nem como padrão.');
+    }
+
+    const tarefas = await buscarTarefasPorRange({ dataInicio, dataFim, agendorToken: tokenParaUso });
+
+    console.log(`?? Total bruto retornado: ${tarefas.length}`);
+
+    let filtradas = tarefas;
+
+    // Filtrar por consultores (user.id)
+    if (consultores.length > 0) {
+      const ids = consultores.map(String);
+      filtradas = filtradas.filter(t => t.user?.id && ids.includes(String(t.user.id)));
+    }

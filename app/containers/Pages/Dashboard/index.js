@@ -325,6 +325,7 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
   const [tarefasComparacao, setTarefasComparacao] = useState([]);
   const [filtradas, setFiltradas] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [limpandoCache, setLimpandoCache] = useState(false);
   const [mapaConsultoresGlobal, setMapaConsultoresGlobal] = useState({});
   const [consultorAgendorLogado, setConsultorAgendorLogado] = useState(null);
 
@@ -343,6 +344,32 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
   const handleCloseSnackbar = useCallback(() => {
     setSnackbar(prev => ({ ...prev, open: false }));
   }, []);
+
+  const limparCacheAgendor = useCallback(async () => {
+    setLimpandoCache(true);
+    try {
+      const response = await fetch(`${API_URL}/agendor/cache/limpar`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${getToken()}`
+        }
+      });
+
+      if (!response.ok) {
+        const texto = await response.text().catch(() => '');
+        throw new Error(`HTTP ${response.status}: ${response.statusText} - ${texto.slice(0, 150)}`);
+      }
+
+      const data = await response.json().catch(() => ({}));
+      showSnackbar(data?.mensagem || 'Cache do Agendor limpo com sucesso.', 'success');
+    } catch (error) {
+      console.error('Erro ao limpar cache do Agendor:', error);
+      showSnackbar('Falha ao limpar cache do Agendor.', 'error');
+    } finally {
+      setLimpandoCache(false);
+    }
+  }, [showSnackbar]);
 
   const extrairMensagemErroAgendor = useCallback((erro) => {
     const mensagemBruta = erro?.message || (typeof erro === 'string' ? erro : '') || '';
@@ -1567,6 +1594,14 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
                 onClick={limparFiltros}
               >
                 Limpar Filtros
+              </Button>
+              <Button
+                variant="outlined"
+                color="warning"
+                onClick={limparCacheAgendor}
+                disabled={limpandoCache || loading}
+              >
+                {limpandoCache ? <CircularProgress size={20} /> : 'Limpar Cache Agendor'}
               </Button>
             </Box>
           </Grid>

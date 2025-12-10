@@ -145,7 +145,7 @@ exports.getTarefas = async (req, res) => {
 
 exports.getNegocios = async (req, res) => {
   try {
-    const { dataInicio, force, consultor, dealStatus } = req.query;
+    const { dataInicio, dataFim, force, consultor, dealStatus } = req.query;
 
     if (!dataInicio) {
       return res.status(400).json({ error: 'dataInicio e obrigatorio' });
@@ -158,7 +158,7 @@ exports.getNegocios = async (req, res) => {
 
     const statusKey = dealStatus || 'ALL';
     const tokenKey = agendorToken ? `tk_${agendorToken.slice(-6)}` : 'default';
-    const chaveCache = [statusKey, dataInicio, tokenKey].join('_');
+    const chaveCache = [statusKey, dataInicio, dataFim || 'sem-fim', tokenKey].join('_');
     limparCacheExpirado(cacheNegocios);
     const entradaCache = cacheNegocios.get(chaveCache);
 
@@ -169,7 +169,7 @@ exports.getNegocios = async (req, res) => {
       baseNegocios = entradaCache.data;
     } else {
       console.log(`Atualizando negocios no cache para dealStatus=${statusKey}...`);
-      const negociosAtualizados = await buscarNegociosPorRangePorStatus({ dataInicio, dealStatus, agendorToken });
+      const negociosAtualizados = await buscarNegociosPorRangePorStatus({ dataInicio, dataFim, dealStatus, agendorToken });
       baseNegocios = Array.isArray(negociosAtualizados) ? negociosAtualizados : [];
       cacheNegocios.set(chaveCache, { data: baseNegocios, expiresAt: Date.now() + CACHE_NEGOCIOS_TTL_MS });
     }
@@ -213,4 +213,23 @@ exports.getNegocios = async (req, res) => {
     console.error('Erro em getNegocios:', error.message);
     res.status(500).json({ error: 'Erro ao buscar negocios' });
   }
+};
+
+exports.limparCache = (req, res) => {
+  const totalTarefasAntes = cacheTarefas.size;
+  const totalNegociosAntes = cacheNegocios.size;
+
+  cacheTarefas.clear();
+  cacheNegocios.clear();
+
+  res.json({
+    ok: true,
+    mensagem: 'Caches de tarefas e negocios limpos.',
+    stats: {
+      tarefasAntes: totalTarefasAntes,
+      negociosAntes: totalNegociosAntes,
+      tarefasDepois: cacheTarefas.size,
+      negociosDepois: cacheNegocios.size
+    }
+  });
 };
