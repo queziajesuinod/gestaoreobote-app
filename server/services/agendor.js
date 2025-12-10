@@ -217,14 +217,12 @@ async function buscarTarefasPorRange({ dataInicio, dataFim, agendorToken }) {
       const url = `${API_AGENDOR_URL}/tasks`;
 
       try {
-        console.log('Agendor GET /tasks', { page, perPage: params.perPage || params.per_page, finishedDateGt: params.finishedDateGt, finishedDateLt: params.finishedDateLt });
         const response = await fetchComRetry(url, agendorToken, { params });
 
         const data = response.data.data || [];
         todas = [...todas, ...data];
 
-        console.log(`📄 Página ${page}: ${data.length} tarefas`);
-
+       
       const pagInfo =
         response?.data?.pagination ||
         response?.data?.page ||
