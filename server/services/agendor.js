@@ -2,29 +2,71 @@
 // 🔹 Versão otimizada e segura — busca direta de tarefas com filtros dinâmicos
 
 const axios = require('axios');
+const http = require('http');
+const https = require('https');
 
 const API_AGENDOR_URL = process.env.API_AGENDOR_URL || 'https://api.agendor.com.br/v3';
 const API_AGENDOR_TOKEN = process.env.API_AGENDOR_TOKEN; // ⚠️ deve conter só o token (sem a palavra "Token")
 
 const CONFIG = {
   TASKS_PER_PAGE: 100,
-  DELAY_BETWEEN_REQUESTS: 5000, // ms entre paginas de busca (mais conservador)
+  DELAY_BETWEEN_REQUESTS: 0, // espera entre paginas; rate limit controla o pacing
   MAX_RETRIES: 3,
-  RETRY_BASE_DELAY: 5000 // backoff base mais longo
+  RETRY_BASE_DELAY: 2000 // backoff base
 };
 
 const RATE_LIMIT = {
-  PER_SECOND: 1,
-  PER_MINUTE: 15
+  PER_SECOND: 3,
+  PER_MINUTE: 180
 };
+
+const MIN_INTERVAL_MS = 0;
 
 const MAX_PAGES_SAFETY = 500; // evita loop infinito e garante busca ate o fim
 
+const AGENDOR_MAX_SOCKETS = Number(process.env.AGENDOR_MAX_SOCKETS || 4);
+const AGENDOR_KEEP_ALIVE_MS = Number(process.env.AGENDOR_KEEP_ALIVE_MS || 30000);
+
+const AGENDOR_HTTP_AGENT = new http.Agent({
+  keepAlive: true,
+  maxSockets: AGENDOR_MAX_SOCKETS,
+  maxFreeSockets: AGENDOR_MAX_SOCKETS,
+  keepAliveMsecs: AGENDOR_KEEP_ALIVE_MS
+});
+
+const AGENDOR_HTTPS_AGENT = new https.Agent({
+  keepAlive: true,
+  maxSockets: AGENDOR_MAX_SOCKETS,
+  maxFreeSockets: AGENDOR_MAX_SOCKETS,
+  keepAliveMsecs: AGENDOR_KEEP_ALIVE_MS
+});
+
+const agendorHttp = axios.create({
+  baseURL: API_AGENDOR_URL,
+  timeout: 30000,
+  httpAgent: AGENDOR_HTTP_AGENT,
+  httpsAgent: AGENDOR_HTTPS_AGENT,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+});
+
 const inflightTarefas = new Map();
-let filaReq = Promise.resolve();
-let ultimoCallAgendor = 0;
-let bloqueadoAte = 0;
-const historicoChamadas = [];
+const limitadoresPorToken = new Map();
+
+const obterTokenKey = (agendorToken) => (agendorToken ? `tk_${agendorToken.slice(-6)}` : 'default');
+
+const obterLimiter = (tokenKey) => {
+  if (!limitadoresPorToken.has(tokenKey)) {
+    limitadoresPorToken.set(tokenKey, {
+      fila: Promise.resolve(),
+      ultimoCall: 0,
+      bloqueadoAte: 0,
+      historico: []
+    });
+  }
+  return limitadoresPorToken.get(tokenKey);
+};
 
 const parseRetryAfterMs = (header) => {
   if (!header) return null;
@@ -39,7 +81,7 @@ const parseRetryAfterMs = (header) => {
   return null;
 };
 
-const calcularEsperaRateLimit = () => {
+const calcularEsperaRateLimit = (historicoChamadas) => {
   const agora = Date.now();
   const limiteMinuto = agora - 60000;
 
@@ -65,7 +107,7 @@ const calcularEsperaRateLimit = () => {
   return Math.max(0, espera);
 };
 
-const registrarChamada = () => {
+const registrarChamada = (historicoChamadas) => {
   historicoChamadas.push(Date.now());
 };
 
@@ -99,18 +141,27 @@ const haProximaPagina = (response, paginaAtual) => {
   return null;
 };
 
-const agendarChamadaAgendor = async (fn) => {
+const obterLinkNext = (links) => {
+  if (!links) return null;
+  if (typeof links === 'string') return links;
+  if (typeof links.next === 'string') return links.next;
+  if (typeof links.next?.href === 'string') return links.next.href;
+  return null;
+};
+
+const agendarChamadaAgendor = async (fn, tokenKey) => {
+  const limiter = obterLimiter(tokenKey);
   // Garante que a fila não fique rejeitada em caso de erro
-  filaReq = filaReq.catch(() => null).then(async () => {
+  limiter.fila = limiter.fila.catch(() => null).then(async () => {
     const agora = Date.now();
 
-    if (agora < bloqueadoAte) {
-      await esperar(bloqueadoAte - agora);
+    if (agora < limiter.bloqueadoAte) {
+      await esperar(limiter.bloqueadoAte - agora);
     }
 
-    const esperaLimite = calcularEsperaRateLimit();
-    const desdeUltima = agora - ultimoCallAgendor;
-    const esperaEntreChamadas = Math.max(1000 - desdeUltima, 0); // mínimo 1s entre chamadas
+    const esperaLimite = calcularEsperaRateLimit(limiter.historico);
+    const desdeUltima = agora - limiter.ultimoCall;
+    const esperaEntreChamadas = Math.max(MIN_INTERVAL_MS - desdeUltima, 0);
     const esperaNecessaria = Math.max(esperaLimite, esperaEntreChamadas);
 
     if (esperaNecessaria > 0) {
@@ -118,12 +169,12 @@ const agendarChamadaAgendor = async (fn) => {
     }
 
     const resultado = await fn();
-    ultimoCallAgendor = Date.now();
-    registrarChamada();
+    limiter.ultimoCall = Date.now();
+    registrarChamada(limiter.historico);
     return resultado;
   });
 
-  return filaReq;
+  return limiter.fila;
 };
 
 // ===================== FUNÇÃO PRINCIPAL =====================
@@ -194,10 +245,10 @@ async function buscarTarefas({ consultores = [], tipo, dataInicio, dataFim, agen
 
 // ===================== BUSCAR TAREFAS COM PAGINAÇÃO =====================
 async function buscarTarefasPorRange({ dataInicio, dataFim, agendorToken }) {
-  const tokenKey = agendorToken ? `tk_${agendorToken.slice(-6)}` : 'default';
+  const tokenKey = obterTokenKey(agendorToken);
   const chave = `${dataInicio || 'sem-inicio'}_${dataFim || 'sem-fim'}_${tokenKey}`;
   if (inflightTarefas.has(chave)) {
-    console.log(`🔄 Usando chamada em andamento para tarefas (${chave})`);
+    console.log(`?? Usando chamada em andamento para tarefas (${chave})`);
     return inflightTarefas.get(chave);
   }
 
@@ -206,28 +257,27 @@ async function buscarTarefasPorRange({ dataInicio, dataFim, agendorToken }) {
     let page = 1;
     let hasMoreData = true;
     let contadorPaginas = 0;
+    let nextUrl = null;
     const dataInicioIso = dataInicio ? normalizarDataIso(dataInicio) : null;
     const dataFimIso = dataFim ? normalizarDataIso(dataFim) : null;
 
+    const paramsBase = {
+      perPage: CONFIG.TASKS_PER_PAGE,
+      per_page: CONFIG.TASKS_PER_PAGE
+    };
+
+    if (dataInicioIso) paramsBase.finishedDateGt = dataInicioIso;
+    if (dataFimIso) paramsBase.finishedDateLt = dataFimIso;
+
     while (hasMoreData && contadorPaginas < MAX_PAGES_SAFETY) {
-      const params = {
-        page,
-        perPage: CONFIG.TASKS_PER_PAGE,
-        per_page: CONFIG.TASKS_PER_PAGE
-      };
+      const params = nextUrl ? undefined : { ...paramsBase, page };
+      const url = nextUrl || '/tasks';
 
-      if (dataInicioIso) params.finishedDateGt = dataInicioIso;
-      if (dataFimIso) params.finishedDateLt = dataFimIso;
+      const response = await fetchComRetry(url, agendorToken, { params });
 
-      const url = `${API_AGENDOR_URL}/tasks`;
+      const data = response.data.data || [];
+      todas.push(...data);
 
-      try {
-        const response = await fetchComRetry(url, agendorToken, { params });
-
-        const data = response.data.data || [];
-        todas = [...todas, ...data];
-
-       
       const pagInfo =
         response?.data?.pagination ||
         response?.data?.page ||
@@ -239,34 +289,26 @@ async function buscarTarefasPorRange({ dataInicio, dataFim, agendorToken }) {
         pagInfo?.per_page ||
         pagInfo?.pageSize ||
         pagInfo?.page_size ||
-        params.perPage ||
-        params.per_page ||
+        params?.perPage ||
+        params?.per_page ||
+        paramsBase.perPage ||
+        paramsBase.per_page ||
         CONFIG.TASKS_PER_PAGE;
 
-        const proxima = haProximaPagina(response, page);
-        const podeTerMais = proxima === true || (proxima === null && data.length >= perPageEsperado);
-        if (podeTerMais) {
-          page++;
-          contadorPaginas++;
+      const linkNext = obterLinkNext(response?.data?.links);
+      const proxima = haProximaPagina(response, page);
+      const podeTerMais = Boolean(linkNext) || proxima === true || (proxima === null && data.length >= perPageEsperado);
+      if (podeTerMais) {
+        nextUrl = linkNext || null;
+        page++;
+        contadorPaginas++;
+        if (CONFIG.DELAY_BETWEEN_REQUESTS > 0) {
           await esperar(CONFIG.DELAY_BETWEEN_REQUESTS);
-          continue;
         }
-
-        if (proxima === false || data.length < perPageEsperado) {
-          hasMoreData = false;
-        }
-      } catch (error) {
-        const status = error?.response?.status;
-        if (status === 429 || status === 503) {
-          const retryAfterMs = parseRetryAfterMs(error?.response?.headers?.['retry-after']);
-          const espera = retryAfterMs ?? 60000;
-          console.warn(`Limite ou instabilidade na pagina ${page}; aguardando ${espera}ms e tentando novamente.`);
-          bloqueadoAte = Math.max(bloqueadoAte, Date.now() + espera);
-          await esperar(espera);
-          continue;
-        }
-        throw error;
+        continue;
       }
+
+      hasMoreData = false;
     }
 
     if (contadorPaginas >= MAX_PAGES_SAFETY) {
@@ -285,26 +327,30 @@ async function buscarTarefasPorRange({ dataInicio, dataFim, agendorToken }) {
 }
 
 async function fetchComRetry(url, agendorToken, { params, tentativa = 1 }) {
+  const tokenKey = obterTokenKey(agendorToken);
+  const limiter = obterLimiter(tokenKey);
+
   try {
-    return await agendarChamadaAgendor(() => axios.get(url, {
+    return await agendarChamadaAgendor(() => agendorHttp.get(url, {
       headers: {
-        Authorization: `Token ${agendorToken}`, // inclui a palavra "Token"
-        'Content-Type': 'application/json'
+        Authorization: `Token ${agendorToken}`
       },
       params
-    }));
+    }), tokenKey);
   } catch (error) {
     const status = error?.response?.status;
     const retryAfterHeader = error?.response?.headers?.['retry-after'];
     const retryAfterMs = parseRetryAfterMs(retryAfterHeader);
-    const isLimit = status === 429 || status === 503;
+    const isRateLimit = status === 429;
+    const isServerError = status >= 500 && status < 600;
+    const isRetryable = isRateLimit || isServerError;
 
-    if (isLimit) {
-      const base = retryAfterMs ?? Math.min(60000, CONFIG.RETRY_BASE_DELAY * tentativa);
+    if (isRetryable) {
+      const backoffBase = retryAfterMs ?? Math.min(60000, CONFIG.RETRY_BASE_DELAY * Math.pow(2, tentativa - 1));
       const jitter = Math.floor(Math.random() * 400);
-      const espera = base + jitter;
-      bloqueadoAte = Math.max(bloqueadoAte, Date.now() + espera);
-      console.warn(`Limite/429 (tentativa ${tentativa}/${CONFIG.MAX_RETRIES}); aguardando ${espera}ms e tentando novamente.`);
+      const espera = backoffBase + jitter;
+      limiter.bloqueadoAte = Math.max(limiter.bloqueadoAte, Date.now() + espera);
+      console.warn(`Limite/erro ${status || 'rede'} (tentativa ${tentativa}/${CONFIG.MAX_RETRIES}); aguardando ${espera}ms e tentando novamente.`);
       await esperar(espera);
 
       if (tentativa < CONFIG.MAX_RETRIES) {
@@ -319,94 +365,86 @@ async function fetchComRetry(url, agendorToken, { params, tentativa = 1 }) {
 async function buscarNegociosPorRangePorStatus({ dataInicio, dataFim, dealStatus, agendorToken }) {
   const tokenParaUso = agendorToken || API_AGENDOR_TOKEN;
   if (!tokenParaUso) {
-    throw new Error('Token do Agendor não configurado para o usuário nem como padrão.');
+    throw new Error('Token do Agendor nao configurado para o usuario nem como padrao.');
   }
   let todasNegocios = [];
   let page = 1;
   let hasMoreData = true;
   let contadorPaginas = 0;
+  let nextUrl = null;
   const dataInicioIso = dataInicio ? normalizarDataIso(dataInicio) : null;
   const dataFimIso = dataFim ? normalizarDataIso(dataFim) : null;
 
+  const paramsBase = {
+    perPage: CONFIG.TASKS_PER_PAGE,
+    per_page: CONFIG.TASKS_PER_PAGE
+  };
+
+  if (dataInicioIso) {
+    paramsBase.updatedAtGt = dataInicioIso;
+    paramsBase.createdAtGt = dataInicioIso;
+  }
+  if (dataFimIso) {
+    paramsBase.updatedAtLt = dataFimIso;
+    paramsBase.createdAtLt = dataFimIso;
+  }
+  if (dealStatus) paramsBase.dealStatus = dealStatus;
+
   while (hasMoreData && contadorPaginas < MAX_PAGES_SAFETY) {
-    const params = {
+    const params = nextUrl ? undefined : { ...paramsBase, page };
+    const url = nextUrl || '/deals';
+
+    console.log('Agendor GET /deals', {
       page,
-      perPage: CONFIG.TASKS_PER_PAGE,
-      per_page: CONFIG.TASKS_PER_PAGE
-    };
+      perPage: params?.perPage || params?.per_page || paramsBase.perPage || paramsBase.per_page,
+      updatedAtGt: paramsBase.updatedAtGt,
+      updatedAtLt: paramsBase.updatedAtLt,
+      createdAtGt: paramsBase.createdAtGt,
+      createdAtLt: paramsBase.createdAtLt,
+      dealStatus
+    });
+    const response = await fetchComRetry(url, tokenParaUso, { params });
 
-    if (dataInicioIso) {
-      params.updatedAtGt = dataInicioIso;
-      params.createdAtGt = dataInicioIso;
-    }
-    if (dataFimIso) {
-      params.updatedAtLt = dataFimIso;
-      params.createdAtLt = dataFimIso;
-    }
-    if (dealStatus) params.dealStatus = dealStatus;
+    const data = response.data.data || [];
+    todasNegocios.push(...data);
 
-    const url = `${API_AGENDOR_URL}/deals`;
+    console.log(`?? P?gina ${page}: ${data.length} neg?cios`);
 
-    try {
-      console.log('Agendor GET /deals', {
-        page,
-        perPage: params.perPage || params.per_page,
-        updatedAtGt: params.updatedAtGt,
-        updatedAtLt: params.updatedAtLt,
-        createdAtGt: params.createdAtGt,
-        createdAtLt: params.createdAtLt,
-        dealStatus
-      });
-      const response = await fetchComRetry(url, tokenParaUso, { params });
+    const pagInfo =
+      response?.data?.pagination ||
+      response?.data?.page ||
+      response?.data?.meta?.pagination ||
+      response?.data?.paging ||
+      null;
+    const perPageEsperado =
+      pagInfo?.perPage ||
+      pagInfo?.per_page ||
+      pagInfo?.pageSize ||
+      pagInfo?.page_size ||
+      params?.perPage ||
+      params?.per_page ||
+      paramsBase.perPage ||
+      paramsBase.per_page ||
+      CONFIG.TASKS_PER_PAGE;
 
-      const data = response.data.data || [];
-      todasNegocios = [...todasNegocios, ...data];
-
-      console.log(`📄 Página ${page}: ${data.length} negócios`);
-
-      const pagInfo =
-        response?.data?.pagination ||
-        response?.data?.page ||
-        response?.data?.meta?.pagination ||
-        response?.data?.paging ||
-        null;
-      const perPageEsperado =
-        pagInfo?.perPage ||
-        pagInfo?.per_page ||
-        pagInfo?.pageSize ||
-        pagInfo?.page_size ||
-        params.perPage ||
-        params.per_page ||
-        CONFIG.TASKS_PER_PAGE;
-
-      const proxima = haProximaPagina(response, page);
-      const podeTerMais = proxima === true || (proxima === null && data.length >= perPageEsperado);
-      if (podeTerMais) {
-        page++;
-        contadorPaginas++;
+    const linkNext = obterLinkNext(response?.data?.links);
+    const proxima = haProximaPagina(response, page);
+    const podeTerMais = Boolean(linkNext) || proxima === true || (proxima === null && data.length >= perPageEsperado);
+    if (podeTerMais) {
+      nextUrl = linkNext || null;
+      page++;
+      contadorPaginas++;
+      if (CONFIG.DELAY_BETWEEN_REQUESTS > 0) {
         await esperar(CONFIG.DELAY_BETWEEN_REQUESTS);
-        continue;
       }
-
-      if (proxima === false || data.length < perPageEsperado) {
-        hasMoreData = false;
-      }
-    } catch (error) {
-      const status = error?.response?.status;
-      if (status === 429 || status === 503) {
-        const retryAfterMs = parseRetryAfterMs(error?.response?.headers?.['retry-after']);
-        const espera = retryAfterMs ?? 60000;
-        console.warn(`Limite ou instabilidade na pagina ${page}; aguardando ${espera}ms e tentando novamente.`);
-        bloqueadoAte = Math.max(bloqueadoAte, Date.now() + espera);
-        await esperar(espera);
-        continue;
-      }
-      throw error;
+      continue;
     }
+
+    hasMoreData = false;
   }
 
   if (contadorPaginas >= MAX_PAGES_SAFETY) {
-    console.warn('Atingiu limite de paginas em negÇücios; possivel paginacao interminavel.');
+    console.warn('Atingiu limite de paginas em negocios; possivel paginacao interminavel.');
   }
 
   return todasNegocios;
@@ -456,7 +494,11 @@ function normalizarDataIso(valor) {
 function logErroAxios(error, contexto) {
   if (error.response) {
     console.error(`❌ Erro ao buscar ${contexto}: [${error.response.status}]`);
-    console.error(`URL: ${error.response.config.url}`);
+    const config = error.response.config || {};
+    const url = config.url || '';
+    const baseURL = config.baseURL || '';
+    const fullUrl = url.startsWith('http') ? url : `${baseURL}${url}`;
+    console.error(`URL: ${fullUrl || url || baseURL}`);
     if (error.response.data) console.error(error.response.data);
   } else {
     console.error(`❌ Erro de rede (${contexto}):`, error.message);
