@@ -410,7 +410,7 @@ async function buscarChats(apiUrl, instanceName, apiKey) {
     
     console.log(`[BUSCAR_CHATS] Buscando chats da instância: ${instanceName}`);
     
-    const response = await client.get(`/chat/findChats/${instanceName}`);
+    const response = await client.get(`/chat/find/${instanceName}`);
     
     console.log(`[BUSCAR_CHATS] Total de chats retornados: ${Array.isArray(response.data) ? response.data.length : 'N/A'}`);
     
