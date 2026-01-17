@@ -29,6 +29,9 @@ router.post('/:leadId/sincronizar', leadsController.sincronizarLead);
 // Insights do lead
 router.get('/:leadId/insights', leadsController.obterInsightsLead);
 
+// Analisar lead manualmente com IA
+router.post('/:leadId/analisar', leadsController.analisarLeadManualmente);
+
 // Insights do consultor
 router.get('/consultor/:consultorId/insights', leadsController.obterInsightsConsultor);
 

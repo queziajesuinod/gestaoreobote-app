@@ -91,6 +91,15 @@ export const leadsApi = {
       { headers: getAuthHeader() }
     );
     return response.data;
+  },
+
+  analisarManualmente: async (leadId, instrucoesPersonalizadas) => {
+    const response = await axios.post(
+      `${API_URL}/leads/${leadId}/analisar`,
+      { instrucoesPersonalizadas },
+      { headers: getAuthHeader() }
+    );
+    return response.data;
   }
 };
 

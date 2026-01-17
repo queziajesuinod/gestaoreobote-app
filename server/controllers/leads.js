@@ -622,7 +622,8 @@ module.exports = {
   sincronizarLead,
   obterInsightsLead,
   obterInsightsConsultor,
-  importarContatosLote
+  importarContatosLote,
+  analisarLeadManualmente
 };
 
 /**
@@ -989,5 +990,112 @@ async function importarContatosLote(req, res) {
   } catch (error) {
     console.error('Erro ao importar contatos:', error);
     res.status(500).json({ sucesso: false, erro: error.message });
+  }
+}
+
+
+/**
+ * Analisar lead manualmente com instruções personalizadas
+ */
+async function analisarLeadManualmente(req, res) {
+  try {
+    const { leadId } = req.params;
+    const { instrucoesPersonalizadas } = req.body;
+    
+    console.log(`[ANALISE_MANUAL] Iniciando análise manual do lead ${leadId}`);
+    
+    const lead = await Lead.findByPk(leadId, {
+      include: [
+        {
+          model: Conversa,
+          as: 'conversas',
+          include: [
+            {
+              model: Mensagem,
+              as: 'mensagens',
+              include: [{ model: AnaliseIA, as: 'analise' }]
+            }
+          ]
+        }
+      ]
+    });
+    
+    if (!lead) {
+      return res.status(404).json({
+        sucesso: false,
+        mensagem: 'Lead não encontrado'
+      });
+    }
+    
+    // Controle de acesso
+    const isGestor = req.user.perfilId === 1;
+    if (!isGestor && req.user.consultorId !== lead.consultorId) {
+      return res.status(403).json({
+        sucesso: false,
+        mensagem: 'Acesso negado'
+      });
+    }
+    
+    // Verificar se há conversas
+    if (!lead.conversas || lead.conversas.length === 0) {
+      return res.status(400).json({
+        sucesso: false,
+        mensagem: 'Lead não possui conversas para analisar. Sincronize as mensagens primeiro.'
+      });
+    }
+    
+    const conversa = lead.conversas[0];
+    
+    // Salvar instruções personalizadas no lead
+    if (instrucoesPersonalizadas && instrucoesPersonalizadas.trim().length > 0) {
+      lead.instrucoesPersonalizadas = instrucoesPersonalizadas.trim();
+      await lead.save();
+      console.log(`[ANALISE_MANUAL] Instruções personalizadas salvas`);
+    }
+    
+    // Recalcular temperatura com instruções personalizadas
+    const iaService = require('../services/ia');
+    const novaTemperatura = await iaService.calcularTemperaturaLead(
+      conversa.id,
+      lead.instrucoesPersonalizadas
+    );
+    
+    console.log(`[ANALISE_MANUAL] Nova temperatura calculada: ${novaTemperatura}`);
+    
+    // Atualizar lead
+    lead.temperaturaLead = novaTemperatura;
+    
+    // Gerar novo resumo
+    const resumo = await iaService.gerarResumoConversa(conversa.id);
+    if (resumo) {
+      lead.resumoIA = resumo;
+    }
+    
+    await lead.save();
+    
+    // Gerar insights atualizados
+    const insightsService = require('../services/insightsService');
+    const insights = await insightsService.gerarInsightsLead(leadId);
+    
+    res.json({
+      sucesso: true,
+      mensagem: 'Análise concluída com sucesso',
+      lead: {
+        id: lead.id,
+        nome: lead.nome,
+        temperaturaLead: lead.temperaturaLead,
+        resumoIA: lead.resumoIA,
+        instrucoesPersonalizadas: lead.instrucoesPersonalizadas
+      },
+      insights
+    });
+    
+  } catch (error) {
+    console.error('[ANALISE_MANUAL] Erro:', error);
+    res.status(500).json({ 
+      sucesso: false, 
+      erro: error.message,
+      mensagem: 'Erro ao analisar lead'
+    });
   }
 }

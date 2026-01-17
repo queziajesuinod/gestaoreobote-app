@@ -86,6 +86,8 @@ function LeadDetalhes() {
     telefone: ''
   });
   const [salvandoLead, setSalvandoLead] = useState(false);
+  const [instrucoesPersonalizadas, setInstrucoesPersonalizadas] = useState('');
+  const [analisando, setAnalisando] = useState(false);
 
   const showSnackbar = useCallback((message, severity = 'info') => {
     setSnackbar({ open: true, message, severity });
@@ -97,7 +99,9 @@ function LeadDetalhes() {
     setLoading(true);
     try {
       const response = await leadsApi.obter(leadId);
-      setLead(normalizarLead(response));
+      const leadData = normalizarLead(response);
+      setLead(leadData);
+      setInstrucoesPersonalizadas(leadData.instrucoesPersonalizadas || '');
     } catch (error) {
       console.error('Erro ao carregar lead:', error);
       showSnackbar('Falha ao carregar lead.', 'error');
@@ -189,6 +193,28 @@ function LeadDetalhes() {
       showSnackbar('Falha ao sincronizar mensagens.', 'error');
     } finally {
       setSincronizando(false);
+    }
+  };
+
+  const handleAnalisarComIA = async () => {
+    setAnalisando(true);
+    try {
+      const response = await leadsApi.analisarManualmente(leadId, instrucoesPersonalizadas);
+      if (response.sucesso) {
+        showSnackbar(
+          `Análise concluída! Nova temperatura: ${response.lead.temperaturaLead}`,
+          'success'
+        );
+        carregarLead();
+        carregarInsights();
+      } else {
+        showSnackbar('Erro ao analisar lead.', 'error');
+      }
+    } catch (error) {
+      console.error('Erro ao analisar:', error);
+      showSnackbar('Falha ao analisar lead com IA.', 'error');
+    } finally {
+      setAnalisando(false);
     }
   };
 
@@ -608,6 +634,45 @@ function LeadDetalhes() {
                   </Button>
                 </Box>
               </Box>
+            </Grid>
+
+            {/* Análise Manual com IA */}
+            <Grid item xs={12}>
+              <Divider sx={{ my: 2 }} />
+              <Card sx={{ backgroundColor: '#f3e5f5' }}>
+                <CardContent>
+                  <Box display="flex" alignItems="center" gap={1} mb={2}>
+                    <LightbulbIcon color="secondary" />
+                    <Typography variant="h6">
+                      Análise Manual com IA
+                    </Typography>
+                  </Box>
+                  <Typography variant="body2" color="textSecondary" gutterBottom>
+                    Adicione instruções personalizadas para refinar a análise de temperatura deste lead.
+                    A IA usará essas informações junto com as mensagens para recalcular a temperatura.
+                  </Typography>
+                  <TextField
+                    fullWidth
+                    multiline
+                    rows={4}
+                    label="Instruções Personalizadas"
+                    placeholder="Ex: Lead já comprou consórcio antes e teve boa experiência. Considere isso na análise."
+                    value={instrucoesPersonalizadas}
+                    onChange={(e) => setInstrucoesPersonalizadas(e.target.value)}
+                    sx={{ mt: 2, mb: 2 }}
+                    helperText="Exemplos: 'Lead tem urgência familiar', 'Desconsidere objeções iniciais', 'Cliente indicado por outro cliente'"
+                  />
+                  <Button
+                    variant="contained"
+                    color="secondary"
+                    onClick={handleAnalisarComIA}
+                    disabled={analisando || !lead}
+                    startIcon={analisando ? <CircularProgress size={20} /> : <LightbulbIcon />}
+                  >
+                    {analisando ? 'Analisando...' : 'Analisar com IA'}
+                  </Button>
+                </CardContent>
+              </Card>
             </Grid>
 
             <Grid item xs={12}>

@@ -88,6 +88,11 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.INTEGER,
       defaultValue: 0,
       allowNull: false
+    },
+    instrucoesPersonalizadas: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      comment: 'Instruções personalizadas para análise de IA'
     }
   }, {
     tableName: 'leads',

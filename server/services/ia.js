@@ -132,7 +132,7 @@ Possíveis objeções:
 /**
  * Calcula a temperatura do lead baseado nas análises de IA
  */
-async function calcularTemperaturaLead(conversaId) {
+async function calcularTemperaturaLead(conversaId, instrucoesPersonalizadas = null) {
   const { Conversa, Mensagem, AnaliseIA } = require('../models');
 
   try {
@@ -239,7 +239,15 @@ async function calcularTemperaturaLead(conversaId) {
       score += 15; // Lead voltou, pode estar decidido
     }
 
-    // PASSO 9: Normalizar entre 0 e 100
+    // PASSO 9: Aplicar ajuste baseado em instruções personalizadas
+    if (instrucoesPersonalizadas && instrucoesPersonalizadas.trim().length > 0) {
+      console.log(`[IA] Aplicando instruções personalizadas: ${instrucoesPersonalizadas.substring(0, 100)}...`);
+      const ajuste = await analisarInstrucoesPersonalizadas(instrucoesPersonalizadas, score);
+      console.log(`[IA] Ajuste sugerido pela IA: ${ajuste}`);
+      score += ajuste;
+    }
+
+    // PASSO 10: Normalizar entre 0 e 100
     score = Math.max(0, Math.min(100, Math.round(score)));
 
     return score;
@@ -379,6 +387,64 @@ Responda em JSON:
   } catch (error) {
     console.error('Erro ao extrair dados do lead:', error);
     return {};
+  }
+}
+
+/**
+ * Analisa instruções personalizadas e retorna ajuste de temperatura
+ */
+async function analisarInstrucoesPersonalizadas(instrucoes, scoreAtual) {
+  try {
+    const prompt = `
+Você é um especialista em análise de leads de venda de consórcio.
+
+O lead atualmente tem uma temperatura (score) de ${scoreAtual} pontos (0-100).
+
+O consultor forneceu as seguintes instruções personalizadas sobre este lead:
+"${instrucoes}"
+
+Com base nessas instruções, determine um AJUSTE (positivo ou negativo) para a temperatura do lead.
+
+Exemplos:
+- "Lead já comprou consórcio antes e teve boa experiência" → ajuste: +15
+- "Lead tem urgência familiar não explícita nas mensagens" → ajuste: +10
+- "Desconsidere as objeções iniciais, ele já demonstrou interesse real" → ajuste: +12
+- "Lead está apenas pesquisando preços, sem intenção real" → ajuste: -20
+- "Cliente foi indicado por outro cliente satisfeito" → ajuste: +18
+- "Lead tem histórico de não comparecer em reuniões" → ajuste: -15
+
+Responda APENAS em JSON válido com esta estrutura:
+{
+  "ajuste": -20,
+  "justificativa": "Explicação do ajuste"
+}
+
+O ajuste deve estar entre -30 e +30.
+`;
+
+    const response = await client.chat.completions.create({
+      model: MODEL,
+      messages: [
+        {
+          role: 'system',
+          content: 'Você é um assistente especializado em análise de leads. Responda sempre em JSON válido.'
+        },
+        { role: 'user', content: prompt }
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.3,
+      max_tokens: 150
+    });
+
+    const resultado = JSON.parse(response.choices[0].message.content);
+    console.log(`[IA] Justificativa do ajuste: ${resultado.justificativa}`);
+    
+    // Limitar ajuste entre -30 e +30
+    const ajuste = Math.max(-30, Math.min(30, resultado.ajuste || 0));
+    return ajuste;
+  } catch (error) {
+    console.error('Erro ao analisar instruções personalizadas:', error);
+    return 0; // Sem ajuste em caso de erro
   }
 }
 
