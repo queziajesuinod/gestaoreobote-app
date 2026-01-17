@@ -270,7 +270,8 @@ async function listarContatos(req, res) {
     const resultado = await evolutionService.buscarContatos(
       instancia.apiUrl,
       instancia.instanceName,
-      apiKey
+      apiKey,
+      { numero: termo }
     );
 
     if (!resultado.sucesso) {

@@ -443,12 +443,31 @@ async function buscarChats(apiUrl, instanceName, apiKey) {
 /**
  * Busca todos os contatos/chats
  */
-async function buscarContatos(apiUrl, instanceName, apiKey) {
+async function buscarContatos(apiUrl, instanceName, apiKey, filtro = {}) {
   try {
     const client = createEvolutionClient(apiUrl, apiKey);
     
+    // Se foi passado um número para buscar, formatar para o padrão WhatsApp
+    const where = {};
+    if (filtro.numero) {
+      // Remover caracteres não numéricos
+      const numeroLimpo = filtro.numero.replace(/\D/g, '');
+      
+      // Adicionar código do país se não tiver (55 para Brasil)
+      let numeroFormatado = numeroLimpo;
+      if (!numeroFormatado.startsWith('55') && numeroLimpo.length === 11) {
+        numeroFormatado = '55' + numeroLimpo;
+      }
+      
+      // Adicionar sufixo do WhatsApp
+      where.id = `${numeroFormatado}@s.whatsapp.net`;
+      
+      console.log(`[BUSCAR_CONTATOS] Número digitado: ${filtro.numero}`);
+      console.log(`[BUSCAR_CONTATOS] Número formatado: ${where.id}`);
+    }
+    
     const response = await client.post(`/contact/findContacts/${instanceName}`, {
-      where: {}
+      where
     });
     
     const contatos = response.data?.contacts
