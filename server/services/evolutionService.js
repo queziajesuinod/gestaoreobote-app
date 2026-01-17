@@ -337,16 +337,33 @@ async function configurarWebhook(apiUrl, instanceName, apiKey, webhookUrl) {
 /**
  * Busca mensagens de um chat específico
  */
-async function buscarMensagensChat(apiUrl, instanceName, apiKey, chatId, limite = 50) {
+async function buscarMensagensChat(apiUrl, instanceName, apiKey, chatId, limite = 50, sincronizarApenas = 'nao_lidas') {
   try {
     const client = createEvolutionClient(apiUrl, apiKey);
     
+    console.log(`[BUSCAR_MSG] Buscando mensagens com filtro: ${sincronizarApenas}`);
+    
+    // Construir filtro baseado em sincronizarApenas
+    const where = {
+      key: {
+        remoteJid: chatId
+      }
+    };
+    
+    // Aplicar filtro de tempo para ultimas_24h
+    if (sincronizarApenas === 'ultimas_24h') {
+      const ontem = new Date();
+      ontem.setDate(ontem.getDate() - 1);
+      const timestampOntem = Math.floor(ontem.getTime() / 1000);
+      where.messageTimestamp = { $gte: timestampOntem };
+      console.log(`[BUSCAR_MSG] Filtro 24h aplicado: timestamp >= ${timestampOntem}`);
+    }
+    
+    // Para 'nao_lidas' e 'todas', o filtro é aplicado no backend após buscar
+    // pois a Evolution API não tem filtro nativo de "não lidas"
+    
     const response = await client.post(`/chat/findMessages/${instanceName}`, {
-      where: {
-        key: {
-          remoteJid: chatId
-        }
-      },
+      where,
       limit: limite
     });
     
@@ -453,6 +470,9 @@ async function sincronizarChat(evolutionInstance, chatId, leadId, limiteMensagen
     }
     
     const apiKey = decryptApiKey(instance.apiKey);
+    const sincronizarApenas = instance.sincronizarApenas || 'nao_lidas';
+    
+    console.log(`[SYNC_CHAT] Sincronizando com filtro: ${sincronizarApenas}`);
     
     // Buscar mensagens do chat
     const resultado = await buscarMensagensChat(
@@ -460,7 +480,8 @@ async function sincronizarChat(evolutionInstance, chatId, leadId, limiteMensagen
       instance.instanceName,
       apiKey,
       chatId,
-      limiteMensagens
+      limiteMensagens,
+      sincronizarApenas
     );
     
     if (!resultado.sucesso) {
@@ -483,24 +504,43 @@ async function sincronizarChat(evolutionInstance, chatId, leadId, limiteMensagen
     }
     
     const mensagensArray = Array.isArray(resultado.mensagens) ? resultado.mensagens : [];
-    const mensagensOrdenadas = mensagensArray
+    console.log(`[SYNC_CHAT] Total de mensagens retornadas pela API: ${mensagensArray.length}`);
+    
+    // Filtrar mensagens baseado em sincronizarApenas
+    let mensagensFiltradas = mensagensArray;
+    
+    if (sincronizarApenas === 'nao_lidas') {
+      // Filtrar apenas mensagens não lidas (status diferente de 'read' ou 'read-self')
+      mensagensFiltradas = mensagensArray.filter(msg => {
+        const status = extractMessageStatus(msg);
+        // Considerar como "não lida" se não for 'lida' ou 'lida_por_mim'
+        return status !== 'lida' && status !== 'lida_por_mim';
+      });
+      console.log(`[SYNC_CHAT] Filtro 'nao_lidas' aplicado: ${mensagensFiltradas.length} de ${mensagensArray.length}`);
+    }
+    
+    const mensagensOrdenadas = mensagensFiltradas
       .map((item) => ({ item, timestamp: extractMessageTimestamp(item) || 0 }))
       .sort((a, b) => a.timestamp - b.timestamp)
       .map((entry) => entry.item);
 
     let mensagensNovas = 0;
+    let mensagensDuplicadas = 0;
 
     // Processar cada mensagem
     for (const msg of mensagensOrdenadas) {
       const messageKey = msg.key || {};
       const messageId = messageKey.id;
 
-      // Verificar se já existe
+      // Verificar se já existe (evitar duplicatas)
       const existe = await Mensagem.findOne({
         where: { evolutionMessageId: messageId }
       });
       
-      if (existe) continue;
+      if (existe) {
+        mensagensDuplicadas++;
+        continue;
+      }
       
       // Determinar remetente
       const remetente = messageKey.fromMe ? 'consultor' : 'lead';
@@ -595,10 +635,14 @@ async function sincronizarChat(evolutionInstance, chatId, leadId, limiteMensagen
     // Atualizar última sincronização
     await instance.update({ ultimaSincronizacao: new Date() });
     
+    console.log(`[SYNC_CHAT] Sincronização concluída: ${mensagensNovas} novas, ${mensagensDuplicadas} duplicadas (ignoradas)`);
+    
     return {
       sucesso: true,
       mensagensNovas,
-      temperaturaAtualizada: temperatura
+      mensagensDuplicadas,
+      temperaturaAtualizada: temperatura,
+      filtroAplicado: sincronizarApenas
     };
     
   } catch (error) {
