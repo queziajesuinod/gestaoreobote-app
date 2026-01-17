@@ -6,6 +6,8 @@ const { Op } = require('sequelize');
  */
 async function gerarInsightsLead(leadId) {
   try {
+    console.log(`[INSIGHTS] Gerando insights para lead: ${leadId}`);
+    
     const lead = await Lead.findByPk(leadId, {
       include: [
         {
@@ -23,8 +25,38 @@ async function gerarInsightsLead(leadId) {
       ]
     });
     
-    if (!lead || !lead.conversas || !lead.conversas[0]) {
+    if (!lead) {
+      console.log(`[INSIGHTS] Lead não encontrado: ${leadId}`);
       return null;
+    }
+    
+    console.log(`[INSIGHTS] Lead encontrado: ${lead.nome}`);
+    console.log(`[INSIGHTS] Conversas: ${lead.conversas ? lead.conversas.length : 0}`);
+    
+    // Se não houver conversas, retornar insights básicos
+    if (!lead.conversas || lead.conversas.length === 0) {
+      console.log(`[INSIGHTS] Lead sem conversas, retornando insights básicos`);
+      return {
+        leadId: lead.id,
+        nome: lead.nome,
+        temperatura: lead.temperaturaLead,
+        classificacao: classificarTemperatura(lead.temperaturaLead),
+        totalMensagens: 0,
+        totalAnalisadas: 0,
+        sinaisCompra: [],
+        objecoes: [],
+        topicos: [],
+        distribuicaoSentimento: { positivo: 0, neutro: 0, negativo: 0 },
+        tendencia: 'estavel',
+        ultimaMensagem: lead.ultimaMensagem,
+        diasSemMensagem: calcularDiasSemMensagem(lead.ultimaMensagem),
+        recomendacoes: [{
+          tipo: 'info',
+          mensagem: 'Nenhuma conversa importada ainda. Sincronize as mensagens para gerar insights.',
+          icone: 'ℹ️'
+        }],
+        resumo: lead.resumoIA || 'Sem dados de conversa'
+      };
     }
     
     const mensagens = lead.conversas[0].mensagens || [];
