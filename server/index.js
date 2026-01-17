@@ -17,6 +17,7 @@ const { resolve } = require('path');
 const app = express();
 const bodyParser = require('body-parser');
 const metasService = require('./services/metas');
+const cronInadimplentes = require('./cron/inadimplentes');
 
 // ✅ Middleware de autenticação JWT (Protege APIs)
 const authMiddleware = (req, res, next) => {
@@ -129,5 +130,8 @@ app.listen(port, host, async (err) => {
   await garantirMeta();
   const UM_DIA_MS = 24 * 60 * 60 * 1000;
   setInterval(garantirMeta, UM_DIA_MS);
+
+  // Inicializar cron jobs do módulo de inadimplentes
+  cronInadimplentes.inicializarCronJobs();
 
 });
