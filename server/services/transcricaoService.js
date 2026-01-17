@@ -161,13 +161,21 @@ async function transcreverMensagemSeNecessario(mensagem) {
     if (resultado.sucesso && resultado.transcricao) {
       // Atualizar mensagem com transcrição
       mensagem.transcricao = resultado.transcricao;
+      
+      // Limpar URL de mídia para economizar armazenamento
+      // A transcrição já contém todo o conteúdo do áudio
+      const urlOriginal = mensagem.urlMidia;
+      mensagem.urlMidia = null;
+      
       await mensagem.save();
       
       console.log(`[TRANSCRICAO] Mensagem ${mensagem.id} transcrita com sucesso`);
+      console.log(`[TRANSCRICAO] URL de mídia removida para economizar espaço: ${urlOriginal?.substring(0, 50)}...`);
       
       return {
         sucesso: true,
-        transcricao: resultado.transcricao
+        transcricao: resultado.transcricao,
+        urlRemovida: true
       };
     }
     
