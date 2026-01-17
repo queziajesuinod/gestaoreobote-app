@@ -768,9 +768,10 @@ async function sincronizarLead(req, res) {
         });
       }
       
-      // Pegar o chatId real (remoteJid)
-      const chatIdReal = chatEncontrado.id || chatEncontrado.remoteJid || chatEncontrado.jid;
+      // Pegar o remoteJid (não o ID interno)
+      const chatIdReal = chatEncontrado.remoteJid || chatEncontrado.jid || chatEncontrado.id;
       console.log(`[SYNC] ChatId real obtido: ${chatIdReal}`);
+      console.log(`[SYNC] Objeto chat completo:`, JSON.stringify(chatEncontrado, null, 2));
       
       // Criar conversa com o chatId real
       conversa = await Conversa.create({
