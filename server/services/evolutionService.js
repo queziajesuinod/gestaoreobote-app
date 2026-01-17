@@ -373,10 +373,15 @@ async function buscarMensagensChat(apiUrl, instanceName, apiKey, chatId, limite 
     const response = await client.post(endpoint, requestBody);
     
     console.log(`[BUSCAR_MSG] Status: ${response.status}`);
-    console.log(`[BUSCAR_MSG] Mensagens retornadas: ${Array.isArray(response.data) ? response.data.length : 'N/A'}`);
     
-    if (response.data && Array.isArray(response.data) && response.data.length > 0) {
-      console.log(`[BUSCAR_MSG] Primeira mensagem:`, JSON.stringify(response.data[0], null, 2).substring(0, 500));
+    // A resposta vem em response.data.messages.records
+    const mensagens = response.data?.messages?.records || response.data || [];
+    
+    console.log(`[BUSCAR_MSG] Mensagens retornadas: ${Array.isArray(mensagens) ? mensagens.length : 'N/A'}`);
+    console.log(`[BUSCAR_MSG] Total na API: ${response.data?.messages?.total || 'N/A'}`);
+    
+    if (mensagens && Array.isArray(mensagens) && mensagens.length > 0) {
+      console.log(`[BUSCAR_MSG] Primeira mensagem:`, JSON.stringify(mensagens[0], null, 2).substring(0, 500));
     } else {
       console.log(`[BUSCAR_MSG] Resposta completa:`, JSON.stringify(response.data, null, 2));
     }
@@ -385,7 +390,7 @@ async function buscarMensagensChat(apiUrl, instanceName, apiKey, chatId, limite 
     
     return {
       sucesso: true,
-      mensagens: response.data || []
+      mensagens: mensagens
     };
   } catch (error) {
     console.error(`[BUSCAR_MSG] ===== ERRO NA BUSCA =====`);
