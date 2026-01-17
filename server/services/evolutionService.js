@@ -406,7 +406,9 @@ async function buscarMensagensChat(apiUrl, instanceName, apiKey, chatId, limite 
  */
 async function buscarChats(apiUrl, instanceName, apiKey) {
   try {
-    const client = createEvolutionClient(apiUrl, apiKey);
+    // Descriptografar apiKey antes de usar
+    const decryptedApiKey = decryptApiKey(apiKey);
+    const client = createEvolutionClient(apiUrl, decryptedApiKey);
     
     console.log(`[BUSCAR_CHATS] Buscando chats da instância: ${instanceName}`);
     console.log(`[BUSCAR_CHATS] Headers configurados:`, JSON.stringify(client.defaults.headers, null, 2));
