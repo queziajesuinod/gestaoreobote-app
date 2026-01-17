@@ -667,25 +667,49 @@ async function sincronizarChat(evolutionInstance, chatId, leadId, limiteMensagen
       
       mensagensNovas++;
       
-      // Analisar com IA se for mensagem do lead
-      if (remetente === 'lead' && tipoMidia === 'texto') {
+      // Transcrever áudio se necessário
+      if (remetente === 'lead' && tipoMidia === 'audio' && urlMidia) {
         try {
-          const analise = await iaService.analisarMensagem(conteudo);
+          const transcricaoService = require('./transcricaoService');
+          const resultadoTranscricao = await transcricaoService.transcreverMensagemSeNecessario(novaMensagem);
           
-          const { AnaliseIA } = require('../models');
-          await AnaliseIA.create({
-            mensagemId: novaMensagem.id,
-            topicos: analise.topicos,
-            objecoes: analise.objecoes,
-            sinaisCompra: analise.sinaisCompra,
-            sentimento: analise.sentimento,
-            scoreConfianca: analise.scoreConfianca,
-            respostaJSON: analise.respostaCompleta
-          });
-          
-          await novaMensagem.update({ analisadaPorIA: true });
+          if (resultadoTranscricao.sucesso) {
+            console.log(`[SYNC] Áudio transcrito: ${resultadoTranscricao.transcricao.substring(0, 50)}...`);
+          }
         } catch (error) {
-          console.error('Erro ao analisar mensagem:', error);
+          console.error('[SYNC] Erro ao transcrever áudio:', error.message);
+        }
+      }
+      
+      // Analisar com IA se for mensagem do lead (texto ou áudio transcrito)
+      if (remetente === 'lead') {
+        let conteudoParaAnalisar = null;
+        
+        if (tipoMidia === 'texto') {
+          conteudoParaAnalisar = conteudo;
+        } else if (tipoMidia === 'audio' && novaMensagem.transcricao) {
+          conteudoParaAnalisar = novaMensagem.transcricao;
+        }
+        
+        if (conteudoParaAnalisar) {
+          try {
+            const analise = await iaService.analisarMensagem(conteudoParaAnalisar);
+            
+            const { AnaliseIA } = require('../models');
+            await AnaliseIA.create({
+              mensagemId: novaMensagem.id,
+              topicos: analise.topicos,
+              objecoes: analise.objecoes,
+              sinaisCompra: analise.sinaisCompra,
+              sentimento: analise.sentimento,
+              scoreConfianca: analise.scoreConfianca,
+              respostaJSON: analise.respostaCompleta
+            });
+            
+            await novaMensagem.update({ analisadaPorIA: true });
+          } catch (error) {
+            console.error('Erro ao analisar mensagem:', error);
+          }
         }
       }
     }

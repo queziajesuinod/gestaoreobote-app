@@ -279,9 +279,16 @@ async function gerarResumoConversa(conversaId) {
       return 'Sem mensagens para resumir.';
     }
 
-    // Montar contexto da conversa
+    // Montar contexto da conversa (usando transcrição para áudios)
     const contexto = conversa.mensagens
-      .map(m => `[${m.remetente}]: ${m.conteudo}`)
+      .map(m => {
+        let conteudo = m.conteudo;
+        // Usar transcrição se for áudio e tiver transcrição
+        if (m.tipoMidia === 'audio' && m.transcricao) {
+          conteudo = `[Áudio transcrito]: ${m.transcricao}`;
+        }
+        return `[${m.remetente}]: ${conteudo}`;
+      })
       .join('\n');
 
     const prompt = `
