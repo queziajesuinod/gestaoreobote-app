@@ -234,17 +234,6 @@ export const reenviarWebhook = async (logId) => {
   return response.json();
 };
 
-// ============================================================================
-// UTILITÁRIOS
-// ============================================================================
-
-export const formatarMoeda = (valor) => {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL'
-  }).format(valor);
-};
-
 export const formatarData = (data) => {
   if (!data) return '-';
   return new Date(data).toLocaleDateString('pt-BR');

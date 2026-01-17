@@ -12,16 +12,15 @@ module.exports = {
         cotaId,
         diaVencimento,
         dataInicioCobranca,
-        valorParcela,
         historicoRetroativo,
         observacao
       } = req.body;
 
       // Validações
-      if (!cotaId || !diaVencimento || !dataInicioCobranca || !valorParcela) {
+      if (!cotaId || !diaVencimento || !dataInicioCobranca) {
         return res.status(400).json({
           sucesso: false,
-          mensagem: 'Campos obrigatórios: cotaId, diaVencimento, dataInicioCobranca, valorParcela'
+          mensagem: 'Campos obrigatórios: cotaId, diaVencimento e dataInicioCobranca'
         });
       }
 
@@ -37,7 +36,6 @@ module.exports = {
         cotaId,
         diaVencimento,
         dataInicioCobranca,
-        valorParcela,
         historicoRetroativo
       });
 
@@ -169,7 +167,7 @@ module.exports = {
   async atualizar(req, res) {
     try {
       const { id } = req.params;
-      const { diaVencimento, valorParcela, observacao } = req.body;
+      const { diaVencimento, observacao } = req.body;
 
       const processo = await ProcessoCobranca.findByPk(id);
       if (!processo) {
@@ -190,7 +188,6 @@ module.exports = {
       // Atualizar campos
       const dadosAtualizacao = {};
       if (diaVencimento !== undefined) dadosAtualizacao.diaVencimento = diaVencimento;
-      if (valorParcela !== undefined) dadosAtualizacao.valorParcela = valorParcela;
       if (observacao !== undefined) dadosAtualizacao.observacao = observacao;
 
       await processo.update(dadosAtualizacao);

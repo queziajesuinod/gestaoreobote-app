@@ -1,18 +1,22 @@
 'use strict';
 
-const SCHEMA = process.env.DB_SCHEMA || 'dev';
+const SCHEMA = (process.env.DB_SCHEMA || 'dev').trim();
 
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.addColumn(
-      { schema: SCHEMA, tableName: 'cota_consultores' },
-      'idagendor',
-      {
-        type: Sequelize.STRING,
-        allowNull: true
-      }
-    );
+    const table = { schema: SCHEMA, tableName: 'cota_consultores' };
 
+    const desc = await queryInterface.describeTable(table);
+
+    // cria a coluna só se não existir
+    if (!desc.idagendor) {
+      await queryInterface.addColumn(table, 'idagendor', {
+        type: Sequelize.STRING,
+        allowNull: true,
+      });
+    }
+
+    // update pode rodar sempre (é idempotente do jeito que está)
     await queryInterface.sequelize.query(`
       UPDATE "${SCHEMA}"."cota_consultores" cc
          SET idagendor = c.idagendor
@@ -24,6 +28,13 @@ module.exports = {
   },
 
   async down(queryInterface) {
-    await queryInterface.removeColumn({ schema: SCHEMA, tableName: 'cota_consultores' }, 'idagendor');
-  }
+    const table = { schema: SCHEMA, tableName: 'cota_consultores' };
+
+    const desc = await queryInterface.describeTable(table);
+
+    // remove só se existir
+    if (!desc.idagendor) return;
+
+    await queryInterface.removeColumn(table, 'idagendor');
+  },
 };

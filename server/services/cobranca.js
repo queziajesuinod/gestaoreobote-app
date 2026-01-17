@@ -10,7 +10,6 @@ class CobrancaService {
       cotaId,
       diaVencimento,
       dataInicioCobranca,
-      valorParcela,
       historicoRetroativo
     } = dados;
 
@@ -32,12 +31,14 @@ class CobrancaService {
       throw new Error('Já existe um processo de cobrança ativo para esta cota');
     }
 
+    const valorCota = Number.parseFloat(cota.valor);
+    const valorBase = !Number.isNaN(valorCota) ? valorCota : 0;
+
     // Criar processo de cobrança
     const processo = await ProcessoCobranca.create({
       cotaId,
       diaVencimento,
       dataInicioCobranca,
-      valorParcela,
       status: 'ativo'
     });
 
@@ -47,7 +48,7 @@ class CobrancaService {
         processo.id,
         historicoRetroativo.primeiroMesPago,
         historicoRetroativo.quantidadeMeses,
-        valorParcela,
+        valorBase,
         diaVencimento
       );
     }
@@ -61,7 +62,7 @@ class CobrancaService {
   /**
    * Importar histórico retroativo de cobranças já pagas
    */
-  async importarHistoricoRetroativo(processoId, primeiroMesPago, quantidadeMeses, valorParcela, diaVencimento) {
+  async importarHistoricoRetroativo(processoId, primeiroMesPago, quantidadeMeses, valorBase, diaVencimento) {
     console.log(`[Cobrança] Importando ${quantidadeMeses} meses de histórico retroativo...`);
 
     const cobrancas = [];
@@ -80,7 +81,7 @@ class CobrancaService {
       cobrancas.push({
         processoCobrancaId: processoId,
         mesReferencia: primeiroDiaMes,
-        valor: valorParcela,
+        valor: valorBase,
         dataVencimento,
         status: 'pago',
         dataPagamento: dataVencimento, // Assumir pagamento em dia
@@ -144,7 +145,13 @@ class CobrancaService {
    * Gerar cobrança para um processo específico
    */
   async gerarCobrancasProcesso(processoId) {
-    const processo = await ProcessoCobranca.findByPk(processoId);
+    const processo = await ProcessoCobranca.findByPk(processoId, {
+      include: [
+        {
+          association: 'cota'
+        }
+      ]
+    });
     if (!processo) {
       throw new Error('Processo de cobrança não encontrado');
     }
@@ -176,6 +183,9 @@ class CobrancaService {
       return { criada: false, motivo: 'ja_existe' };
     }
 
+    const valorCota = Number.parseFloat(processo.cota?.valor);
+    const valorBase = !Number.isNaN(valorCota) ? valorCota : 0;
+
     // Data de vencimento
     const dataVencimento = new Date(anoAtual, mesAtual, processo.diaVencimento);
 
@@ -183,7 +193,7 @@ class CobrancaService {
     const cobranca = await CobrancaMensal.create({
       processoCobrancaId: processoId,
       mesReferencia,
-      valor: processo.valorParcela,
+      valor: valorBase,
       dataVencimento,
       status: 'pendente'
     });

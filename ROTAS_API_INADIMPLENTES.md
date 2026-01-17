@@ -34,9 +34,9 @@ Base URL: `/api/inadimplentes`
 | Método | Rota | Descrição | Query/Body |
 |--------|------|-----------|------------|
 | GET | `/processos` | Listar processos | `?status=ativo&cotaId=uuid` |
-| POST | `/processos` | Criar processo | `{ cotaId, diaVencimento, dataInicioCobranca, valorParcela, historicoRetroativo, observacao }` |
+| POST | `/processos` | Criar processo | `{ cotaId, diaVencimento, dataInicioCobranca, historicoRetroativo, observacao }` |
 | GET | `/processos/:id` | Buscar processo | - |
-| PUT | `/processos/:id` | Atualizar processo | `{ diaVencimento, valorParcela, observacao }` |
+| PUT | `/processos/:id` | Atualizar processo | `{ diaVencimento, observacao }` |
 | DELETE | `/processos/:id` | Excluir processo | - |
 | POST | `/processos/:id/pausar` | Pausar processo | - |
 | POST | `/processos/:id/reativar` | Reativar processo | - |
@@ -131,7 +131,6 @@ Content-Type: application/json
   "cotaId": "uuid-da-cota",
   "diaVencimento": 10,
   "dataInicioCobranca": "2026-01-01",
-  "valorParcela": 500.00,
   "historicoRetroativo": {
     "primeiroMesPago": "2024-01-01",
     "quantidadeMeses": 12

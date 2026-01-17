@@ -1,4 +1,5 @@
 require('dotenv').config();
+const resolveSchema = require('./schema');
 
 module.exports = {
   development: {
@@ -9,7 +10,7 @@ module.exports = {
     port: process.env.DB_PORT || 5432,
     dialect: 'postgres',
     dialectOptions: {
-      searchPath: process.env.DB_SCHEMA || 'dev'
+      searchPath: resolveSchema('dev')
     }
   },
   production: {
@@ -20,7 +21,7 @@ module.exports = {
     port: process.env.DB_PORT || 5432,
     dialect: 'postgres',
     dialectOptions: {
-      searchPath: process.env.DB_SCHEMA || 'public'
+      searchPath: resolveSchema('public')
     }
   }
 };

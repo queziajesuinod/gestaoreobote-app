@@ -1,6 +1,6 @@
 const { v4: uuidv4 } = require('uuid');
 
-const SCHEMA = process.env.DB_SCHEMA || 'dev';
+const SCHEMA = (process.env.DB_SCHEMA || 'dev').trim();
 const TABLE = { schema: SCHEMA, tableName: 'Permissoes' };
 const PERFIS_TABLE = { schema: SCHEMA, tableName: 'Perfis' };
 

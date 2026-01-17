@@ -12,9 +12,10 @@ import useStyles from './search-jss';
 
 // Campo de busca
 function renderInput(inputProps) {
-  const { ref, ...rest } = inputProps;
+  const { ref, key: inputKey, ...rest } = inputProps;
   return (
     <TextField
+      key={inputKey}
       variant="standard"
       className="input-header"
       fullWidth

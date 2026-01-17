@@ -2,7 +2,7 @@
 
 const { Model, DataTypes } = require('sequelize');
 
-const SCHEMA = process.env.DB_SCHEMA || 'dev';
+const SCHEMA = (process.env.DB_SCHEMA || 'dev').trim();
 
 module.exports = (sequelize) => {
   class ProcessoCobranca extends Model {
@@ -49,11 +49,6 @@ module.exports = (sequelize) => {
       type: DataTypes.DATEONLY,
       allowNull: false,
       comment: 'Data a partir da qual começar a gerar cobranças'
-    },
-    valorParcela: {
-      type: DataTypes.DECIMAL(10, 2),
-      allowNull: false,
-      comment: 'Valor fixo da parcela mensal'
     },
     status: {
       type: DataTypes.ENUM('ativo', 'pausado', 'encerrado'),

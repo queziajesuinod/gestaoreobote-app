@@ -12,7 +12,7 @@
 
 1. **ProcessoCobranca** (`processocobranca.js`)
    - Gerencia processos de cobrança de cotas
-   - Campos: cotaId, diaVencimento, dataInicioCobranca, valorParcela, status
+- Campos: cotaId, diaVencimento, dataInicioCobranca, status
    - Relacionamentos: Cota, CobrancaMensal
 
 2. **CobrancaMensal** (`cobrancamensal.js`)

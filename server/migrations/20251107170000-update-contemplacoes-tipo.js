@@ -1,4 +1,4 @@
-const SCHEMA = process.env.DB_SCHEMA || 'dev';
+const SCHEMA = (process.env.DB_SCHEMA || 'dev').trim();
 
 const enumSchema = SCHEMA.replace(/"/g, '');
 const enumName = 'enum_contemplacoes_tipo';

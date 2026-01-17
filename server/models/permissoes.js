@@ -1,4 +1,6 @@
 const { Model } = require('sequelize');
+const resolveSchema = require('../config/schema');
+const SCHEMA = resolveSchema('dev');
 
 module.exports = (sequelize, DataTypes) => {
   class Permissao extends Model {
@@ -25,7 +27,7 @@ module.exports = (sequelize, DataTypes) => {
     sequelize, // Usa a instância passada como parâmetro
     modelName: 'Permissao',
     tableName: 'Permissoes',
-    schema: process.env.DB_SCHEMA || 'dev'
+    schema: SCHEMA
   });
 
   return Permissao;

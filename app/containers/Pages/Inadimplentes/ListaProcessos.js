@@ -224,7 +224,7 @@ function ListaProcessos() {
             variant="contained"
             color="primary"
             startIcon={<AddIcon />}
-            href="/app/inadimplentes/novo"
+            href="/app/inadimplentes/processos/novo"
           >
             Novo Processo
           </Button>
@@ -266,7 +266,6 @@ function ListaProcessos() {
                     <TableCell>Cota</TableCell>
                     <TableCell>Cliente</TableCell>
                     <TableCell>Consultor</TableCell>
-                    <TableCell>Valor Parcela</TableCell>
                     <TableCell>Dia Vencimento</TableCell>
                     <TableCell>Status</TableCell>
                     <TableCell align="right">Ações</TableCell>
@@ -275,7 +274,7 @@ function ListaProcessos() {
                 <TableBody>
                   {processosPaginados.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} align="center">
+                      <TableCell colSpan={6} align="center">
                         <Typography variant="body2" color="textSecondary">
                           Nenhum processo encontrado
                         </Typography>
@@ -304,9 +303,6 @@ function ListaProcessos() {
                           <Typography variant="body2">
                             {processo.Cota?.Consultor?.nome || '-'}
                           </Typography>
-                        </TableCell>
-                        <TableCell>
-                          {inadimplentesApi.formatarMoeda(processo.valorParcela)}
                         </TableCell>
                         <TableCell>
                           Dia {processo.diaVencimento}

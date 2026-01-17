@@ -1,6 +1,6 @@
 'use strict';
 
-const SCHEMA = process.env.DB_SCHEMA || 'dev';
+const SCHEMA = (process.env.DB_SCHEMA || 'dev').trim();
 
 module.exports = {
   up: async (queryInterface, Sequelize) => {
@@ -52,11 +52,11 @@ module.exports = {
           comment: 'Texto da anotação ou mensagem de erro'
         },
         usuarioId: {
-          type: Sequelize.INTEGER,
+          type: Sequelize.UUID,
           allowNull: true,
           references: {
             model: {
-              tableName: 'users',
+              tableName: 'Users',
               schema: SCHEMA
             },
             key: 'id'

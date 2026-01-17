@@ -403,15 +403,6 @@ function DetalhesProcesso() {
 
                   <Grid item xs={6}>
                     <Typography variant="caption" color="textSecondary">
-                      Valor da Parcela
-                    </Typography>
-                    <Typography variant="body1">
-                      {inadimplentesApi.formatarMoeda(processo.valorParcela)}
-                    </Typography>
-                  </Grid>
-
-                  <Grid item xs={6}>
-                    <Typography variant="caption" color="textSecondary">
                       Dia de Vencimento
                     </Typography>
                     <Typography variant="body1">
@@ -462,18 +453,17 @@ function DetalhesProcesso() {
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell>Mês</TableCell>
-                    <TableCell>Vencimento</TableCell>
-                    <TableCell>Valor</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell>Atraso</TableCell>
-                    <TableCell align="right">Ações</TableCell>
+                  <TableCell>Mês</TableCell>
+                  <TableCell>Vencimento</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Atraso</TableCell>
+                  <TableCell align="right">Ações</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {cobrancas.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} align="center">
+                      <TableCell colSpan={5} align="center">
                         <Typography variant="body2" color="textSecondary">
                           Nenhuma cobrança gerada ainda
                         </Typography>
@@ -493,9 +483,6 @@ function DetalhesProcesso() {
                           </TableCell>
                           <TableCell>
                             {inadimplentesApi.formatarData(cobranca.dataVencimento)}
-                          </TableCell>
-                          <TableCell>
-                            {inadimplentesApi.formatarMoeda(cobranca.valor)}
                           </TableCell>
                           <TableCell>
                             <Chip

@@ -141,7 +141,7 @@ class WebhookService {
       cota: {
         numero: `${cota.grupo}-${cota.cota}${cota.digito ? `-${cota.digito}` : ''}`,
         grupo: cota.grupo,
-        valor_parcela: parseFloat(processoCobranca.valorParcela)
+        valor_parcela: parseFloat(cota.valor) || 0
       },
       cliente: {
         id: cliente.id,

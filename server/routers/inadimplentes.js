@@ -43,7 +43,7 @@ router.get('/processos', processoCobrancaController.listar);
 /**
  * POST /api/inadimplentes/processos
  * Criar novo processo de cobrança
- * Body: { cotaId, diaVencimento, dataInicioCobranca, valorParcela, historicoRetroativo, observacao }
+ * Body: { cotaId, diaVencimento, dataInicioCobranca, historicoRetroativo, observacao }
  */
 router.post('/processos', processoCobrancaController.criar);
 
@@ -56,7 +56,7 @@ router.get('/processos/:id', processoCobrancaController.buscarPorId);
 /**
  * PUT /api/inadimplentes/processos/:id
  * Atualizar processo de cobrança
- * Body: { diaVencimento, valorParcela, observacao }
+ * Body: { diaVencimento, observacao }
  */
 router.put('/processos/:id', processoCobrancaController.atualizar);
 

@@ -1,6 +1,6 @@
 'use strict';
 
-const SCHEMA = process.env.DB_SCHEMA || 'dev';
+const SCHEMA = (process.env.DB_SCHEMA || 'dev').trim();
 
 module.exports = {
   up: async (queryInterface, Sequelize) => {

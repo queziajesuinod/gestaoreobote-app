@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Helmet } from 'react-helmet';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -52,13 +52,15 @@ function FormularioProcesso() {
   const [salvando, setSalvando] = useState(false);
   const [cotas, setCotas] = useState([]);
   const [cotaSelecionada, setCotaSelecionada] = useState(null);
+  const [clientesDisponiveis, setClientesDisponiveis] = useState([]);
+  const [clienteSelecionado, setClienteSelecionado] = useState(null);
+  const [grupoSelecionado, setGrupoSelecionado] = useState('');
   const [loadingCotas, setLoadingCotas] = useState(false);
 
   const [form, setForm] = useState({
     cotaId: '',
     diaVencimento: 10,
-    dataInicioCobranca: new Date().toISOString().split('T')[0],
-    valorParcela: ''
+    dataInicioCobranca: new Date().toISOString().split('T')[0]
   });
 
   // Histórico retroativo
@@ -67,6 +69,7 @@ function FormularioProcesso() {
     primeiroMesPago: '',
     quantidadeMeses: 1
   });
+  const ultimoMesPadraoRef = useRef('');
 
   // Preview de cobranças
   const [previewCobrancas, setPreviewCobrancas] = useState([]);
@@ -90,6 +93,29 @@ function FormularioProcesso() {
     }
   }, [id]);
 
+  useEffect(() => {
+    if (!importarHistorico || !cotaSelecionada) return;
+    const dataAcquisicao = cotaSelecionada.dtaquisicao
+      || cotaSelecionada.dataAquisicao
+      || cotaSelecionada.DtAquisicao
+      || cotaSelecionada.dtaAquisicao;
+    const mesPadrao = formatarMesReferenciaParaInput(dataAcquisicao);
+    if (!mesPadrao) return;
+
+    setHistorico((prev) => {
+      const deveAtualizar = !prev.primeiroMesPago || prev.primeiroMesPago === ultimoMesPadraoRef.current;
+      if (!deveAtualizar) return prev;
+      ultimoMesPadraoRef.current = mesPadrao;
+      return { ...prev, primeiroMesPago: mesPadrao };
+    });
+  }, [importarHistorico, cotaSelecionada]);
+
+  useEffect(() => {
+    if (!importarHistorico) {
+      ultimoMesPadraoRef.current = '';
+    }
+  }, [importarHistorico]);
+
   // Atualizar preview quando form mudar
   useEffect(() => {
     atualizarPreview();
@@ -98,7 +124,7 @@ function FormularioProcesso() {
   const carregarCotas = async () => {
     try {
       setLoadingCotas(true);
-      const response = await fetch(`${API_URL}/api/cotas`, {
+      const response = await fetch(`${API_URL}/cotas`, {
         headers: {
           Authorization: `Bearer ${getToken()}`
         }
@@ -107,7 +133,19 @@ function FormularioProcesso() {
       if (!response.ok) throw new Error('Erro ao carregar cotas');
 
       const data = await response.json();
-      setCotas(data.dados || []);
+      const cotasLista = data.dados || [];
+      setCotas(cotasLista);
+      const clientesMap = new Map();
+      cotasLista.forEach((cota) => {
+        const cliente = cota.cliente || cota.Cliente;
+        if (cliente && cliente.id && !clientesMap.has(cliente.id)) {
+          clientesMap.set(cliente.id, {
+            id: cliente.id,
+            nome: cliente.nome
+          });
+        }
+      });
+      setClientesDisponiveis(Array.from(clientesMap.values()));
     } catch (error) {
       console.error('Erro ao carregar cotas:', error);
       mostrarSnackbar('Erro ao carregar cotas', 'error');
@@ -125,13 +163,19 @@ function FormularioProcesso() {
       setForm({
         cotaId: processo.cotaId,
         diaVencimento: processo.diaVencimento,
-        dataInicioCobranca: processo.dataInicioCobranca.split('T')[0],
-        valorParcela: processo.valorParcela
+        dataInicioCobranca: processo.dataInicioCobranca.split('T')[0]
       });
 
       // Buscar cota selecionada
-      const cota = cotas.find(c => c.id === processo.cotaId);
-      if (cota) setCotaSelecionada(cota);
+      const cota = processo.Cota || processo.cota;
+      if (cota) {
+        setCotaSelecionada(cota);
+        const cliente = cota.Cliente || cota.cliente;
+        if (cliente) {
+          setClienteSelecionado({ id: cliente.id, nome: cliente.nome });
+        }
+        setGrupoSelecionado(cota.grupo || '');
+      }
     } catch (error) {
       console.error('Erro ao carregar processo:', error);
       mostrarSnackbar('Erro ao carregar processo', 'error');
@@ -148,19 +192,36 @@ function FormularioProcesso() {
     setSnackbar({ ...snackbar, open: false });
   };
 
+  const formatarDataParaInput = (data) => {
+    if (!data) return '';
+    const parsed = new Date(data);
+    if (Number.isNaN(parsed.getTime())) return '';
+    return parsed.toISOString().split('T')[0];
+  };
+
+  const formatarMesReferenciaParaInput = (data) => {
+    if (!data) return '';
+    const parsed = new Date(data);
+    if (Number.isNaN(parsed.getTime())) return '';
+    const mes = String(parsed.getMonth() + 1).padStart(2, '0');
+    return `${parsed.getFullYear()}-${mes}`;
+  };
+
   const handleChangeCota = (event, novaCota) => {
     setCotaSelecionada(novaCota);
     if (novaCota) {
       setForm({
         ...form,
         cotaId: novaCota.id,
-        valorParcela: novaCota.valor || ''
+        dataInicioCobranca: formatarDataParaInput(
+          novaCota.dtaquisicao || novaCota.dataAquisicao || novaCota.DtAquisicao || novaCota.dtaAquisicao
+        )
       });
     } else {
       setForm({
         ...form,
         cotaId: '',
-        valorParcela: ''
+        dataInicioCobranca: ''
       });
     }
   };
@@ -179,6 +240,45 @@ function FormularioProcesso() {
     });
   };
 
+  const gruposDisponiveis = useMemo(() => {
+    if (!clienteSelecionado) return [];
+    const gruposSet = new Set();
+    cotas.forEach((cota) => {
+      const cliente = cota.cliente || cota.Cliente;
+      if (!cliente || cliente.id !== clienteSelecionado.id) return;
+      if (cota.grupo) gruposSet.add(cota.grupo);
+    });
+    return Array.from(gruposSet);
+  }, [cotas, clienteSelecionado]);
+
+  const cotasFiltradas = useMemo(() => {
+    return cotas.filter((cota) => {
+      const cliente = cota.cliente || cota.Cliente;
+      if (clienteSelecionado && cliente?.id !== clienteSelecionado.id) return false;
+      if (grupoSelecionado && String(cota.grupo) !== String(grupoSelecionado)) return false;
+      return true;
+    });
+  }, [cotas, clienteSelecionado, grupoSelecionado]);
+
+  const handleSelectCliente = (event, novoCliente) => {
+    setClienteSelecionado(novoCliente);
+    setGrupoSelecionado('');
+    setCotaSelecionada(null);
+    setForm((prev) => ({
+      ...prev,
+      cotaId: ''
+    }));
+  };
+
+  const handleSelectGrupo = (event) => {
+    setGrupoSelecionado(event.target.value);
+    setCotaSelecionada(null);
+    setForm((prev) => ({
+      ...prev,
+      cotaId: ''
+    }));
+  };
+
   const atualizarPreview = () => {
     const cobrancas = [];
 
@@ -191,7 +291,6 @@ function FormularioProcesso() {
         cobrancas.push({
           mesReferencia: `${String(data.getMonth() + 1).padStart(2, '0')}/${data.getFullYear()}`,
           dataVencimento: data.toLocaleDateString('pt-BR'),
-          valor: form.valorParcela || 0,
           status: 'pago',
           tipo: 'retroativo'
         });
@@ -204,7 +303,6 @@ function FormularioProcesso() {
     cobrancas.push({
       mesReferencia: `${String(mesAtual.getMonth() + 1).padStart(2, '0')}/${mesAtual.getFullYear()}`,
       dataVencimento: mesAtual.toLocaleDateString('pt-BR'),
-      valor: form.valorParcela || 0,
       status: 'pendente',
       tipo: 'atual'
     });
@@ -225,11 +323,6 @@ function FormularioProcesso() {
 
     if (!form.dataInicioCobranca) {
       mostrarSnackbar('Informe a data de início da cobrança', 'error');
-      return false;
-    }
-
-    if (!form.valorParcela || form.valorParcela <= 0) {
-      mostrarSnackbar('Informe o valor da parcela', 'error');
       return false;
     }
 
@@ -254,10 +347,7 @@ function FormularioProcesso() {
     try {
       setSalvando(true);
 
-      const dados = {
-        ...form,
-        valorParcela: parseFloat(form.valorParcela)
-      };
+      const dados = { ...form };
 
       // Adicionar histórico se marcado
       if (importarHistorico) {
@@ -320,15 +410,62 @@ function FormularioProcesso() {
                 </Typography>
 
                 <Grid container spacing={2}>
+                  {/* Filtro por Cliente */}
+                  <Grid item xs={12} md={6}>
+                    <Autocomplete
+                      options={clientesDisponiveis}
+                      getOptionLabel={(option) => option?.nome || ''}
+                      value={clienteSelecionado}
+                      onChange={handleSelectCliente}
+                      isOptionEqualToValue={(option, value) => option?.id === value?.id}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Cliente"
+                          placeholder="Selecione o cliente"
+                          helperText="Filtrar cotas pelo cliente"
+                        />
+                      )}
+                    />
+                  </Grid>
+
+                  {/* Filtro por Grupo */}
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      select
+                      fullWidth
+                      label="Grupo"
+                      value={grupoSelecionado}
+                      onChange={handleSelectGrupo}
+                      helperText="Selecione o grupo do cliente"
+                      disabled={!clienteSelecionado}
+                    >
+                      <MenuItem value="">
+                        <em>Todos os grupos</em>
+                      </MenuItem>
+                      {gruposDisponiveis.map((grupo) => (
+                        <MenuItem key={grupo} value={grupo}>
+                          {grupo}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </Grid>
+
                   {/* Seleção de Cota */}
                   <Grid item xs={12}>
-                    <Autocomplete
-                      options={cotas}
-                      getOptionLabel={(option) => 
-                        `${option.numero} - ${option.Cliente?.nome || 'Sem cliente'} (Grupo: ${option.grupo})`
-                      }
+                  <Autocomplete
+                      options={cotasFiltradas}
+                      getOptionLabel={(option) => {
+                        if (!option) return '';
+                        const numeroCota = option.cota || option.numero || '';
+                        const digito = option.digito ? `-${option.digito}` : '';
+                        const clienteNome = option.cliente?.nome || option.Cliente?.nome || 'Sem cliente';
+                        const grupo = option.grupo ? `Grupo ${option.grupo}` : '';
+                        return `${numeroCota}${digito} – ${clienteNome}${grupo ? ` (${grupo})` : ''}`;
+                      }}
                       value={cotaSelecionada}
                       onChange={handleChangeCota}
+                      isOptionEqualToValue={(option, value) => option?.id === value?.id}
                       loading={loadingCotas}
                       disabled={isEdicao}
                       renderInput={(params) => (
@@ -368,18 +505,6 @@ function FormularioProcesso() {
                     />
                   </Grid>
 
-                  {/* Valor da Parcela */}
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      type="number"
-                      label="Valor da Parcela *"
-                      value={form.valorParcela}
-                      onChange={(e) => handleChangeForm('valorParcela', e.target.value)}
-                      inputProps={{ min: 0, step: 0.01 }}
-                      helperText="Valor mensal da parcela"
-                    />
-                  </Grid>
                 </Grid>
 
                 <Divider sx={{ my: 3 }} />
@@ -480,14 +605,13 @@ function FormularioProcesso() {
                       <TableRow>
                         <TableCell>Mês</TableCell>
                         <TableCell>Vencimento</TableCell>
-                        <TableCell>Valor</TableCell>
                         <TableCell>Status</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
                       {previewCobrancas.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={4} align="center">
+                          <TableCell colSpan={3} align="center">
                             <Typography variant="caption" color="textSecondary">
                               Preencha os dados para ver o preview
                             </Typography>
@@ -510,9 +634,6 @@ function FormularioProcesso() {
                               )}
                             </TableCell>
                             <TableCell>{cobranca.dataVencimento}</TableCell>
-                            <TableCell>
-                              {inadimplentesApi.formatarMoeda(cobranca.valor)}
-                            </TableCell>
                             <TableCell>
                               <Typography
                                 variant="caption"

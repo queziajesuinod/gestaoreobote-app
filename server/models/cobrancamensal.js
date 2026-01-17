@@ -2,7 +2,7 @@
 
 const { Model, DataTypes } = require('sequelize');
 
-const SCHEMA = process.env.DB_SCHEMA || 'dev';
+const SCHEMA = (process.env.DB_SCHEMA || 'dev').trim();
 
 module.exports = (sequelize) => {
   class CobrancaMensal extends Model {

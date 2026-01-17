@@ -300,51 +300,6 @@ function Dashboard() {
           </Grid>
         </Grid>
 
-        {/* Valores */}
-        <Grid container spacing={3} sx={{ mb: 3 }}>
-          {/* Valor Total */}
-          <Grid item xs={12} sm={6} md={4}>
-            <Card>
-              <CardContent>
-                <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                  Valor Total em Cobrança
-                </Typography>
-                <Typography variant="h5">
-                  {inadimplentesApi.formatarMoeda(dashboard?.valorTotal || 0)}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Valor Pago */}
-          <Grid item xs={12} sm={6} md={4}>
-            <Card>
-              <CardContent>
-                <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                  Valor Pago
-                </Typography>
-                <Typography variant="h5" color="success.main">
-                  {inadimplentesApi.formatarMoeda(dashboard?.valorPago || 0)}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Valor em Atraso */}
-          <Grid item xs={12} sm={6} md={4}>
-            <Card>
-              <CardContent>
-                <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                  Valor em Atraso
-                </Typography>
-                <Typography variant="h5" color="error.main">
-                  {inadimplentesApi.formatarMoeda(dashboard?.valorAtrasado || 0)}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-
         {/* Tabela de Cobranças Atrasadas */}
         <Card>
           <CardContent>
@@ -360,7 +315,6 @@ function Dashboard() {
                     <TableCell>Cliente</TableCell>
                     <TableCell>Mês</TableCell>
                     <TableCell>Vencimento</TableCell>
-                    <TableCell>Valor</TableCell>
                     <TableCell>Dias Atraso</TableCell>
                     <TableCell align="right">Ações</TableCell>
                   </TableRow>
@@ -368,7 +322,7 @@ function Dashboard() {
                 <TableBody>
                   {cobrancasAtrasadas.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} align="center">
+                      <TableCell colSpan={6} align="center">
                         <Typography variant="body2" color="textSecondary">
                           Nenhuma cobrança atrasada
                         </Typography>
@@ -398,9 +352,6 @@ function Dashboard() {
                         </TableCell>
                         <TableCell>
                           {inadimplentesApi.formatarData(cobranca.dataVencimento)}
-                        </TableCell>
-                        <TableCell>
-                          {inadimplentesApi.formatarMoeda(cobranca.valor)}
                         </TableCell>
                         <TableCell>
                           <Chip
