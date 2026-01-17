@@ -42,9 +42,12 @@ function ConversaTimeline({ mensagens }) {
     );
   }
 
+  // Inverter ordem: mais recente (topo) para mais antigo (final)
+  const mensagensOrdenadas = [...mensagens].reverse();
+
   return (
     <Timeline className={classes.timeline}>
-      {mensagens.map((mensagem, index) => {
+      {mensagensOrdenadas.map((mensagem, index) => {
         const isLead = (mensagem?.remetente || '').toLowerCase() === 'lead';
         const sinais = mensagem?.analise?.sinaisCompra || [];
         const objecoes = mensagem?.analise?.objecoes || [];
@@ -59,7 +62,7 @@ function ConversaTimeline({ mensagens }) {
             </TimelineOppositeContent>
             <TimelineSeparator>
               <TimelineDot color={isLead ? 'primary' : 'secondary'} />
-              {index < mensagens.length - 1 && <TimelineConnector />}
+              {index < mensagensOrdenadas.length - 1 && <TimelineConnector />}
             </TimelineSeparator>
             <TimelineContent>
               <Paper elevation={1} className={classes.messageCard}>
