@@ -455,7 +455,7 @@ async function buscarContatos(apiUrl, instanceName, apiKey, filtro = {}) {
       
       // Adicionar código do país se não tiver (55 para Brasil)
       let numeroFormatado = numeroLimpo;
-      if (!numeroFormatado.startsWith('55') && numeroLimpo.length === 11) {
+      if (!numeroFormatado.startsWith('55') && (numeroLimpo.length === 10 || numeroLimpo.length === 11)) {
         numeroFormatado = '55' + numeroLimpo;
       }
       
