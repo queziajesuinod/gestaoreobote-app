@@ -99,3 +99,29 @@ export const PerfisAdmin = loadable(() =>
   import('./Pages/Users/PerfisManagement'), {
     fallback: <Loading />,
   });
+
+// Módulo de Inadimplentes
+export const InadimplentesProcessos = loadable(() =>
+  import('./Pages/Inadimplentes/ListaProcessos'), {
+    fallback: <Loading />,
+  });
+
+export const InadimplentesFormulario = loadable(() =>
+  import('./Pages/Inadimplentes/FormularioProcesso'), {
+    fallback: <Loading />,
+  });
+
+export const InadimplentesDetalhes = loadable(() =>
+  import('./Pages/Inadimplentes/DetalhesProcesso'), {
+    fallback: <Loading />,
+  });
+
+export const InadimplentesWebhook = loadable(() =>
+  import('./Pages/Inadimplentes/ConfiguracoesWebhook'), {
+    fallback: <Loading />,
+  });
+
+export const InadimplenteDashboard = loadable(() =>
+  import('./Pages/Inadimplentes/Dashboard'), {
+    fallback: <Loading />,
+  });
