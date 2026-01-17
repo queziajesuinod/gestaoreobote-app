@@ -301,22 +301,9 @@ async function listarContatos(req, res) {
       })
       .filter(Boolean);
 
-    let validChatIds = new Set();
-    if (contatosMapeados.length) {
-      const chatIds = contatosMapeados.map((item) => item.chatId);
-      const conversas = await Conversa.findAll({
-        where: {
-          consultorId: contexto.consultorId,
-          chatId: chatIds
-        },
-        attributes: ['chatId']
-      });
-      validChatIds = new Set(conversas.map((conversa) => conversa.chatId).filter(Boolean));
-    }
-
-    const contatosValidos = contatosMapeados
-      .filter((entry) => validChatIds.has(entry.chatId))
-      .map((entry) => entry.contato);
+    // Remover filtro que limitava apenas a contatos já importados
+    // Agora retorna TODOS os contatos encontrados na Evolution API
+    const contatosValidos = contatosMapeados.map((entry) => entry.contato);
 
     const filtrados = termo
       ? contatosValidos.filter((contato) => {
