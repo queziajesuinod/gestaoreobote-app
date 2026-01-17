@@ -1,13 +1,11 @@
-const { OpenAI } = require('openai');
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { exec } = require('child_process');
+const { promisify } = require('util');
 
-// Inicializar cliente OpenAI
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+const execPromise = promisify(exec);
 
 /**
  * Baixa arquivo de áudio de uma URL
@@ -18,13 +16,25 @@ async function baixarAudio(url) {
     
     const response = await axios.get(url, {
       responseType: 'arraybuffer',
-      timeout: 30000 // 30 segundos
+      timeout: 30000, // 30 segundos
+      headers: {
+        'User-Agent': 'Mozilla/5.0'
+      }
     });
     
     // Criar arquivo temporário
     const tempDir = os.tmpdir();
     const timestamp = Date.now();
-    const tempFile = path.join(tempDir, `audio_${timestamp}.ogg`);
+    const random = Math.random().toString(36).substring(7);
+    
+    // Detectar extensão do arquivo pela URL ou content-type
+    let extensao = '.ogg';
+    if (url.includes('.mp3')) extensao = '.mp3';
+    else if (url.includes('.wav')) extensao = '.wav';
+    else if (url.includes('.m4a')) extensao = '.m4a';
+    else if (url.includes('.webm')) extensao = '.webm';
+    
+    const tempFile = path.join(tempDir, `audio_${timestamp}_${random}${extensao}`);
     
     fs.writeFileSync(tempFile, response.data);
     console.log(`[TRANSCRICAO] Áudio salvo em: ${tempFile}`);
@@ -37,27 +47,44 @@ async function baixarAudio(url) {
 }
 
 /**
- * Transcreve arquivo de áudio usando Whisper API
+ * Transcreve arquivo de áudio usando manus-speech-to-text (open source)
  */
 async function transcreverAudio(caminhoArquivo) {
   try {
     console.log(`[TRANSCRICAO] Transcrevendo áudio: ${caminhoArquivo}`);
     
-    const audioFile = fs.createReadStream(caminhoArquivo);
-    
-    const response = await client.audio.transcriptions.create({
-      file: audioFile,
-      model: 'whisper-1',
-      language: 'pt', // Português
-      response_format: 'json'
+    // Executar comando manus-speech-to-text
+    const comando = `manus-speech-to-text "${caminhoArquivo}"`;
+    const { stdout, stderr } = await execPromise(comando, {
+      timeout: 120000, // 2 minutos de timeout
+      maxBuffer: 10 * 1024 * 1024 // 10MB buffer
     });
     
-    const transcricao = response.text || '';
+    if (stderr) {
+      console.warn(`[TRANSCRICAO] Avisos: ${stderr}`);
+    }
+    
+    const transcricao = stdout.trim();
+    
+    if (!transcricao || transcricao.length === 0) {
+      throw new Error('Transcrição vazia retornada');
+    }
+    
     console.log(`[TRANSCRICAO] Transcrição concluída: ${transcricao.substring(0, 100)}...`);
     
     return transcricao;
   } catch (error) {
     console.error('[TRANSCRICAO] Erro ao transcrever áudio:', error.message);
+    
+    // Mensagens de erro mais amigáveis
+    if (error.message.includes('timeout')) {
+      throw new Error('Timeout ao transcrever áudio (arquivo muito grande ou servidor lento)');
+    } else if (error.message.includes('not found')) {
+      throw new Error('Comando manus-speech-to-text não encontrado');
+    } else if (error.message.includes('Invalid')) {
+      throw new Error('Formato de áudio inválido ou corrompido');
+    }
+    
     throw new Error(`Falha ao transcrever áudio: ${error.message}`);
   } finally {
     // Limpar arquivo temporário
@@ -165,24 +192,67 @@ async function transcreverLoteMensagens(mensagens) {
     total: mensagens.length,
     transcritas: 0,
     falhas: 0,
-    puladas: 0
+    puladas: 0,
+    erros: []
   };
   
   for (const mensagem of mensagens) {
-    const resultado = await transcreverMensagemSeNecessario(mensagem);
-    
-    if (resultado.sucesso) {
-      resultados.transcritas++;
-    } else if (resultado.motivo === 'Não é mensagem de áudio' || resultado.motivo === 'Já possui transcrição') {
-      resultados.puladas++;
-    } else {
+    try {
+      const resultado = await transcreverMensagemSeNecessario(mensagem);
+      
+      if (resultado.sucesso) {
+        resultados.transcritas++;
+      } else if (resultado.motivo === 'Não é mensagem de áudio' || resultado.motivo === 'Já possui transcrição') {
+        resultados.puladas++;
+      } else {
+        resultados.falhas++;
+        resultados.erros.push({
+          mensagemId: mensagem.id,
+          erro: resultado.motivo
+        });
+      }
+    } catch (error) {
       resultados.falhas++;
+      resultados.erros.push({
+        mensagemId: mensagem.id,
+        erro: error.message
+      });
     }
   }
   
-  console.log(`[TRANSCRICAO] Lote processado:`, resultados);
+  console.log(`[TRANSCRICAO] Lote processado:`, {
+    total: resultados.total,
+    transcritas: resultados.transcritas,
+    falhas: resultados.falhas,
+    puladas: resultados.puladas
+  });
+  
+  if (resultados.erros.length > 0) {
+    console.log(`[TRANSCRICAO] Erros detalhados:`, resultados.erros.slice(0, 5));
+  }
   
   return resultados;
+}
+
+/**
+ * Verifica se o serviço de transcrição está disponível
+ */
+async function verificarDisponibilidade() {
+  try {
+    const { stdout } = await execPromise('which manus-speech-to-text', {
+      timeout: 5000
+    });
+    
+    if (stdout.trim()) {
+      console.log('[TRANSCRICAO] Serviço disponível:', stdout.trim());
+      return true;
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('[TRANSCRICAO] Serviço não disponível:', error.message);
+    return false;
+  }
 }
 
 module.exports = {
@@ -190,5 +260,6 @@ module.exports = {
   transcreverMensagemSeNecessario,
   transcreverLoteMensagens,
   baixarAudio,
-  transcreverAudio
+  transcreverAudio,
+  verificarDisponibilidade
 };

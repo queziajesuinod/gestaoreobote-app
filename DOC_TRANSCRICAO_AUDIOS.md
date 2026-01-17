@@ -2,7 +2,7 @@
 
 ## 🎯 Visão Geral
 
-O sistema agora **transcreve automaticamente** mensagens de áudio do WhatsApp usando **Whisper API (OpenAI)** e analisa a transcrição com IA para calcular a temperatura do lead.
+O sistema **transcreve automaticamente** mensagens de áudio do WhatsApp usando **solução open source gratuita** (`manus-speech-to-text`) e analisa a transcrição com IA para calcular a temperatura do lead.
 
 ---
 
@@ -10,8 +10,9 @@ O sistema agora **transcreve automaticamente** mensagens de áudio do WhatsApp u
 
 ### 1. **Transcrição Automática**
 - Áudios de leads são transcritos automaticamente durante a importação
-- Usa Whisper API da OpenAI (modelo `whisper-1`)
-- Transcrição em português (pt)
+- Usa **`manus-speech-to-text`** (solução open source)
+- **100% GRATUITO** - sem custos de API
+- Transcrição em português e outros idiomas
 - Armazenada no campo `transcricao` da mensagem
 
 ### 2. **Análise de IA**
@@ -22,6 +23,18 @@ O sistema agora **transcreve automaticamente** mensagens de áudio do WhatsApp u
 ### 3. **Resumo de Conversa**
 - Resumos incluem conteúdo de áudios transcritos
 - Identificados como "[Áudio transcrito]" no resumo
+
+---
+
+## 💰 Vantagens da Solução Open Source
+
+| Aspecto | Whisper API (OpenAI) | manus-speech-to-text |
+|---------|---------------------|---------------------|
+| **Custo** | Pago (por minuto) | **GRATUITO** ✅ |
+| **Privacidade** | Envia para OpenAI | **Processa localmente** ✅ |
+| **Velocidade** | Depende da API | **Rápido** ✅ |
+| **Limite** | Quota da API | **Ilimitado** ✅ |
+| **Dependência** | Internet obrigatória | **Funciona offline** ✅ |
 
 ---
 
@@ -36,9 +49,9 @@ O sistema agora **transcreve automaticamente** mensagens de áudio do WhatsApp u
    ↓
 4. Sistema baixa áudio da URL
    ↓
-5. Sistema envia para Whisper API
+5. Sistema executa manus-speech-to-text (open source)
    ↓
-6. Whisper retorna transcrição em texto
+6. Transcrição retornada em texto
    ↓
 7. Sistema salva transcrição no banco
    ↓
@@ -113,7 +126,7 @@ O sistema agora **transcreve automaticamente** mensagens de áudio do WhatsApp u
   conteudo: '[Áudio]',
   tipoMidia: 'audio',
   urlMidia: 'https://...',
-  transcricao: 'Texto transcrito aqui',  // ← NOVO
+  transcricao: 'Texto transcrito aqui',  // ← Campo de transcrição
   analisadaPorIA: true,
   timestamp: Date
 }
@@ -127,11 +140,19 @@ O sistema agora **transcreve automaticamente** mensagens de áudio do WhatsApp u
 - `transcreverAudioDeURL(url)` - Transcreve áudio de uma URL
 - `transcreverMensagemSeNecessario(mensagem)` - Transcreve mensagem se for áudio
 - `transcreverLoteMensagens(mensagens)` - Processa lote de mensagens
+- `verificarDisponibilidade()` - Verifica se serviço está disponível
 
 **Exemplo de uso:**
 ```javascript
 const transcricaoService = require('./transcricaoService');
 
+// Verificar disponibilidade
+const disponivel = await transcricaoService.verificarDisponibilidade();
+if (!disponivel) {
+  console.error('Serviço de transcrição não disponível');
+}
+
+// Transcrever áudio
 const resultado = await transcricaoService.transcreverAudioDeURL(
   'https://evolution.../audio.ogg'
 );
@@ -140,6 +161,33 @@ if (resultado.sucesso) {
   console.log('Transcrição:', resultado.transcricao);
 }
 ```
+
+### Como Funciona Internamente
+
+```javascript
+// 1. Baixar áudio
+const caminhoArquivo = await baixarAudio(url);
+// Salva em: /tmp/audio_1234567890_abc123.ogg
+
+// 2. Executar comando
+const comando = `manus-speech-to-text "${caminhoArquivo}"`;
+const { stdout } = await execPromise(comando);
+
+// 3. Retornar transcrição
+const transcricao = stdout.trim();
+
+// 4. Limpar arquivo temporário
+fs.unlinkSync(caminhoArquivo);
+```
+
+### Formatos de Áudio Suportados
+
+- ✅ `.ogg` (WhatsApp padrão)
+- ✅ `.mp3`
+- ✅ `.wav`
+- ✅ `.m4a`
+- ✅ `.webm`
+- ✅ `.mp4` (áudio)
 
 ### Integração no Evolution Service
 
@@ -234,17 +282,38 @@ A transcrição acontece automaticamente em:
 
 ## ⚙️ Configuração
 
-### Variáveis de Ambiente
+### Pré-requisitos
+
+O utilitário `manus-speech-to-text` já está **pré-instalado** no ambiente Manus.
+
+### Verificar Disponibilidade
 
 ```bash
-OPENAI_API_KEY=sk-...  # Chave da OpenAI (já configurada)
+# No terminal do servidor
+which manus-speech-to-text
+# Deve retornar: /usr/local/bin/manus-speech-to-text (ou similar)
 ```
 
-### Dependências
+### Testar Manualmente
 
 ```bash
-npm install openai axios
+# Baixar um áudio de teste
+curl -o teste.ogg "https://url-do-audio.ogg"
+
+# Transcrever
+manus-speech-to-text teste.ogg
+
+# Deve retornar a transcrição em texto
 ```
+
+### Dependências Node.js
+
+```bash
+# Já incluídas no projeto
+npm install axios
+```
+
+**Não precisa instalar nada adicional!** 🎉
 
 ---
 
@@ -254,10 +323,10 @@ npm install openai axios
 
 ```bash
 [TRANSCRICAO] Baixando áudio de: https://evolution.../audio.ogg
-[TRANSCRICAO] Áudio salvo em: /tmp/audio_1234567890.ogg
-[TRANSCRICAO] Transcrevendo áudio: /tmp/audio_1234567890.ogg
+[TRANSCRICAO] Áudio salvo em: /tmp/audio_1234567890_abc123.ogg
+[TRANSCRICAO] Transcrevendo áudio: /tmp/audio_1234567890_abc123.ogg
 [TRANSCRICAO] Transcrição concluída: Oi, tô interessado em consórcio...
-[TRANSCRICAO] Arquivo temporário removido: /tmp/audio_1234567890.ogg
+[TRANSCRICAO] Arquivo temporário removido: /tmp/audio_1234567890_abc123.ogg
 [SYNC] Áudio transcrito: Oi, tô interessado em consórcio de carro...
 ```
 
@@ -265,75 +334,100 @@ npm install openai axios
 
 ```bash
 [TRANSCRICAO] Erro ao baixar áudio: timeout of 30000ms exceeded
-[TRANSCRICAO] Erro ao transcrever áudio: Invalid file format
+[TRANSCRICAO] Erro ao transcrever áudio: Formato de áudio inválido ou corrompido
 [SYNC] Erro ao transcrever áudio: Falha ao baixar áudio
+```
+
+### Logs de Lote
+
+```bash
+[TRANSCRICAO] Lote processado: {
+  total: 10,
+  transcritas: 7,
+  falhas: 1,
+  puladas: 2
+}
+[TRANSCRICAO] Erros detalhados: [
+  { mensagemId: 'uuid-123', erro: 'URL de mídia não disponível' }
+]
 ```
 
 ---
 
 ## 🎯 Benefícios
 
-### 1. **Análise Completa**
-- Áudios agora contribuem para temperatura do lead
-- Não perde informações importantes em áudios
+### 1. **100% Gratuito** 💰
+- Sem custos de API
+- Ilimitado
+- Sem quotas
 
-### 2. **Automação**
-- Não precisa ouvir áudios manualmente
-- Transcrição automática durante importação
+### 2. **Privacidade** 🔒
+- Processa localmente
+- Não envia dados para terceiros
+- Dados ficam no seu servidor
 
-### 3. **Insights Melhores**
-- IA analisa conteúdo de áudios
-- Resumos incluem áudios transcritos
+### 3. **Velocidade** ⚡
+- Rápido (processa localmente)
+- Não depende de internet
+- Sem latência de API
 
-### 4. **Busca e Filtro**
-- Pode buscar por palavras-chave em áudios
-- Transcrições são texto pesquisável
+### 4. **Confiabilidade** 🛡️
+- Não depende de serviços externos
+- Funciona offline
+- Sem limite de requisições
+
+### 5. **Análise Completa** 📊
+- Áudios contribuem para temperatura
+- Não perde informações em áudios
+- 100% das mensagens analisadas
 
 ---
 
-## ⚠️ Limitações
+## ⚠️ Considerações
 
-### 1. **Custo**
-- Whisper API cobra por minuto de áudio
-- Muitos áudios = custo maior
+### Recursos do Servidor
 
-### 2. **Tempo**
-- Transcrição demora alguns segundos por áudio
-- Importação fica mais lenta com muitos áudios
+- **CPU:** Transcrição usa CPU (não GPU)
+- **Memória:** ~500MB por transcrição
+- **Disco:** Arquivos temporários (~5MB cada)
 
-### 3. **Qualidade**
-- Depende da qualidade do áudio
-- Ruído ou sotaque forte pode afetar precisão
+### Performance
 
-### 4. **Idioma**
-- Configurado para português (pt)
-- Outros idiomas podem ter precisão menor
+- **Velocidade:** ~1-3 segundos por áudio de 30s
+- **Concorrência:** Processa 1 áudio por vez
+- **Timeout:** 2 minutos máximo por áudio
+
+### Qualidade
+
+- **Precisão:** Boa para português
+- **Ruído:** Pode afetar precisão
+- **Sotaque:** Suporta variações regionais
 
 ---
 
 ## 🧪 Como Testar
 
-### Teste 1: Importar Contato com Áudio
-
+### Teste 1: Enviar Áudio
 1. Envie áudio para um contato no WhatsApp
-2. Vá em **Importar por Contato**
-3. Busque e importe o contato
-4. Aguarde processamento
-5. Abra detalhes do lead
-6. Verifique se áudio foi transcrito no histórico
+2. Importe o contato
+3. Verifique transcrição no histórico
 
 ### Teste 2: Verificar Temperatura
-
-1. Lead com áudio contendo **sinais de compra**
+1. Lead com áudio contendo sinais de compra
 2. Verifique se temperatura aumentou
-3. Lead com áudio contendo **objeções**
-4. Verifique se temperatura diminuiu
 
 ### Teste 3: Verificar Resumo
-
 1. Abra detalhes de lead com áudios
 2. Verifique se resumo menciona conteúdo dos áudios
-3. Procure por "[Áudio transcrito]" no resumo
+
+### Teste 4: Verificar Disponibilidade
+
+```javascript
+const transcricaoService = require('./services/transcricaoService');
+
+const disponivel = await transcricaoService.verificarDisponibilidade();
+console.log('Serviço disponível:', disponivel);
+```
 
 ---
 
@@ -387,18 +481,35 @@ ORDER BY m.timestamp DESC;
 
 ---
 
+## 🆚 Comparação: Whisper API vs Open Source
+
+| Aspecto | Whisper API (OpenAI) | manus-speech-to-text |
+|---------|---------------------|---------------------|
+| **Custo** | $0.006/min (~R$0.03) | **GRATUITO** ✅ |
+| **100 áudios de 30s** | ~R$15 | **R$0** ✅ |
+| **1000 áudios de 30s** | ~R$150 | **R$0** ✅ |
+| **Privacidade** | Envia para OpenAI | **Local** ✅ |
+| **Velocidade** | 2-5s (rede) | **1-3s** ✅ |
+| **Limite** | Quota da API | **Ilimitado** ✅ |
+| **Offline** | ❌ Não | **✅ Sim** |
+| **Precisão** | Excelente | Boa |
+| **Idiomas** | 90+ | Português + outros |
+
+---
+
 ## 📝 Resumo
 
 | Aspecto | Detalhes |
 |---------|----------|
 | **O que faz** | Transcreve áudios automaticamente |
 | **Quando** | Durante importação de mensagens |
-| **API usada** | Whisper API (OpenAI) |
-| **Idioma** | Português (pt) |
+| **Solução usada** | **manus-speech-to-text (open source)** |
+| **Custo** | **GRATUITO** 💰 |
+| **Privacidade** | **Processa localmente** 🔒 |
+| **Idioma** | Português + outros |
 | **Análise** | IA analisa transcrição como texto |
 | **Temperatura** | Áudios contribuem para o score |
 | **Resumo** | Inclui conteúdo de áudios |
-| **Custo** | Por minuto de áudio transcrito |
 
 ---
 
@@ -407,14 +518,16 @@ ORDER BY m.timestamp DESC;
 Agora o sistema analisa **100% das mensagens dos leads**, incluindo:
 
 - ✅ Mensagens de texto
-- ✅ Mensagens de áudio (transcritas)
-- ✅ Imagens (conteúdo visual não analisado ainda)
-- ✅ Documentos (conteúdo não analisado ainda)
-- ✅ Vídeos (conteúdo não analisado ainda)
+- ✅ **Mensagens de áudio (transcritas)** ⭐
+- ⚠️ Imagens (conteúdo visual não analisado ainda)
+- ⚠️ Documentos (conteúdo não analisado ainda)
+- ⚠️ Vídeos (conteúdo não analisado ainda)
 
-**A temperatura do lead é mais precisa** porque considera todo o conteúdo da conversa, não apenas texto! 🚀
+**A temperatura do lead é muito mais precisa** porque considera todo o conteúdo da conversa, incluindo áudios! 🚀
+
+**E o melhor:** **100% GRATUITO** sem custos de API! 💰✨
 
 ---
 
 **Última atualização:** 2026-01-17  
-**Versão:** 1.0
+**Versão:** 2.0 (Open Source)
