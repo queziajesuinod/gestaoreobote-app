@@ -511,3 +511,104 @@ module.exports = {
   buscarTarefasPorRange,
   buscarNegociosPorRangePorStatus
 };
+
+
+/**
+ * Obter detalhes de um negócio específico (para integração com Leads)
+ */
+async function obterNegocio(negocioId, userToken = null) {
+  const token = userToken || API_AGENDOR_TOKEN;
+  
+  try {
+    const response = await agendorHttp.get(`/deals/${negocioId}`, {
+      headers: { Authorization: `Token ${token}` }
+    });
+    
+    return response.data.data || null;
+  } catch (error) {
+    console.error(`Erro ao obter negócio ${negocioId}:`, error.message);
+    return null;
+  }
+}
+
+/**
+ * Obter tarefas de um negócio específico
+ */
+async function obterTarefasNegocio(negocioId, userToken = null) {
+  const token = userToken || API_AGENDOR_TOKEN;
+  
+  try {
+    const response = await agendorHttp.get('/tasks', {
+      headers: { Authorization: `Token ${token}` },
+      params: {
+        deal: negocioId,
+        per_page: 100
+      }
+    });
+    
+    return response.data.data || [];
+  } catch (error) {
+    console.error(`Erro ao obter tarefas do negócio ${negocioId}:`, error.message);
+    return [];
+  }
+}
+
+/**
+ * Buscar negócios por termo (para vincular leads)
+ */
+async function buscarNegocios(termo, userToken = null, limite = 20) {
+  const token = userToken || API_AGENDOR_TOKEN;
+  
+  try {
+    const response = await agendorHttp.get('/deals', {
+      headers: { Authorization: `Token ${token}` },
+      params: {
+        q: termo,
+        per_page: limite
+      }
+    });
+    
+    return response.data.data || [];
+  } catch (error) {
+    console.error(`Erro ao buscar negócios com termo "${termo}":`, error.message);
+    return [];
+  }
+}
+
+/**
+ * Criar negócio no Agendor a partir de um lead
+ */
+async function criarNegocioDoLead(leadData, userToken = null) {
+  const token = userToken || API_AGENDOR_TOKEN;
+  
+  try {
+    const payload = {
+      title: `Consórcio - ${leadData.nome}`,
+      value: leadData.valorDesejado || 0,
+      person: {
+        name: leadData.nome,
+        contact: {
+          email: leadData.email || null,
+          mobile: leadData.telefone || null
+        }
+      }
+    };
+    
+    const response = await agendorHttp.post('/deals', payload, {
+      headers: { Authorization: `Token ${token}` }
+    });
+    
+    return response.data.data || null;
+  } catch (error) {
+    console.error('Erro ao criar negócio no Agendor:', error.message);
+    return null;
+  }
+}
+
+module.exports = {
+  ...module.exports,
+  obterNegocio,
+  obterTarefasNegocio,
+  buscarNegocios,
+  criarNegocioDoLead
+};

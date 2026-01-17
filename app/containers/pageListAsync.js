@@ -99,3 +99,18 @@ export const PerfisAdmin = loadable(() =>
   import('./Pages/Users/PerfisManagement'), {
     fallback: <Loading />,
   });
+
+export const LeadsPage = loadable(() =>
+  import('./Pages/Leads'), {
+    fallback: <Loading />,
+  });
+
+export const LeadDetalhes = loadable(() =>
+  import('./Pages/Leads/LeadDetalhes'), {
+    fallback: <Loading />,
+  });
+
+export const EvolutionConfig = loadable(() =>
+  import('./Pages/EvolutionConfig'), {
+    fallback: <Loading />,
+  });

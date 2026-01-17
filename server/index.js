@@ -53,12 +53,18 @@ app.use(express.json());
 // 🔓 **ROTA PÚBLICA** (Autenticação)
 app.use('/auth', require("./routers/auth"));
 
+// 🔓 WEBHOOK PÚBLICO (antes do authMiddleware)
+app.use('/webhook/evolution', require('./routers/webhookEvolution'));
+
+
 // 🔒 **ROTAS PROTEGIDAS** (Exigem um token JWT válido)
 app.use('/users', authMiddleware, require("./routers/users"));
 app.use('/perfil', authMiddleware, require("./routers/perfis"));
 app.use('/equipe', authMiddleware, require("./routers/equipes"));
 app.use('/integrante', authMiddleware, require("./routers/integrantes"));
 app.use('/consultor', authMiddleware, require("./routers/consultores"));
+app.use('/leads', authMiddleware, require('./routers/leads'));
+app.use('/evolution', authMiddleware, require('./routers/evolution'));
 app.use('/agendor', authMiddleware, require("./routers/agendor"));
 app.use('/clientes', authMiddleware, require('./routers/clientes'));
 app.use('/cotas', authMiddleware, require('./routers/cotas'));

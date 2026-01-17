@@ -115,6 +115,26 @@ export const buildMenu = (permissoes = []) => {
   
 
   menu.push({
+    key: 'leads',
+    name: 'Leads',
+    icon: 'ion-ios-people-outline',
+    child: [
+      {
+        key: 'leads_lista',
+        name: 'Leads',
+        link: '/app/leads',
+        icon: 'ion-ios-people-outline'
+      },
+      {
+        key: 'leads_whatsapp',
+        name: 'WhatsApp',
+        link: '/app/configuracoes/whatsapp',
+        icon: 'ion-social-whatsapp'
+      }
+    ]
+  });
+
+  menu.push({
     key: 'auth',
     name: 'Perfil',
     icon: 'ion-ios-contact-outline',

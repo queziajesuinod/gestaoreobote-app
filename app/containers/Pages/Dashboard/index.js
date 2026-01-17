@@ -33,7 +33,10 @@ import {
   DialogContent,
   DialogActions,
   Snackbar,
-  Alert
+  Alert,
+  List,
+  ListItem,
+  ListItemText
 } from '@mui/material';
 import { PapperBlock } from 'dan-components';
 import {
@@ -55,6 +58,9 @@ import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import RemoveIcon from '@mui/icons-material/Remove';
 import { set } from 'lodash';
 import { getStoredUser } from '../../../utils/userStorage';
+import { leadsApi } from '../../../services/leadsApi';
+import { formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 const API_URL = process.env.REACT_APP_API_URL?.replace(/\/$/, '') || 'http://localhost:3003';
 const API_INTEGRANTES_URL = `${API_URL}/integrante/equipe`;
@@ -107,6 +113,25 @@ const formatarIdentificadorCota = (cota) => {
     .map(parte => (parte || '').toString().trim())
     .filter(Boolean);
   return partes.join('-') || '—';
+};
+
+const normalizarLeadsResumo = (data) => {
+  if (!data) return [];
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.leads)) return data.leads;
+  if (Array.isArray(data?.dados)) return data.dados;
+  if (data?.agrupados) {
+    const { quentes = [], mornos = [], frios = [] } = data.agrupados;
+    return [...quentes, ...mornos, ...frios];
+  }
+  return [];
+};
+
+const formatarTempoRelativo = (value) => {
+  if (!value) return '--';
+  const data = new Date(value);
+  if (Number.isNaN(data.getTime())) return '--';
+  return formatDistanceToNow(data, { locale: ptBR, addSuffix: true });
 };
 
 const splitPeriodIntoChunks = (inicio, fim, maxDias = 31) => {
@@ -336,6 +361,8 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
   const [rankingPage, setRankingPage] = useState(0);
   const [rankingRowsPerPage, setRankingRowsPerPage] = useState(10);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
+  const [leadsResumo, setLeadsResumo] = useState({ quentes: 0, mornos: 0, frios: 0, top: [] });
+  const [leadsLoading, setLeadsLoading] = useState(false);
 
   const showSnackbar = useCallback((message, severity = 'info') => {
     setSnackbar({ open: true, message, severity });
@@ -408,8 +435,53 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
   const consultorIdLogado = isConsultorPerfil && storedUser?.consultorId
     ? Number(storedUser.consultorId)
     : null;
+  const consultorIdParaLeads = consultorIdLogado || storedUser?.consultorId || null;
   const podeVerTodasEquipes = isAdminPerfil || isGestorPerfil || permissoesUsuario.includes('GESTAO');
   const podeSelecionarTodasEquipes = podeVerTodasEquipes && !isConsultorPerfil;
+
+  const carregarLeadsResumo = useCallback(async () => {
+    setLeadsLoading(true);
+    try {
+      const response = await leadsApi.listar(consultorIdParaLeads || undefined);
+      const lista = normalizarLeadsResumo(response);
+      let quentes = 0;
+      let mornos = 0;
+      let frios = 0;
+
+      lista.forEach((lead) => {
+        const temperatura = Number(lead?.temperaturaLead) || 0;
+        if (temperatura >= 70) {
+          quentes += 1;
+        } else if (temperatura >= 40) {
+          mornos += 1;
+        } else {
+          frios += 1;
+        }
+      });
+
+      const top = [...lista]
+        .sort((a, b) => (Number(b?.temperaturaLead) || 0) - (Number(a?.temperaturaLead) || 0))
+        .slice(0, 5);
+
+      setLeadsResumo({ quentes, mornos, frios, top });
+    } catch (error) {
+      console.error('Erro ao carregar leads do dashboard:', error);
+      showSnackbar('Falha ao carregar leads do dashboard.', 'error');
+      setLeadsResumo({ quentes: 0, mornos: 0, frios: 0, top: [] });
+    } finally {
+      setLeadsLoading(false);
+    }
+  }, [consultorIdParaLeads, showSnackbar]);
+
+  const leadsTemperaturaData = useMemo(() => ([
+    { label: 'Quentes', quantidade: leadsResumo.quentes, cor: '#f44336' },
+    { label: 'Mornos', quantidade: leadsResumo.mornos, cor: '#ff9800' },
+    { label: 'Frios', quantidade: leadsResumo.frios, cor: '#2196f3' }
+  ]), [leadsResumo]);
+
+  useEffect(() => {
+    carregarLeadsResumo();
+  }, [carregarLeadsResumo]);
 
   useEffect(() => {
     let ativo = true;
@@ -1606,6 +1678,105 @@ const [rankingCotasDialog, setRankingCotasDialog] = useState({
             </Box>
           </Grid>
         </Grid>
+
+        {/* ==================== RESUMO LEADS ==================== */}
+        <Typography variant="h5" gutterBottom style={{ marginTop: 30, marginBottom: 20 }}>
+          Leads por temperatura
+        </Typography>
+
+        {leadsLoading ? (
+          <Box display="flex" justifyContent="center" padding={4}>
+            <CircularProgress />
+          </Box>
+        ) : (
+          <>
+            <Grid container spacing={3} style={{ marginBottom: 30 }}>
+              <Grid item xs={12} sm={6} md={4}>
+                <Paper elevation={2} style={{ padding: 20, textAlign: 'center', borderTop: '4px solid #f44336' }}>
+                  <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                    Quentes
+                  </Typography>
+                  <Typography variant="h3" style={{ color: '#f44336', fontWeight: 'bold' }}>
+                    {leadsResumo.quentes}
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} sm={6} md={4}>
+                <Paper elevation={2} style={{ padding: 20, textAlign: 'center', borderTop: '4px solid #ff9800' }}>
+                  <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                    Mornos
+                  </Typography>
+                  <Typography variant="h3" style={{ color: '#ff9800', fontWeight: 'bold' }}>
+                    {leadsResumo.mornos}
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} sm={6} md={4}>
+                <Paper elevation={2} style={{ padding: 20, textAlign: 'center', borderTop: '4px solid #2196f3' }}>
+                  <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                    Frios
+                  </Typography>
+                  <Typography variant="h3" style={{ color: '#2196f3', fontWeight: 'bold' }}>
+                    {leadsResumo.frios}
+                  </Typography>
+                </Paper>
+              </Grid>
+            </Grid>
+
+            <Grid container spacing={3} style={{ marginBottom: 30 }}>
+              <Grid item xs={12} md={6}>
+                <Paper elevation={2} style={{ padding: 20, height: '100%' }}>
+                  <Typography variant="h6" gutterBottom>
+                    Distribuicao por temperatura
+                  </Typography>
+                  {leadsResumo.quentes + leadsResumo.mornos + leadsResumo.frios === 0 ? (
+                    <Typography variant="body2" color="textSecondary">
+                      Sem dados de leads no momento.
+                    </Typography>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={240}>
+                      <BarChart data={leadsTemperaturaData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="label" />
+                        <YAxis allowDecimals={false} />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="quantidade">
+                          {leadsTemperaturaData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.cor} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Paper elevation={2} style={{ padding: 20, height: '100%' }}>
+                  <Typography variant="h6" gutterBottom>
+                    Top 5 leads mais quentes
+                  </Typography>
+                  {leadsResumo.top.length === 0 ? (
+                    <Typography variant="body2" color="textSecondary">
+                      Sem leads para exibir.
+                    </Typography>
+                  ) : (
+                    <List dense>
+                      {leadsResumo.top.map((lead, index) => (
+                        <ListItem key={lead?.id || `${lead?.nome}-${index}`}>
+                          <ListItemText
+                            primary={`${index + 1}. ${lead?.nome || 'Lead'} (${lead?.temperaturaLead ?? '--'})`}
+                            secondary={`Ultima: ${formatarTempoRelativo(lead?.ultimaMensagem)}`}
+                          />
+                        </ListItem>
+                      ))}
+                    </List>
+                  )}
+                </Paper>
+              </Grid>
+            </Grid>
+          </>
+        )}
 
         {/* ==================== INDICADORES ==================== */}
         {filtradas.length > 0 && (

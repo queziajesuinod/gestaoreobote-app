@@ -17,7 +17,10 @@ import {
   Metas,
   ProfilePage,
   UsersAdmin,
-  PerfisAdmin
+  PerfisAdmin,
+  LeadsPage,
+  LeadDetalhes,
+  EvolutionConfig
 } from '../pageListAsync';
 
 function Application({ isAuthenticated }) {
@@ -67,6 +70,18 @@ function Application({ isAuthenticated }) {
         <Route
           path="metas"
           element={<ProtectedRoute element={<Metas />} isAuthenticated={isAuthenticated} />}
+        />
+        <Route
+          path="leads"
+          element={<ProtectedRoute element={<LeadsPage />} isAuthenticated={isAuthenticated} />}
+        />
+        <Route
+          path="leads/:leadId"
+          element={<ProtectedRoute element={<LeadDetalhes />} isAuthenticated={isAuthenticated} />}
+        />
+        <Route
+          path="configuracoes/whatsapp"
+          element={<ProtectedRoute element={<EvolutionConfig />} isAuthenticated={isAuthenticated} />}
         />
         <Route
           path="usuarios"
