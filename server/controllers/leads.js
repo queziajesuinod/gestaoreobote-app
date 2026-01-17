@@ -661,22 +661,36 @@ async function sincronizarLead(req, res) {
       });
     }
     
-    // Validar se o lead tem instância Evolution associada
-    if (!lead.evolutionInstanceId) {
-      console.log(`[SYNC] Lead ${leadId} não possui evolutionInstanceId associado`);
-      return res.status(400).json({
-        sucesso: false,
-        mensagem: 'Este lead não está vinculado a uma instância do WhatsApp. Importe-o novamente pela configuração do WhatsApp.'
-      });
+    // Buscar instância Evolution
+    const { EvolutionInstance } = require('../models');
+    let instancia;
+    
+    if (lead.evolutionInstanceId) {
+      // Se o lead já tem instância associada, buscar por ID
+      instancia = await EvolutionInstance.findByPk(lead.evolutionInstanceId);
+      console.log(`[SYNC] Buscando instância por ID: ${lead.evolutionInstanceId}`);
     }
     
-    const { EvolutionInstance } = require('../models');
-    const instancia = await EvolutionInstance.findByPk(lead.evolutionInstanceId);
     if (!instancia) {
-      console.log(`[SYNC] Instância Evolution ${lead.evolutionInstanceId} não encontrada no banco`);
+      // Se não encontrou por ID ou não tinha ID, buscar pelo consultorId
+      console.log(`[SYNC] Buscando instância pelo consultorId: ${lead.consultorId}`);
+      instancia = await EvolutionInstance.findOne({
+        where: { consultorId: lead.consultorId }
+      });
+      
+      if (instancia) {
+        console.log(`[SYNC] Instância encontrada pelo consultorId: ${instancia.instanceName} (ID: ${instancia.id})`);
+        // Atualizar o lead com o evolutionInstanceId correto
+        await lead.update({ evolutionInstanceId: instancia.id });
+        console.log(`[SYNC] Lead atualizado com evolutionInstanceId: ${instancia.id}`);
+      }
+    }
+    
+    if (!instancia) {
+      console.log(`[SYNC] Nenhuma instância Evolution encontrada para o consultor ${lead.consultorId}`);
       return res.status(400).json({
         sucesso: false,
-        mensagem: 'Instância Evolution não encontrada. Configure o WhatsApp novamente.'
+        mensagem: 'Instância Evolution não configurada para este consultor. Configure o WhatsApp primeiro.'
       });
     }
     console.log(`[SYNC] Instância encontrada: ${instancia.instanceName}`);
