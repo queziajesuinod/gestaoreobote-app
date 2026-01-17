@@ -631,6 +631,7 @@ module.exports = {
 async function sincronizarLead(req, res) {
   try {
     const { leadId } = req.params;
+    console.log(`[SYNC] Iniciando sincronização do lead ${leadId}`);
     
     const lead = await Lead.findByPk(leadId, {
       include: [
@@ -642,11 +643,14 @@ async function sincronizarLead(req, res) {
     });
     
     if (!lead) {
+      console.log(`[SYNC] Lead ${leadId} não encontrado`);
       return res.status(404).json({
         sucesso: false,
         mensagem: 'Lead não encontrado'
       });
     }
+    
+    console.log(`[SYNC] Lead encontrado: ${lead.nome}, consultorId: ${lead.consultorId}, evolutionInstanceId: ${lead.evolutionInstanceId}`);
     
     // Controle de acesso
     const isGestor = req.user.perfilId === 1;
@@ -660,21 +664,26 @@ async function sincronizarLead(req, res) {
     const { EvolutionInstance } = require('../models');
     const instancia = await EvolutionInstance.findByPk(lead.evolutionInstanceId);
     if (!instancia) {
+      console.log(`[SYNC] Instância Evolution ${lead.evolutionInstanceId} não encontrada`);
       return res.status(400).json({
         sucesso: false,
         mensagem: 'Instância Evolution não configurada'
       });
     }
+    console.log(`[SYNC] Instância encontrada: ${instancia.instanceName}`);
     
     const conversa = lead.conversas && lead.conversas[0];
     if (!conversa) {
+      console.log(`[SYNC] Nenhuma conversa encontrada para o lead ${leadId}`);
       return res.status(400).json({
         sucesso: false,
         mensagem: 'Nenhuma conversa encontrada para sincronizar'
       });
     }
+    console.log(`[SYNC] Conversa encontrada: chatId=${conversa.chatId}`);
     
     // Sincronizar
+    console.log(`[SYNC] Chamando evolutionService.sincronizarChat...`);
     const resultado = await evolutionService.sincronizarChat(
       instancia,
       conversa.chatId,
@@ -682,12 +691,17 @@ async function sincronizarLead(req, res) {
       200 // Últimas 200 mensagens
     );
     
+    console.log(`[SYNC] Resultado da sincronização:`, resultado);
+    
     if (!resultado.sucesso) {
+      console.log(`[SYNC] Erro na sincronização: ${resultado.erro}`);
       return res.status(500).json({
         sucesso: false,
         mensagem: resultado.erro
       });
     }
+    
+    console.log(`[SYNC] Sincronização concluída com sucesso: ${resultado.mensagensNovas} novas mensagens`);
     
     res.json({
       sucesso: true,
@@ -697,7 +711,8 @@ async function sincronizarLead(req, res) {
     });
     
   } catch (error) {
-    console.error('Erro ao sincronizar lead:', error);
+    console.error('[SYNC] Erro ao sincronizar lead:', error);
+    console.error('[SYNC] Stack trace:', error.stack);
     res.status(500).json({ sucesso: false, erro: error.message });
   }
 }

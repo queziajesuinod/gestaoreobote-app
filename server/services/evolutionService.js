@@ -415,8 +415,18 @@ async function sincronizarChat(evolutionInstance, chatId, leadId, limiteMensagen
   const iaService = require('./ia');
   
   try {
-    // Buscar instância do banco
-    const instance = await EvolutionInstance.findByPk(evolutionInstance.id);
+    // Buscar instância do banco (aceita ID ou objeto)
+    let instance;
+    if (typeof evolutionInstance === 'object' && evolutionInstance.id) {
+      // Se já é um objeto com id, buscar novamente para garantir dados atualizados
+      instance = await EvolutionInstance.findByPk(evolutionInstance.id);
+    } else if (typeof evolutionInstance === 'number' || typeof evolutionInstance === 'string') {
+      // Se é um ID, buscar
+      instance = await EvolutionInstance.findByPk(evolutionInstance);
+    } else {
+      throw new Error('Parâmetro evolutionInstance inválido');
+    }
+    
     if (!instance) {
       throw new Error('Instância Evolution não encontrada');
     }
