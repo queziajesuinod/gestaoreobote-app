@@ -13,10 +13,8 @@ async function sincronizarTodosLeads() {
   console.log('[SYNC] Iniciando sincronização automática...');
   
   try {
-    // Buscar todas as instâncias ativas
-    const instancias = await EvolutionInstance.findAll({
-      where: { ativo: true }
-    });
+    // Buscar todas as instâncias (não há coluna 'ativo' na tabela)
+    const instancias = await EvolutionInstance.findAll();
     
     if (!instancias || instancias.length === 0) {
       console.log('[SYNC] Nenhuma instância ativa encontrada.');

@@ -661,13 +661,22 @@ async function sincronizarLead(req, res) {
       });
     }
     
+    // Validar se o lead tem instância Evolution associada
+    if (!lead.evolutionInstanceId) {
+      console.log(`[SYNC] Lead ${leadId} não possui evolutionInstanceId associado`);
+      return res.status(400).json({
+        sucesso: false,
+        mensagem: 'Este lead não está vinculado a uma instância do WhatsApp. Importe-o novamente pela configuração do WhatsApp.'
+      });
+    }
+    
     const { EvolutionInstance } = require('../models');
     const instancia = await EvolutionInstance.findByPk(lead.evolutionInstanceId);
     if (!instancia) {
-      console.log(`[SYNC] Instância Evolution ${lead.evolutionInstanceId} não encontrada`);
+      console.log(`[SYNC] Instância Evolution ${lead.evolutionInstanceId} não encontrada no banco`);
       return res.status(400).json({
         sucesso: false,
-        mensagem: 'Instância Evolution não configurada'
+        mensagem: 'Instância Evolution não encontrada. Configure o WhatsApp novamente.'
       });
     }
     console.log(`[SYNC] Instância encontrada: ${instancia.instanceName}`);
