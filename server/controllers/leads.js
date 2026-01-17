@@ -732,12 +732,23 @@ async function sincronizarLead(req, res) {
         console.log(`[SYNC]   Chat ${idx + 1}: ${remoteJid}`);
       });
       
+      let tentativasComparacao = 0;
       for (const chat of resultadoChats.chats) {
         const remoteJid = chat.id || chat.remoteJid || chat.jid;
         if (!remoteJid) continue;
         
         // Extrair número do remoteJid (ex: 5511999999999@s.whatsapp.net -> 5511999999999)
         const numeroChat = remoteJid.split('@')[0].replace(/\D/g, '');
+        
+        // Log das primeiras 3 comparações
+        if (tentativasComparacao < 3) {
+          console.log(`[SYNC] Comparação ${tentativasComparacao + 1}:`);
+          console.log(`[SYNC]   remoteJid: ${remoteJid}`);
+          console.log(`[SYNC]   numeroChat: ${numeroChat}`);
+          console.log(`[SYNC]   telefoneNormalizado: ${telefoneNormalizado}`);
+          console.log(`[SYNC]   Iguais? ${numeroChat === telefoneNormalizado}`);
+          tentativasComparacao++;
+        }
         
         // Comparar com o telefone do lead
         if (numeroChat === telefoneNormalizado || 
