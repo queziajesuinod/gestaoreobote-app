@@ -466,7 +466,7 @@ async function buscarContatos(apiUrl, instanceName, apiKey, filtro = {}) {
       console.log(`[BUSCAR_CONTATOS] Número formatado: ${where.id}`);
     }
     
-    const response = await client.post(`/contact/findContacts/${instanceName}`, {
+    const response = await client.post(`/chat/findChats/${instanceName}`, {
       where
     });
     
