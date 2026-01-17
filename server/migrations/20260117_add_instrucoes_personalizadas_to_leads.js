@@ -2,14 +2,27 @@
 
 module.exports = {
   up: async (queryInterface, Sequelize) => {
-    await queryInterface.addColumn('leads', 'instrucoesPersonalizadas', {
-      type: Sequelize.TEXT,
-      allowNull: true,
-      comment: 'Instruções personalizadas para análise de IA'
-    });
+    // Obter schema do ambiente
+    const schema = process.env.DB_SCHEMA || (process.env.NODE_ENV === 'production' ? 'public' : 'dev');
+    
+    await queryInterface.addColumn(
+      { tableName: 'leads', schema },
+      'instrucoesPersonalizadas',
+      {
+        type: Sequelize.TEXT,
+        allowNull: true,
+        comment: 'Instruções personalizadas para análise de IA'
+      }
+    );
   },
 
   down: async (queryInterface, Sequelize) => {
-    await queryInterface.removeColumn('leads', 'instrucoesPersonalizadas');
+    // Obter schema do ambiente
+    const schema = process.env.DB_SCHEMA || (process.env.NODE_ENV === 'production' ? 'public' : 'dev');
+    
+    await queryInterface.removeColumn(
+      { tableName: 'leads', schema },
+      'instrucoesPersonalizadas'
+    );
   }
 };
