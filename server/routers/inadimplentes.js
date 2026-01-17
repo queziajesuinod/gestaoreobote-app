@@ -237,6 +237,43 @@ router.post('/configuracoes/webhook/:id/ativar', configuracaoWebhookController.a
  */
 router.post('/configuracoes/webhook/:id/desativar', configuracaoWebhookController.desativar);
 
+// ----------------------------------------------------------------------------
+// RELATÓRIOS E EXPORTAÇÕES
+// ----------------------------------------------------------------------------
+
+/**
+ * GET /api/inadimplentes/relatorios/processo/:id/pdf
+ * Gerar relatório PDF de um processo
+ */
+router.get('/relatorios/processo/:id/pdf', inadimplenciaController.gerarRelatorioPDF);
+
+/**
+ * GET /api/inadimplentes/relatorios/inadimplencia/pdf
+ * Gerar relatório consolidado de inadimplência em PDF
+ * Query params: dataInicio, dataFim
+ */
+router.get('/relatorios/inadimplencia/pdf', inadimplenciaController.gerarRelatorioInadimplenciaPDF);
+
+/**
+ * GET /api/inadimplentes/exportar/processos/excel
+ * Exportar processos para Excel
+ * Query params: status
+ */
+router.get('/exportar/processos/excel', inadimplenciaController.exportarProcessosExcel);
+
+/**
+ * GET /api/inadimplentes/exportar/atrasadas/excel
+ * Exportar cobranças atrasadas para Excel
+ */
+router.get('/exportar/atrasadas/excel', inadimplenciaController.exportarCobrancasAtrasadasExcel);
+
+/**
+ * GET /api/inadimplentes/estatisticas/graficos
+ * Obter dados para gráficos
+ * Query params: meses (padrão: 6)
+ */
+router.get('/estatisticas/graficos', inadimplenciaController.obterDadosGraficos);
+
 // ============================================================================
 // EXPORTAR ROUTER
 // ============================================================================

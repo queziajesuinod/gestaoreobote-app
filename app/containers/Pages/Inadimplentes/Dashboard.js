@@ -39,11 +39,14 @@ import {
   PlayArrow as PlayIcon,
   Visibility as ViewIcon,
   Edit as EditIcon,
-  Payment as PaymentIcon
+  Payment as PaymentIcon,
+  PictureAsPdf as PdfIcon,
+  TableChart as ExcelIcon
 } from '@mui/icons-material';
 import { PapperBlock } from 'dan-components';
 import brand from 'dan-api/dummy/brand';
 import * as inadimplentesApi from '../../../services/inadimplentesApi';
+import GraficosInadimplencia from './GraficosInadimplencia';
 
 function Dashboard() {
   const navigate = useNavigate();
@@ -56,6 +59,8 @@ function Dashboard() {
   const [cobrancasAtrasadas, setCobrancasAtrasadas] = useState([]);
   const [detectando, setDetectando] = useState(false);
   const [atualizando, setAtualizando] = useState(false);
+  const [exportando, setExportando] = useState(false);
+  const [mostrarGraficos, setMostrarGraficos] = useState(true);
 
   // Dialog de marcar como pago
   const [dialogPago, setDialogPago] = useState({
@@ -130,6 +135,32 @@ function Dashboard() {
       mostrarSnackbar('Erro ao detectar inadimplência', 'error');
     } finally {
       setDetectando(false);
+    }
+  };
+
+  const handleExportarPDF = async () => {
+    try {
+      setExportando(true);
+      await inadimplentesApi.gerarRelatorioInadimplenciaPDF();
+      mostrarSnackbar('Relatório PDF gerado com sucesso');
+    } catch (error) {
+      console.error('Erro ao exportar PDF:', error);
+      mostrarSnackbar('Erro ao gerar relatório PDF', 'error');
+    } finally {
+      setExportando(false);
+    }
+  };
+
+  const handleExportarExcel = async () => {
+    try {
+      setExportando(true);
+      await inadimplentesApi.exportarCobrancasAtrasadasExcel();
+      mostrarSnackbar('Cobranças atrasadas exportadas com sucesso');
+    } catch (error) {
+      console.error('Erro ao exportar Excel:', error);
+      mostrarSnackbar('Erro ao exportar para Excel', 'error');
+    } finally {
+      setExportando(false);
     }
   };
 
@@ -210,6 +241,26 @@ function Dashboard() {
             disabled={atualizando}
           >
             Atualizar
+          </Button>
+
+          <Button
+            variant="outlined"
+            color="error"
+            startIcon={exportando ? <CircularProgress size={20} /> : <PdfIcon />}
+            onClick={handleExportarPDF}
+            disabled={exportando}
+          >
+            Exportar PDF
+          </Button>
+
+          <Button
+            variant="outlined"
+            color="success"
+            startIcon={exportando ? <CircularProgress size={20} /> : <ExcelIcon />}
+            onClick={handleExportarExcel}
+            disabled={exportando}
+          >
+            Exportar Excel
           </Button>
         </Box>
 
@@ -344,6 +395,38 @@ function Dashboard() {
             </Card>
           </Grid>
         </Grid>
+
+        {/* Gráficos de Inadimplência */}
+        {mostrarGraficos && (
+          <Card sx={{ mb: 3 }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h6">
+                  Gráficos de Inadimplência
+                </Typography>
+                <Button
+                  variant="text"
+                  size="small"
+                  onClick={() => setMostrarGraficos(false)}
+                >
+                  Ocultar Gráficos
+                </Button>
+              </Box>
+              <GraficosInadimplencia meses={6} />
+            </CardContent>
+          </Card>
+        )}
+
+        {!mostrarGraficos && (
+          <Box sx={{ mb: 3, textAlign: 'center' }}>
+            <Button
+              variant="outlined"
+              onClick={() => setMostrarGraficos(true)}
+            >
+              Mostrar Gráficos
+            </Button>
+          </Box>
+        )}
 
         {/* Tabela de Cobranças Atrasadas */}
         <Card>
