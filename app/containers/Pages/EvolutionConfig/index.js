@@ -40,7 +40,8 @@ const initialForm = {
   instanceName: '',
   apiUrl: '',
   apiKey: '',
-  sincronizarAutomaticamente: false
+  sincronizarAutomaticamente: false,
+  sincronizarApenas: 'nao_lidas'
 };
 
 const formatarUltimaSync = (value) => {
@@ -199,7 +200,8 @@ function EvolutionConfig() {
           instanceName: instancia.instanceName || '',
           apiUrl: sanitizeApiUrl(instancia.apiUrl || ''),
           apiKey: instancia.apiKey || '',
-          sincronizarAutomaticamente: Boolean(instancia.sincronizarAutomaticamente)
+          sincronizarAutomaticamente: Boolean(instancia.sincronizarAutomaticamente),
+          sincronizarApenas: instancia.sincronizarApenas || 'nao_lidas'
         });
       }
       return true;
@@ -286,6 +288,7 @@ function EvolutionConfig() {
         apiUrl: apiUrlSanitizada,
         apiKey: form.apiKey,
         sincronizarAutomaticamente: form.sincronizarAutomaticamente,
+        sincronizarApenas: form.sincronizarApenas,
         consultorId: consultorIdPayload || undefined
       });
       showSnackbar('Configuracao salva com sucesso.', 'success');
@@ -478,6 +481,18 @@ function EvolutionConfig() {
                   label="Sincronizar automaticamente"
                 />
               </Box>
+              <FormControl fullWidth margin="normal">
+                <InputLabel>Tipo de sincronização</InputLabel>
+                <Select
+                  label="Tipo de sincronização"
+                  value={form.sincronizarApenas}
+                  onChange={handleChange('sincronizarApenas')}
+                >
+                  <MenuItem value="nao_lidas">Apenas não lidas</MenuItem>
+                  <MenuItem value="todas">Todas as mensagens</MenuItem>
+                  <MenuItem value="ultimas_24h">Últimas 24 horas</MenuItem>
+                </Select>
+              </FormControl>
               <Box className={classes.actions}>
                 <Button variant="outlined" onClick={handleTestar} disabled={carregandoStatus}>
                   Testar conexao

@@ -70,7 +70,7 @@ const iniciarCargaInicial = (instancia, consultorId, sincronizarAutomaticamente)
  */
 async function configurarInstancia(req, res) {
   try {
-    const { instanceName, apiUrl, apiKey, sincronizarAutomaticamente } = req.body;
+    const { instanceName, apiUrl, apiKey, sincronizarAutomaticamente, sincronizarApenas } = req.body;
     const consultorId = ensureConsultorId(req, res);
     if (!consultorId) return;
     
@@ -98,7 +98,8 @@ async function configurarInstancia(req, res) {
         apiKey: evolutionService.encryptApiKey(apiKey),
         status: teste.status === 'open' ? 'conectada' : 'desconectada',
         sincronizarAutomaticamente,
-      ultimaConexao: new Date()
+        sincronizarApenas: sincronizarApenas || 'nao_lidas',
+        ultimaConexao: new Date()
       });
       iniciarCargaInicial(instanciaExistente, consultorId, sincronizarAutomaticamente);
 
@@ -117,6 +118,7 @@ async function configurarInstancia(req, res) {
       apiKey: evolutionService.encryptApiKey(apiKey),
       status: teste.status === 'open' ? 'conectada' : 'desconectada',
       sincronizarAutomaticamente,
+      sincronizarApenas: sincronizarApenas || 'nao_lidas',
       ultimaConexao: new Date()
     });
     iniciarCargaInicial(novaInstancia, consultorId, sincronizarAutomaticamente);
