@@ -1,0 +1,223 @@
+const cobrancaService = require('../services/cobranca');
+const inadimplenciaService = require('../services/inadimplencia');
+const { CobrancaMensal } = require('../models');
+
+module.exports = {
+  /**
+   * GET /api/inadimplentes/cobrancas
+   * Listar cobranças com filtros
+   */
+  async listar(req, res) {
+    try {
+      const { status, dataInicio, dataFim, processoCobrancaId } = req.query;
+
+      const filtros = {};
+      if (status) filtros.status = status;
+      if (dataInicio) filtros.dataInicio = dataInicio;
+      if (dataFim) filtros.dataFim = dataFim;
+      if (processoCobrancaId) filtros.processoCobrancaId = processoCobrancaId;
+
+      const cobrancas = await cobrancaService.listarCobrancas(filtros);
+
+      return res.status(200).json({
+        sucesso: true,
+        mensagem: 'Cobranças listadas com sucesso',
+        dados: cobrancas
+      });
+
+    } catch (erro) {
+      console.error('[CobrancaMensal] Erro ao listar:', erro);
+      return res.status(500).json({
+        sucesso: false,
+        mensagem: 'Erro ao listar cobranças'
+      });
+    }
+  },
+
+  /**
+   * GET /api/inadimplentes/cobrancas/:id
+   * Buscar cobrança específica
+   */
+  async buscarPorId(req, res) {
+    try {
+      const { id } = req.params;
+
+      const cobranca = await CobrancaMensal.findByPk(id, {
+        include: [
+          {
+            association: 'processoCobranca',
+            include: [
+              {
+                association: 'cota',
+                include: [
+                  { association: 'cliente' },
+                  { association: 'consultor' }
+                ]
+              }
+            ]
+          },
+          {
+            association: 'notificacoes',
+            include: [
+              { association: 'usuario' }
+            ],
+            order: [['createdAt', 'DESC']]
+          }
+        ]
+      });
+
+      if (!cobranca) {
+        return res.status(404).json({
+          sucesso: false,
+          mensagem: 'Cobrança não encontrada'
+        });
+      }
+
+      // Calcular dias de atraso
+      const hoje = new Date();
+      const vencimento = new Date(cobranca.dataVencimento);
+      const diasAtraso = Math.max(0, Math.floor((hoje - vencimento) / (1000 * 60 * 60 * 24)));
+
+      return res.status(200).json({
+        sucesso: true,
+        mensagem: 'Cobrança encontrada',
+        dados: {
+          ...cobranca.toJSON(),
+          diasAtraso
+        }
+      });
+
+    } catch (erro) {
+      console.error('[CobrancaMensal] Erro ao buscar:', erro);
+      return res.status(500).json({
+        sucesso: false,
+        mensagem: 'Erro ao buscar cobrança'
+      });
+    }
+  },
+
+  /**
+   * POST /api/inadimplentes/cobrancas/:id/pagar
+   * Marcar cobrança como paga
+   */
+  async marcarComoPago(req, res) {
+    try {
+      const { id } = req.params;
+      const { dataPagamento, observacao } = req.body;
+
+      const cobranca = await cobrancaService.marcarComoPago(id, {
+        dataPagamento,
+        observacao
+      });
+
+      return res.status(200).json({
+        sucesso: true,
+        mensagem: 'Cobrança marcada como paga',
+        dados: cobranca
+      });
+
+    } catch (erro) {
+      console.error('[CobrancaMensal] Erro ao marcar como pago:', erro);
+      return res.status(400).json({
+        sucesso: false,
+        mensagem: erro.message || 'Erro ao marcar cobrança como paga'
+      });
+    }
+  },
+
+  /**
+   * POST /api/inadimplentes/cobrancas/:id/notificacoes
+   * Adicionar anotação manual
+   */
+  async adicionarAnotacao(req, res) {
+    try {
+      const { id } = req.params;
+      const { tipo, canal, mensagem } = req.body;
+      const usuarioId = req.user?.id;
+
+      // Validações
+      if (!tipo || !canal || !mensagem) {
+        return res.status(400).json({
+          sucesso: false,
+          mensagem: 'Campos obrigatórios: tipo, canal, mensagem'
+        });
+      }
+
+      const notificacao = await inadimplenciaService.adicionarAnotacao(id, {
+        tipo,
+        canal,
+        mensagem,
+        usuarioId
+      });
+
+      return res.status(201).json({
+        sucesso: true,
+        mensagem: 'Anotação adicionada com sucesso',
+        dados: notificacao
+      });
+
+    } catch (erro) {
+      console.error('[CobrancaMensal] Erro ao adicionar anotação:', erro);
+      return res.status(400).json({
+        sucesso: false,
+        mensagem: erro.message || 'Erro ao adicionar anotação'
+      });
+    }
+  },
+
+  /**
+   * POST /api/inadimplentes/cobrancas/:id/notificar
+   * Forçar notificação manual
+   */
+  async forcarNotificacao(req, res) {
+    try {
+      const { id } = req.params;
+
+      const resultado = await inadimplenciaService.forcarNotificacao(id);
+
+      if (resultado.sucesso) {
+        return res.status(200).json({
+          sucesso: true,
+          mensagem: 'Notificação enviada com sucesso',
+          dados: resultado
+        });
+      } else {
+        return res.status(500).json({
+          sucesso: false,
+          mensagem: 'Falha ao enviar notificação',
+          dados: resultado
+        });
+      }
+
+    } catch (erro) {
+      console.error('[CobrancaMensal] Erro ao forçar notificação:', erro);
+      return res.status(400).json({
+        sucesso: false,
+        mensagem: erro.message || 'Erro ao forçar notificação'
+      });
+    }
+  },
+
+  /**
+   * GET /api/inadimplentes/cobrancas/estatisticas
+   * Obter estatísticas de cobranças
+   */
+  async obterEstatisticas(req, res) {
+    try {
+      const estatisticas = await cobrancaService.obterEstatisticas();
+
+      return res.status(200).json({
+        sucesso: true,
+        mensagem: 'Estatísticas obtidas com sucesso',
+        dados: estatisticas
+      });
+
+    } catch (erro) {
+      console.error('[CobrancaMensal] Erro ao obter estatísticas:', erro);
+      return res.status(500).json({
+        sucesso: false,
+        mensagem: 'Erro ao obter estatísticas'
+      });
+    }
+  }
+};
