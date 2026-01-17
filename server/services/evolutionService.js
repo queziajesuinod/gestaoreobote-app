@@ -402,6 +402,35 @@ async function buscarMensagensChat(apiUrl, instanceName, apiKey, chatId, limite 
 }
 
 /**
+ * Busca todos os chats da instância
+ */
+async function buscarChats(apiUrl, instanceName, apiKey) {
+  try {
+    const client = createEvolutionClient(apiUrl, apiKey);
+    
+    console.log(`[BUSCAR_CHATS] Buscando chats da instância: ${instanceName}`);
+    
+    const response = await client.get(`/chat/findChats/${instanceName}`);
+    
+    console.log(`[BUSCAR_CHATS] Total de chats retornados: ${Array.isArray(response.data) ? response.data.length : 'N/A'}`);
+    
+    return {
+      sucesso: true,
+      chats: response.data || []
+    };
+  } catch (error) {
+    console.error(`[BUSCAR_CHATS] Erro ao buscar chats:`, error.message);
+    console.error(`[BUSCAR_CHATS] Status:`, error.response?.status);
+    console.error(`[BUSCAR_CHATS] Resposta:`, JSON.stringify(error.response?.data, null, 2));
+    return {
+      sucesso: false,
+      erro: error.response?.data?.message || error.message,
+      chats: []
+    };
+  }
+}
+
+/**
  * Busca todos os contatos/chats
  */
 async function buscarContatos(apiUrl, instanceName, apiKey) {
@@ -797,6 +826,7 @@ module.exports = {
   testarConexao,
   configurarWebhook,
   buscarMensagensChat,
+  buscarChats,
   buscarContatos,
   validarNumerosWhatsapp,
   sincronizarMensagensLeads,

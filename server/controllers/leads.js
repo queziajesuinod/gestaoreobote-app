@@ -700,24 +700,71 @@ async function sincronizarLead(req, res) {
     
     if (!conversa) {
       console.log(`[SYNC] Nenhuma conversa encontrada para o lead ${leadId}`);
-      console.log(`[SYNC] Criando conversa automaticamente...`);
+      console.log(`[SYNC] Buscando chat real na Evolution API...`);
       
-      // Criar chatId baseado no telefone do lead
-      const telefone = lead.telefone.replace(/\D/g, ''); // Remove caracteres não numéricos
-      const chatId = `${telefone}@s.whatsapp.net`;
+      // Buscar todos os chats da instância
+      const resultadoChats = await evolutionService.buscarChats(
+        instancia.apiUrl,
+        instancia.instanceName,
+        instancia.apiKey
+      );
       
-      console.log(`[SYNC] ChatId gerado: ${chatId}`);
+      if (!resultadoChats.sucesso || resultadoChats.chats.length === 0) {
+        console.log(`[SYNC] Nenhum chat encontrado na Evolution API`);
+        return res.status(400).json({
+          sucesso: false,
+          mensagem: 'Nenhum chat encontrado na instância do WhatsApp. Certifique-se de que existe uma conversa com este contato.'
+        });
+      }
       
-      // Criar conversa
+      console.log(`[SYNC] Total de chats encontrados: ${resultadoChats.chats.length}`);
+      
+      // Normalizar telefone do lead (remover caracteres não numéricos)
+      const telefoneNormalizado = lead.telefone.replace(/\D/g, '');
+      console.log(`[SYNC] Telefone do lead normalizado: ${telefoneNormalizado}`);
+      
+      // Buscar chat que corresponde ao telefone do lead
+      let chatEncontrado = null;
+      
+      for (const chat of resultadoChats.chats) {
+        const remoteJid = chat.id || chat.remoteJid || chat.jid;
+        if (!remoteJid) continue;
+        
+        // Extrair número do remoteJid (ex: 5511999999999@s.whatsapp.net -> 5511999999999)
+        const numeroChat = remoteJid.split('@')[0].replace(/\D/g, '');
+        
+        // Comparar com o telefone do lead
+        if (numeroChat === telefoneNormalizado || 
+            telefoneNormalizado.endsWith(numeroChat) || 
+            numeroChat.endsWith(telefoneNormalizado)) {
+          chatEncontrado = chat;
+          console.log(`[SYNC] Chat encontrado! remoteJid: ${remoteJid}`);
+          break;
+        }
+      }
+      
+      if (!chatEncontrado) {
+        console.log(`[SYNC] Nenhum chat correspondente ao telefone ${lead.telefone} foi encontrado`);
+        return res.status(400).json({
+          sucesso: false,
+          mensagem: `Nenhuma conversa encontrada para o telefone ${lead.telefone}. Certifique-se de que existe uma conversa com este contato no WhatsApp.`
+        });
+      }
+      
+      // Pegar o chatId real (remoteJid)
+      const chatIdReal = chatEncontrado.id || chatEncontrado.remoteJid || chatEncontrado.jid;
+      console.log(`[SYNC] ChatId real obtido: ${chatIdReal}`);
+      
+      // Criar conversa com o chatId real
       conversa = await Conversa.create({
         leadId: lead.id,
         consultorId: lead.consultorId,
         plataforma: 'whatsapp',
-        chatId: chatId,
+        chatId: chatIdReal,
         status: 'ativa'
       });
       
-      console.log(`[SYNC] Conversa criada com sucesso: ID=${conversa.id}`);
+      console.log(`[SYNC] Conversa criada com sucesso: ID=${conversa.id}, chatId=${chatIdReal}`);
     } else {
       console.log(`[SYNC] Conversa encontrada: chatId=${conversa.chatId}`);
     }
