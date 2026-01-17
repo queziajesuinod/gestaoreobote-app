@@ -80,7 +80,6 @@ function EvolutionConfig() {
   const [status, setStatus] = useState({ conectado: false, ultimaSincronizacao: null, configurada: false });
   const [carregandoStatus, setCarregandoStatus] = useState(false);
   const [salvando, setSalvando] = useState(false);
-  const [importando, setImportando] = useState(false);
   const [cargaInicializando, setCargaInicializando] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
   const [storedUser, setStoredUserState] = useState(() => getStoredUser());
@@ -300,25 +299,7 @@ function EvolutionConfig() {
     }
   };
 
-  const handleImportar = async () => {
-    setImportando(true);
-    try {
-      const consultorIdPayload = isAdminPerfil ? consultorSelecionado : consultorIdLogado;
-      if (isAdminPerfil && !consultorIdPayload) {
-        showSnackbar('Selecione um consultor antes de importar.', 'warning');
-        setImportando(false);
-        return;
-      }
-      const response = await evolutionApi.importar(consultorIdPayload || undefined);
-      showSnackbar(response?.mensagem || 'Importacao iniciada.', 'success');
-      carregarStatus(consultorIdPayload || undefined);
-    } catch (error) {
-      console.error('Erro ao importar chats:', error);
-      showSnackbar(`Falha ao importar chats: ${extrairErroBackend(error)}`, 'error');
-    } finally {
-      setImportando(false);
-    }
-  };
+
 
   const handleCargaInicial = async () => {
     setCargaInicializando(true);
@@ -516,18 +497,9 @@ function EvolutionConfig() {
               <Box className={classes.actions}>
                 <Button
                   variant="contained"
-                  color="success"
-                  onClick={handleImportar}
-                  disabled={importando}
-                >
-                  {importando ? 'Importando...' : 'Importar agora'}
-                </Button>
-                <Button
-                  variant="outlined"
                   color="info"
                   onClick={handleCargaInicial}
                   disabled={cargaInicializando}
-                  sx={{ ml: 2 }}
                 >
                   {cargaInicializando ? 'Executando...' : 'Carga inicial'}
                 </Button>
