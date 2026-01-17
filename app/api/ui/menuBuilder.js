@@ -126,6 +126,12 @@ export const buildMenu = (permissoes = []) => {
         icon: 'ion-ios-people-outline'
       },
       {
+        key: 'leads_insights',
+        name: 'Insights',
+        link: '/app/leads-insights',
+        icon: 'ion-ios-lightbulb-outline'
+      },
+      {
         key: 'leads_whatsapp',
         name: 'WhatsApp',
         link: '/app/configuracoes/whatsapp',

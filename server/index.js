@@ -135,4 +135,14 @@ app.listen(port, host, async (err) => {
   const UM_DIA_MS = 24 * 60 * 60 * 1000;
   setInterval(garantirMeta, UM_DIA_MS);
 
+  // 🔄 Iniciar sincronização automática de leads
+  const sincronizacaoService = require('./services/sincronizacaoService');
+  sincronizacaoService.agendarSincronizacao();
+  
+  // Executar primeira sincronização após 1 minuto
+  setTimeout(() => {
+    console.log('🔄 Executando primeira sincronização de leads...');
+    sincronizacaoService.sincronizarTodosLeads();
+  }, 60000);
+
 });

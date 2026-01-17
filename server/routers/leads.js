@@ -23,4 +23,16 @@ router.post('/:leadId/vincular-agendor', leadsController.vincularAgendor);
 // Sincronizar Agendor
 router.post('/:leadId/sincronizar-agendor', leadsController.sincronizarAgendor);
 
+// Sincronizar mensagens do Evolution
+router.post('/:leadId/sincronizar', leadsController.sincronizarLead);
+
+// Insights do lead
+router.get('/:leadId/insights', leadsController.obterInsightsLead);
+
+// Insights do consultor
+router.get('/consultor/:consultorId/insights', leadsController.obterInsightsConsultor);
+
+// Importar contatos em lote
+router.post('/consultor/:consultorId/importar-lote', leadsController.importarContatosLote);
+
 module.exports = router;

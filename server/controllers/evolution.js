@@ -413,94 +413,6 @@ async function cargaInicial(req, res) {
 }
 
 /**
- * Enviar mensagem via Evolution
- */
-async function enviarMensagem(req, res) {
-  try {
-    const { leadId, mensagem } = req.body;
-    const { Lead, EvolutionInstance, Conversa, Mensagem } = require('../models');
-    
-    const lead = await Lead.findByPk(leadId, {
-      include: [{ model: Conversa, as: 'conversas' }]
-    });
-    
-    if (!lead) {
-      return res.status(404).json({
-        sucesso: false,
-        mensagem: 'Lead não encontrado'
-      });
-    }
-    
-    // Validar permissão
-    const isGestor = req.user.perfilId === 1;
-    if (!isGestor && req.user.consultorId !== lead.consultorId) {
-      return res.status(403).json({
-        sucesso: false,
-        mensagem: 'Acesso negado'
-      });
-    }
-    
-    const instancia = await EvolutionInstance.findOne({
-      where: { consultorId: lead.consultorId }
-    });
-    
-    if (!instancia) {
-      return res.status(404).json({
-        sucesso: false,
-        mensagem: 'Instância Evolution não configurada'
-      });
-    }
-    
-    const apiKey = evolutionService.decryptApiKey(instancia.apiKey);
-    
-    // Enviar mensagem
-    const resultado = await evolutionService.enviarMensagemTexto(
-      instancia.apiUrl,
-      instancia.instanceName,
-      apiKey,
-      lead.telefone,
-      mensagem
-    );
-    
-    if (!resultado.sucesso) {
-      return res.status(400).json({
-        sucesso: false,
-        mensagem: 'Erro ao enviar mensagem',
-        erro: resultado.erro
-      });
-    }
-    
-    // Salvar mensagem no banco
-    const conversa = lead.conversas && lead.conversas[0];
-    if (conversa) {
-      await Mensagem.create({
-        conversaId: conversa.id,
-        remetente: 'consultor',
-        conteudo: mensagem,
-        tipoMidia: 'texto',
-        evolutionMessageId: resultado.messageId,
-        timestamp: new Date(),
-        status: 'enviado',
-        analisadaPorIA: false
-      });
-      
-      await conversa.update({ ultimaMensagem: new Date() });
-      await lead.update({ ultimaMensagem: new Date() });
-    }
-    
-    res.json({
-      sucesso: true,
-      mensagem: 'Mensagem enviada com sucesso',
-      messageId: resultado.messageId
-    });
-    
-  } catch (error) {
-    console.error('Erro ao enviar mensagem:', error);
-    res.status(500).json({ sucesso: false, erro: error.message });
-  }
-}
-
-/**
  * Desconectar instância
  */
 async function desconectar(req, res) {
@@ -539,6 +451,5 @@ module.exports = {
   importarContato,
   cargaInicial,
   sincronizarMensagens,
-  enviarMensagem,
   desconectar
 };

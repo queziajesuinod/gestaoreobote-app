@@ -618,5 +618,256 @@ module.exports = {
   atualizarLead,
   promoverACliente,
   vincularAgendor,
-  sincronizarAgendor
+  sincronizarAgendor,
+  sincronizarLead,
+  obterInsightsLead,
+  obterInsightsConsultor,
+  importarContatosLote
 };
+
+/**
+ * Sincronizar mensagens de um lead específico
+ */
+async function sincronizarLead(req, res) {
+  try {
+    const { leadId } = req.params;
+    
+    const lead = await Lead.findByPk(leadId, {
+      include: [
+        {
+          model: Conversa,
+          as: 'conversas'
+        }
+      ]
+    });
+    
+    if (!lead) {
+      return res.status(404).json({
+        sucesso: false,
+        mensagem: 'Lead não encontrado'
+      });
+    }
+    
+    // Controle de acesso
+    const isGestor = req.user.perfilId === 1;
+    if (!isGestor && req.user.consultorId !== lead.consultorId) {
+      return res.status(403).json({
+        sucesso: false,
+        mensagem: 'Acesso negado'
+      });
+    }
+    
+    const { EvolutionInstance } = require('../models');
+    const instancia = await EvolutionInstance.findByPk(lead.evolutionInstanceId);
+    if (!instancia) {
+      return res.status(400).json({
+        sucesso: false,
+        mensagem: 'Instância Evolution não configurada'
+      });
+    }
+    
+    const conversa = lead.conversas && lead.conversas[0];
+    if (!conversa) {
+      return res.status(400).json({
+        sucesso: false,
+        mensagem: 'Nenhuma conversa encontrada para sincronizar'
+      });
+    }
+    
+    // Sincronizar
+    const resultado = await evolutionService.sincronizarChat(
+      instancia,
+      conversa.chatId,
+      lead.id,
+      200 // Últimas 200 mensagens
+    );
+    
+    if (!resultado.sucesso) {
+      return res.status(500).json({
+        sucesso: false,
+        mensagem: resultado.erro
+      });
+    }
+    
+    res.json({
+      sucesso: true,
+      mensagem: 'Sincronização concluída',
+      mensagensNovas: resultado.mensagensNovas,
+      temperaturaAtualizada: resultado.temperaturaAtualizada
+    });
+    
+  } catch (error) {
+    console.error('Erro ao sincronizar lead:', error);
+    res.status(500).json({ sucesso: false, erro: error.message });
+  }
+}
+
+/**
+ * Obter insights de um lead específico
+ */
+async function obterInsightsLead(req, res) {
+  try {
+    const { leadId } = req.params;
+    const insightsService = require('../services/insightsService');
+    
+    const lead = await Lead.findByPk(leadId);
+    if (!lead) {
+      return res.status(404).json({
+        sucesso: false,
+        mensagem: 'Lead não encontrado'
+      });
+    }
+    
+    // Controle de acesso
+    const isGestor = req.user.perfilId === 1;
+    if (!isGestor && req.user.consultorId !== lead.consultorId) {
+      return res.status(403).json({
+        sucesso: false,
+        mensagem: 'Acesso negado'
+      });
+    }
+    
+    const insights = await insightsService.gerarInsightsLead(leadId);
+    
+    if (!insights) {
+      return res.status(404).json({
+        sucesso: false,
+        mensagem: 'Não foi possível gerar insights'
+      });
+    }
+    
+    res.json({
+      sucesso: true,
+      insights
+    });
+    
+  } catch (error) {
+    console.error('Erro ao obter insights:', error);
+    res.status(500).json({ sucesso: false, erro: error.message });
+  }
+}
+
+/**
+ * Obter insights consolidados do consultor
+ */
+async function obterInsightsConsultor(req, res) {
+  try {
+    const { consultorId } = req.params;
+    const { temperatura, status } = req.query;
+    const insightsService = require('../services/insightsService');
+    
+    // Controle de acesso
+    const isGestor = req.user.perfilId === 1;
+    const targetConsultorId = isGestor && consultorId !== 'meu'
+      ? parseInt(consultorId)
+      : req.user.consultorId;
+    
+    if (!isGestor && req.user.consultorId !== targetConsultorId) {
+      return res.status(403).json({
+        sucesso: false,
+        mensagem: 'Acesso negado'
+      });
+    }
+    
+    const insights = await insightsService.gerarInsightsConsultor(targetConsultorId, {
+      temperatura,
+      status
+    });
+    
+    if (!insights) {
+      return res.status(404).json({
+        sucesso: false,
+        mensagem: 'Não foi possível gerar insights'
+      });
+    }
+    
+    res.json({
+      sucesso: true,
+      insights
+    });
+    
+  } catch (error) {
+    console.error('Erro ao obter insights do consultor:', error);
+    res.status(500).json({ sucesso: false, erro: error.message });
+  }
+}
+
+/**
+ * Importar múltiplos contatos do Evolution
+ */
+async function importarContatosLote(req, res) {
+  try {
+    const { consultorId } = req.params;
+    const { evolutionInstanceId, contatosSelecionados } = req.body;
+    
+    // Controle de acesso
+    const isGestor = req.user.perfilId === 1;
+    const targetConsultorId = isGestor && consultorId !== 'meu'
+      ? parseInt(consultorId)
+      : req.user.consultorId;
+    
+    if (!isGestor && req.user.consultorId !== targetConsultorId) {
+      return res.status(403).json({
+        sucesso: false,
+        mensagem: 'Acesso negado'
+      });
+    }
+    
+    const { EvolutionInstance } = require('../models');
+    const instancia = await EvolutionInstance.findByPk(evolutionInstanceId);
+    if (!instancia) {
+      return res.status(404).json({
+        sucesso: false,
+        mensagem: 'Instância não encontrada'
+      });
+    }
+    
+    if (!Array.isArray(contatosSelecionados) || contatosSelecionados.length === 0) {
+      return res.status(400).json({
+        sucesso: false,
+        mensagem: 'Nenhum contato selecionado'
+      });
+    }
+    
+    const resultados = {
+      sucesso: 0,
+      falhas: 0,
+      detalhes: []
+    };
+    
+    for (const contato of contatosSelecionados) {
+      try {
+        const resultado = await evolutionService.importarHistoricoContato(
+          instancia,
+          targetConsultorId,
+          contato,
+          { limiteMensagens: 1000, criarSeNaoExiste: true }
+        );
+        
+        resultados.sucesso++;
+        resultados.detalhes.push({
+          contato: contato.name || contato.id,
+          status: 'sucesso',
+          leadCriado: resultado.leadCriado
+        });
+      } catch (error) {
+        resultados.falhas++;
+        resultados.detalhes.push({
+          contato: contato.name || contato.id,
+          status: 'falha',
+          erro: error.message
+        });
+      }
+    }
+    
+    res.json({
+      sucesso: true,
+      mensagem: `Importação concluída: ${resultados.sucesso} sucesso, ${resultados.falhas} falhas`,
+      resultados
+    });
+    
+  } catch (error) {
+    console.error('Erro ao importar contatos:', error);
+    res.status(500).json({ sucesso: false, erro: error.message });
+  }
+}

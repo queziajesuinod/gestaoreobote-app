@@ -10,12 +10,27 @@ import {
   Snackbar,
   Alert,
   Divider,
-  MenuItem
+  MenuItem,
+  Card,
+  CardContent,
+  Chip,
+  List,
+  ListItem,
+  ListItemText,
+  IconButton,
+  Tooltip
 } from '@mui/material';
+import {
+  Sync as SyncIcon,
+  TrendingUp as TrendingUpIcon,
+  TrendingDown as TrendingDownIcon,
+  TrendingFlat as TrendingFlatIcon,
+  Lightbulb as LightbulbIcon
+} from '@mui/icons-material';
 import { useNavigate, useParams } from 'react-router-dom';
 import brand from 'dan-api/dummy/brand';
 import { PapperBlock } from 'dan-components';
-import { leadsApi, evolutionApi } from '../../../services/leadsApi';
+import { leadsApi } from '../../../services/leadsApi';
 import TemperaturaIndicador from '../../../components/TemperaturaIndicador';
 import AnaliseIACard from '../../../components/AnaliseIACard';
 import ConversaTimeline from '../../../components/ConversaTimeline';
@@ -26,6 +41,28 @@ const normalizarLead = (data) => {
   return data.lead || data.dados || data;
 };
 
+const getTendenciaIcon = (tendencia) => {
+  switch (tendencia) {
+    case 'melhorando':
+      return <TrendingUpIcon color="success" />;
+    case 'piorando':
+      return <TrendingDownIcon color="error" />;
+    default:
+      return <TrendingFlatIcon color="action" />;
+  }
+};
+
+const getTendenciaLabel = (tendencia) => {
+  switch (tendencia) {
+    case 'melhorando':
+      return 'Melhorando';
+    case 'piorando':
+      return 'Piorando';
+    default:
+      return 'Estável';
+  }
+};
+
 function LeadDetalhes() {
   const { leadId } = useParams();
   const navigate = useNavigate();
@@ -33,10 +70,11 @@ function LeadDetalhes() {
   const description = 'Detalhes do lead';
 
   const [lead, setLead] = useState(null);
+  const [insights, setInsights] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [mensagem, setMensagem] = useState('');
+  const [loadingInsights, setLoadingInsights] = useState(false);
+  const [sincronizando, setSincronizando] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [enviando, setEnviando] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
   const [leadForm, setLeadForm] = useState({
     nome: '',
@@ -66,6 +104,21 @@ function LeadDetalhes() {
       setLead(null);
     } finally {
       setLoading(false);
+    }
+  }, [leadId, showSnackbar]);
+
+  const carregarInsights = useCallback(async () => {
+    setLoadingInsights(true);
+    try {
+      const response = await leadsApi.obterInsights(leadId);
+      if (response.sucesso) {
+        setInsights(response.insights);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar insights:', error);
+      showSnackbar('Falha ao carregar insights.', 'warning');
+    } finally {
+      setLoadingInsights(false);
     }
   }, [leadId, showSnackbar]);
 
@@ -117,9 +170,32 @@ function LeadDetalhes() {
     }
   };
 
+  const handleSincronizar = async () => {
+    setSincronizando(true);
+    try {
+      const response = await leadsApi.sincronizar(leadId);
+      if (response.sucesso) {
+        showSnackbar(
+          `Sincronização concluída! ${response.mensagensNovas || 0} novas mensagens.`,
+          'success'
+        );
+        carregarLead();
+        carregarInsights();
+      } else {
+        showSnackbar('Erro ao sincronizar.', 'error');
+      }
+    } catch (error) {
+      console.error('Erro ao sincronizar:', error);
+      showSnackbar('Falha ao sincronizar mensagens.', 'error');
+    } finally {
+      setSincronizando(false);
+    }
+  };
+
   useEffect(() => {
     carregarLead();
-  }, [carregarLead]);
+    carregarInsights();
+  }, [carregarLead, carregarInsights]);
 
   const mensagens = useMemo(() => {
     if (!lead) return [];
@@ -143,23 +219,6 @@ function LeadDetalhes() {
   }, [lead]);
 
   const sentimento = lead?.sentimentoGeral || lead?.analise?.sentimento || '';
-
-  const handleEnviarMensagem = async () => {
-    const texto = mensagem.trim();
-    if (!texto) return;
-    setEnviando(true);
-    try {
-      await evolutionApi.enviarMensagem(leadId, texto);
-      setMensagem('');
-      showSnackbar('Mensagem enviada.', 'success');
-      carregarLead();
-    } catch (error) {
-      console.error('Erro ao enviar mensagem:', error);
-      showSnackbar('Falha ao enviar mensagem.', 'error');
-    } finally {
-      setEnviando(false);
-    }
-  };
 
   const handlePromoverCliente = async (dados) => {
     try {
@@ -197,29 +256,52 @@ function LeadDetalhes() {
         <meta property="twitter:description" content={description} />
       </Helmet>
 
-      <PapperBlock title="Detalhes do Lead" desc="Informacoes completas e historico">
+      <PapperBlock title="Detalhes do Lead" desc="Análise completa e histórico de conversas">
         {loading ? (
           <Box display="flex" justifyContent="center" padding={4}>
             <CircularProgress />
           </Box>
         ) : !lead ? (
           <Typography variant="body2" color="textSecondary">
-            Lead nao encontrado.
+            Lead não encontrado.
           </Typography>
         ) : (
           <Grid container spacing={3}>
             <Grid item xs={12}>
-              <Button onClick={() => navigate('/app/leads')}>Voltar</Button>
-              <Typography variant="h4" gutterBottom>
-                {lead.nome || 'Lead'}
-              </Typography>
+              <Box display="flex" justifyContent="space-between" alignItems="center">
+                <Box>
+                  <Button onClick={() => navigate('/app/leads')}>Voltar</Button>
+                  <Typography variant="h4" gutterBottom>
+                    {lead.nome || 'Lead'}
+                  </Typography>
+                </Box>
+                <Tooltip title="Sincronizar mensagens do WhatsApp">
+                  <IconButton
+                    color="primary"
+                    onClick={handleSincronizar}
+                    disabled={sincronizando}
+                  >
+                    <SyncIcon />
+                  </IconButton>
+                </Tooltip>
+              </Box>
             </Grid>
 
             <Grid item xs={12} md={4}>
               <TemperaturaIndicador temperatura={lead.temperaturaLead} />
               <Box mt={2}>
-                <Typography variant="body2">Telefone: {lead.telefone || '--'}</Typography>
-                <Typography variant="body2">Email: {lead.email || '--'}</Typography>
+                <Typography variant="body2">
+                  <strong>Telefone:</strong> {lead.telefone || '--'}
+                </Typography>
+                <Typography variant="body2">
+                  <strong>Email:</strong> {lead.email || '--'}
+                </Typography>
+                <Typography variant="body2">
+                  <strong>Última mensagem:</strong>{' '}
+                  {lead.ultimaMensagem
+                    ? new Date(lead.ultimaMensagem).toLocaleDateString('pt-BR')
+                    : '--'}
+                </Typography>
               </Box>
               <Box mt={2} display="flex" flexDirection="column" gap={1}>
                 <Button variant="contained" onClick={() => setDialogOpen(true)}>
@@ -240,7 +322,201 @@ function LeadDetalhes() {
               />
             </Grid>
 
+            {/* Insights Detalhados */}
+            {loadingInsights ? (
+              <Grid item xs={12}>
+                <Box display="flex" justifyContent="center" padding={2}>
+                  <CircularProgress size={24} />
+                </Box>
+              </Grid>
+            ) : insights ? (
+              <>
+                <Grid item xs={12}>
+                  <Divider sx={{ my: 2 }} />
+                  <Typography variant="h6" gutterBottom>
+                    <LightbulbIcon sx={{ verticalAlign: 'middle', mr: 1 }} />
+                    Insights Detalhados
+                  </Typography>
+                </Grid>
+
+                {/* Tendência */}
+                <Grid item xs={12} md={4}>
+                  <Card>
+                    <CardContent>
+                      <Box display="flex" alignItems="center" gap={1}>
+                        {getTendenciaIcon(insights.tendencia)}
+                        <Typography variant="h6">Tendência</Typography>
+                      </Box>
+                      <Typography variant="h4" color="primary" sx={{ mt: 1 }}>
+                        {getTendenciaLabel(insights.tendencia)}
+                      </Typography>
+                      <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
+                        Baseado na evolução do sentimento nas últimas mensagens
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+
+                {/* Estatísticas */}
+                <Grid item xs={12} md={4}>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="h6" gutterBottom>
+                        Estatísticas
+                      </Typography>
+                      <Typography variant="body2">
+                        Total de mensagens: <strong>{insights.totalMensagens}</strong>
+                      </Typography>
+                      <Typography variant="body2">
+                        Analisadas: <strong>{insights.totalAnalisadas}</strong>
+                      </Typography>
+                      <Typography variant="body2">
+                        Dias sem mensagem: <strong>{insights.diasSemMensagem}</strong>
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+
+                {/* Sentimento */}
+                <Grid item xs={12} md={4}>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="h6" gutterBottom>
+                        Distribuição de Sentimento
+                      </Typography>
+                      <Box display="flex" flexDirection="column" gap={1}>
+                        <Box display="flex" justifyContent="space-between">
+                          <Typography variant="body2">Positivo:</Typography>
+                          <Chip
+                            label={insights.distribuicaoSentimento?.positivo || 0}
+                            color="success"
+                            size="small"
+                          />
+                        </Box>
+                        <Box display="flex" justifyContent="space-between">
+                          <Typography variant="body2">Neutro:</Typography>
+                          <Chip
+                            label={insights.distribuicaoSentimento?.neutro || 0}
+                            color="default"
+                            size="small"
+                          />
+                        </Box>
+                        <Box display="flex" justifyContent="space-between">
+                          <Typography variant="body2">Negativo:</Typography>
+                          <Chip
+                            label={insights.distribuicaoSentimento?.negativo || 0}
+                            color="error"
+                            size="small"
+                          />
+                        </Box>
+                      </Box>
+                    </CardContent>
+                  </Card>
+                </Grid>
+
+                {/* Sinais de Compra */}
+                {insights.sinaisCompra && insights.sinaisCompra.length > 0 && (
+                  <Grid item xs={12} md={6}>
+                    <Card>
+                      <CardContent>
+                        <Typography variant="h6" gutterBottom>
+                          Sinais de Compra Detectados
+                        </Typography>
+                        <List dense>
+                          {insights.sinaisCompra.slice(0, 5).map((item, index) => (
+                            <ListItem key={index}>
+                              <ListItemText
+                                primary={item.sinal.replace(/_/g, ' ').toUpperCase()}
+                                secondary={`${item.ocorrencias} ocorrência(s)`}
+                              />
+                            </ListItem>
+                          ))}
+                        </List>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                )}
+
+                {/* Objeções */}
+                {insights.objecoes && insights.objecoes.length > 0 && (
+                  <Grid item xs={12} md={6}>
+                    <Card>
+                      <CardContent>
+                        <Typography variant="h6" gutterBottom>
+                          Objeções Identificadas
+                        </Typography>
+                        <List dense>
+                          {insights.objecoes.slice(0, 5).map((item, index) => (
+                            <ListItem key={index}>
+                              <ListItemText
+                                primary={item.objecao.replace(/_/g, ' ').toUpperCase()}
+                                secondary={`${item.ocorrencias} ocorrência(s)`}
+                              />
+                            </ListItem>
+                          ))}
+                        </List>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                )}
+
+                {/* Recomendações */}
+                {insights.recomendacoes && insights.recomendacoes.length > 0 && (
+                  <Grid item xs={12}>
+                    <Card sx={{ backgroundColor: '#fff3e0' }}>
+                      <CardContent>
+                        <Typography variant="h6" gutterBottom>
+                          🎯 Recomendações
+                        </Typography>
+                        <List>
+                          {insights.recomendacoes.map((rec, index) => (
+                            <ListItem key={index}>
+                              <ListItemText
+                                primary={
+                                  <Box display="flex" alignItems="center" gap={1}>
+                                    <span>{rec.icone}</span>
+                                    <Typography variant="body1" fontWeight="bold">
+                                      {rec.mensagem}
+                                    </Typography>
+                                  </Box>
+                                }
+                                secondary={`Tipo: ${rec.tipo}`}
+                              />
+                            </ListItem>
+                          ))}
+                        </List>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                )}
+
+                {/* Tópicos */}
+                {insights.topicos && insights.topicos.length > 0 && (
+                  <Grid item xs={12}>
+                    <Card>
+                      <CardContent>
+                        <Typography variant="h6" gutterBottom>
+                          Tópicos Mais Discutidos
+                        </Typography>
+                        <Box display="flex" flexWrap="wrap" gap={1} mt={1}>
+                          {insights.topicos.slice(0, 10).map((item, index) => (
+                            <Chip
+                              key={index}
+                              label={`${item.topico.replace(/_/g, ' ')} (${item.ocorrencias})`}
+                              variant="outlined"
+                              color="primary"
+                            />
+                          ))}
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                )}
+              </>
+            ) : null}
+
             <Grid item xs={12}>
+              <Divider sx={{ my: 2 }} />
               <Box
                 sx={{
                   border: '1px solid',
@@ -335,34 +611,15 @@ function LeadDetalhes() {
             </Grid>
 
             <Grid item xs={12}>
+              <Divider sx={{ my: 2 }} />
               <Typography variant="h6" gutterBottom>
-                Conversa
+                Histórico de Conversa
+              </Typography>
+              <Typography variant="body2" color="textSecondary" gutterBottom>
+                Mensagens importadas do WhatsApp. Para enviar novas mensagens, use o aplicativo
+                WhatsApp diretamente.
               </Typography>
               <ConversaTimeline mensagens={mensagens} />
-            </Grid>
-
-            <Grid item xs={12}>
-              <Divider sx={{ mb: 2 }} />
-              <Typography variant="subtitle1" gutterBottom>
-                Enviar mensagem
-              </Typography>
-              <TextField
-                fullWidth
-                multiline
-                minRows={2}
-                label="Digite sua mensagem"
-                value={mensagem}
-                onChange={(event) => setMensagem(event.target.value)}
-              />
-              <Box mt={2}>
-                <Button
-                  variant="contained"
-                  onClick={handleEnviarMensagem}
-                  disabled={enviando}
-                >
-                  {enviando ? 'Enviando...' : 'Enviar'}
-                </Button>
-              </Box>
             </Grid>
           </Grid>
         )}

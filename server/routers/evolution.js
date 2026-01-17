@@ -23,9 +23,6 @@ router.post('/importar-contato', evolutionController.importarContato);
 // Carga inicial de contatos e conversas
 router.post('/carga-inicial', evolutionController.cargaInicial);
 
-// Enviar mensagem
-router.post('/enviar-mensagem', evolutionController.enviarMensagem);
-
 // Desconectar
 router.delete('/desconectar', evolutionController.desconectar);
 

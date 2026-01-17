@@ -308,64 +308,6 @@ Resumo:`;
 }
 
 /**
- * Sugere respostas inteligentes para o consultor
- */
-async function sugerirResposta(conversaId, ultimaMensagemLead) {
-  try {
-    const { Conversa, Mensagem, AnaliseIA } = require('../models');
-
-    // Buscar contexto da conversa
-    const conversa = await Conversa.findByPk(conversaId, {
-      include: [
-        {
-          model: Mensagem,
-          as: 'mensagens',
-          include: [{ model: AnaliseIA, as: 'analise' }],
-          order: [['timestamp', 'DESC']],
-          limit: 5
-        }
-      ]
-    });
-
-    const contexto = conversa.mensagens
-      .reverse()
-      .map(m => `[${m.remetente}]: ${m.conteudo}`)
-      .join('\n');
-
-    const prompt = `
-Você é um consultor especialista em vendas de consórcio.
-
-Contexto da conversa:
-${contexto}
-
-Última mensagem do cliente: "${ultimaMensagemLead}"
-
-Sugira uma resposta profissional, empática e que ajude a avançar a venda.
-Seja breve (máximo 2-3 frases).
-
-Resposta sugerida:`;
-
-    const response = await client.chat.completions.create({
-      model: MODEL,
-      messages: [
-        {
-          role: 'system',
-          content: 'Você é um consultor especializado em vendas de consórcio. Seja profissional e empático.'
-        },
-        { role: 'user', content: prompt }
-      ],
-      temperature: 0.7,
-      max_tokens: 150
-    });
-
-    return response.choices[0].message.content.trim();
-  } catch (error) {
-    console.error('Erro ao sugerir resposta:', error);
-    return null;
-  }
-}
-
-/**
  * Extrai dados estruturados do lead a partir da conversa
  */
 async function extrairDadosLead(conversaId) {
@@ -444,7 +386,6 @@ module.exports = {
   analisarMensagem,
   calcularTemperaturaLead,
   gerarResumoConversa,
-  sugerirResposta,
   extrairDadosLead,
   PESOS_SINAIS_COMPRA,
   PESOS_OBJECOES,

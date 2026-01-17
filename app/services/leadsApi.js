@@ -54,6 +54,43 @@ export const leadsApi = {
       { headers: getAuthHeader() }
     );
     return response.data;
+  },
+
+  sincronizar: async (leadId) => {
+    const response = await axios.post(
+      `${API_URL}/leads/${leadId}/sincronizar`,
+      {},
+      { headers: getAuthHeader() }
+    );
+    return response.data;
+  },
+
+  obterInsights: async (leadId) => {
+    const response = await axios.get(
+      `${API_URL}/leads/${leadId}/insights`,
+      { headers: getAuthHeader() }
+    );
+    return response.data;
+  },
+
+  obterInsightsConsultor: async (consultorId, filtros = {}) => {
+    const response = await axios.get(
+      `${API_URL}/leads/consultor/${consultorId}/insights`,
+      {
+        headers: getAuthHeader(),
+        params: filtros
+      }
+    );
+    return response.data;
+  },
+
+  importarLote: async (consultorId, dados) => {
+    const response = await axios.post(
+      `${API_URL}/leads/consultor/${consultorId}/importar-lote`,
+      dados,
+      { headers: getAuthHeader() }
+    );
+    return response.data;
   }
 };
 
@@ -121,15 +158,6 @@ export const evolutionApi = {
     const response = await axios.post(
       `${API_URL}/evolution/carga-inicial`,
       payload,
-      { headers: getAuthHeader() }
-    );
-    return response.data;
-  },
-
-  enviarMensagem: async (leadId, mensagem) => {
-    const response = await axios.post(
-      `${API_URL}/evolution/enviar-mensagem`,
-      { leadId, mensagem },
       { headers: getAuthHeader() }
     );
     return response.data;

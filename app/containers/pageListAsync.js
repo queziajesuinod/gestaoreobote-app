@@ -110,6 +110,11 @@ export const LeadDetalhes = loadable(() =>
     fallback: <Loading />,
   });
 
+export const LeadsInsights = loadable(() =>
+  import('./Pages/Leads/LeadsInsights'), {
+    fallback: <Loading />,
+  });
+
 export const EvolutionConfig = loadable(() =>
   import('./Pages/EvolutionConfig'), {
     fallback: <Loading />,

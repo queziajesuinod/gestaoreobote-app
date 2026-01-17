@@ -20,6 +20,7 @@ import {
   PerfisAdmin,
   LeadsPage,
   LeadDetalhes,
+  LeadsInsights,
   EvolutionConfig
 } from '../pageListAsync';
 
@@ -78,6 +79,10 @@ function Application({ isAuthenticated }) {
         <Route
           path="leads/:leadId"
           element={<ProtectedRoute element={<LeadDetalhes />} isAuthenticated={isAuthenticated} />}
+        />
+        <Route
+          path="leads-insights"
+          element={<ProtectedRoute element={<LeadsInsights />} isAuthenticated={isAuthenticated} />}
         />
         <Route
           path="configuracoes/whatsapp"

@@ -408,37 +408,6 @@ async function validarNumerosWhatsapp(apiUrl, instanceName, apiKey, numeros = []
 }
 
 /**
- * Envia mensagem de texto
- */
-async function enviarMensagemTexto(apiUrl, instanceName, apiKey, numero, mensagem) {
-  try {
-    const client = createEvolutionClient(apiUrl, apiKey);
-    
-    // Formatar número (adicionar @s.whatsapp.net se necessário)
-    const numeroFormatado = numero.includes('@') ? numero : `${numero}@s.whatsapp.net`;
-    
-    const payload = {
-      number: numeroFormatado,
-      text: mensagem
-    };
-    
-    const response = await client.post(`/message/sendText/${instanceName}`, payload);
-    
-    return {
-      sucesso: true,
-      messageId: response.data.key?.id,
-      dados: response.data
-    };
-  } catch (error) {
-    console.error('Erro ao enviar mensagem:', error.message);
-    return {
-      sucesso: false,
-      erro: error.response?.data?.message || error.message
-    };
-  }
-}
-
-/**
  * Sincroniza mensagens de um chat para o sistema
  */
 async function sincronizarChat(evolutionInstance, chatId, leadId, limiteMensagens = 100) {
@@ -736,7 +705,6 @@ module.exports = {
   buscarContatos,
   validarNumerosWhatsapp,
   sincronizarMensagensLeads,
-  enviarMensagemTexto,
   sincronizarChat,
   importarTodosChats,
   importarHistoricoContato
