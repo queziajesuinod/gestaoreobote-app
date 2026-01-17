@@ -447,7 +447,7 @@ async function buscarContatos(apiUrl, instanceName, apiKey) {
   try {
     const client = createEvolutionClient(apiUrl, apiKey);
     
-    const response = await client.post(`/chat/findContacts/${instanceName}`, {
+    const response = await client.post(`/contact/findContacts/${instanceName}`, {
       limit: 1000
     });
     
