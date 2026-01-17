@@ -696,7 +696,6 @@ async function sincronizarLead(req, res) {
     console.log(`[SYNC] Instância encontrada: ${instancia.instanceName}`);
     
     // Buscar ou criar conversa
-    const { Conversa } = require('../models');
     let conversa = lead.conversas && lead.conversas[0];
     
     if (!conversa) {
