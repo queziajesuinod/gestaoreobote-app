@@ -267,3 +267,176 @@ export const getStatusLabel = (status) => {
   };
   return labels[status] || status;
 };
+
+
+// ============================================================================
+// RELATÓRIOS E EXPORTAÇÕES
+// ============================================================================
+
+/**
+ * Gerar relatório PDF de um processo
+ */
+export const gerarRelatorioPDF = async (processoId) => {
+  const response = await fetch(`${API_URL}/api/inadimplentes/relatorios/processo/${processoId}/pdf`, {
+    headers: {
+      Authorization: `Bearer ${getToken()}`
+    }
+  });
+  
+  if (!response.ok) throw new Error('Erro ao gerar relatório PDF');
+  
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `processo-${processoId}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  document.body.removeChild(a);
+  
+  return { sucesso: true, mensagem: 'Relatório PDF gerado com sucesso' };
+};
+
+/**
+ * Gerar relatório consolidado de inadimplência em PDF
+ */
+export const gerarRelatorioInadimplenciaPDF = async (filtros = {}) => {
+  const params = new URLSearchParams();
+  if (filtros.dataInicio) params.append('dataInicio', filtros.dataInicio);
+  if (filtros.dataFim) params.append('dataFim', filtros.dataFim);
+  
+  const response = await fetch(`${API_URL}/api/inadimplentes/relatorios/inadimplencia/pdf?${params}`, {
+    headers: {
+      Authorization: `Bearer ${getToken()}`
+    }
+  });
+  
+  if (!response.ok) throw new Error('Erro ao gerar relatório de inadimplência');
+  
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'relatorio-inadimplencia.pdf';
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  document.body.removeChild(a);
+  
+  return { sucesso: true, mensagem: 'Relatório de inadimplência gerado com sucesso' };
+};
+
+/**
+ * Exportar processos para Excel
+ */
+export const exportarProcessosExcel = async (filtros = {}) => {
+  const params = new URLSearchParams();
+  if (filtros.status) params.append('status', filtros.status);
+  
+  const response = await fetch(`${API_URL}/api/inadimplentes/exportar/processos/excel?${params}`, {
+    headers: {
+      Authorization: `Bearer ${getToken()}`
+    }
+  });
+  
+  if (!response.ok) throw new Error('Erro ao exportar processos');
+  
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'processos-cobranca.xlsx';
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  document.body.removeChild(a);
+  
+  return { sucesso: true, mensagem: 'Processos exportados com sucesso' };
+};
+
+/**
+ * Exportar cobranças atrasadas para Excel
+ */
+export const exportarCobrancasAtrasadasExcel = async () => {
+  const response = await fetch(`${API_URL}/api/inadimplentes/exportar/atrasadas/excel`, {
+    headers: {
+      Authorization: `Bearer ${getToken()}`
+    }
+  });
+  
+  if (!response.ok) throw new Error('Erro ao exportar cobranças atrasadas');
+  
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'cobrancas-atrasadas.xlsx';
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  document.body.removeChild(a);
+  
+  return { sucesso: true, mensagem: 'Cobranças atrasadas exportadas com sucesso' };
+};
+
+/**
+ * Obter dados para gráficos
+ */
+export const obterDadosGraficos = async (meses = 6) => {
+  const response = await fetch(`${API_URL}/api/inadimplentes/estatisticas/graficos?meses=${meses}`, {
+    headers: getHeaders()
+  });
+  
+  if (!response.ok) throw new Error('Erro ao obter dados para gráficos');
+  return response.json();
+};
+
+// Exportar todas as funções como default também
+export default {
+  // Processos
+  listarProcessos,
+  buscarProcesso,
+  criarProcesso,
+  atualizarProcesso,
+  excluirProcesso,
+  pausarProcesso,
+  reativarProcesso,
+  encerrarProcesso,
+  
+  // Cobranças
+  listarCobrancas,
+  buscarCobranca,
+  marcarComoPago,
+  adicionarAnotacao,
+  forcarNotificacao,
+  obterEstatisticas,
+  
+  // Inadimplência
+  obterDashboard,
+  detectarManual,
+  listarInadimplentes,
+  buscarInadimplente,
+  
+  // Webhooks
+  listarLogsWebhook,
+  buscarLogWebhook,
+  obterEstatisticasWebhook,
+  
+  // Configurações Webhook
+  listarConfiguracoesWebhook,
+  buscarConfiguracaoWebhook,
+  criarConfiguracaoWebhook,
+  atualizarConfiguracaoWebhook,
+  excluirConfiguracaoWebhook,
+  ativarConfiguracaoWebhook,
+  desativarConfiguracaoWebhook,
+  obterConfiguracaoAtiva,
+  
+  // Relatórios e Exportações
+  gerarRelatorioPDF,
+  gerarRelatorioInadimplenciaPDF,
+  exportarProcessosExcel,
+  exportarCobrancasAtrasadasExcel,
+  obterDadosGraficos
+};

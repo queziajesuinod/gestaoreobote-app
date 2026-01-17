@@ -178,6 +178,7 @@
     "mui-datatables": "^4.3.0",
     "node-cron": "^4.2.1",
     "organism-react-scroll-nav": "^0.15.0",
+    "pdfkit": "^0.17.2",
     "pg": "^8.16.3",
     "pg-hstore": "^2.3.4",
     "prop-types": "15.7.2",

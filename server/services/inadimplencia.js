@@ -451,3 +451,170 @@ class InadimplenciaService {
 }
 
 module.exports = new InadimplenciaService();
+
+  /**
+   * Obter dados para gráficos (evolução de inadimplência)
+   */
+  async obterDadosGraficos(meses = 6) {
+    const dataFinal = new Date();
+    const dataInicial = new Date();
+    dataInicial.setMonth(dataInicial.getMonth() - meses);
+
+    // Gráfico de evolução de inadimplência (linha)
+    const evolucaoInadimplencia = [];
+    for (let i = 0; i < meses; i++) {
+      const mesReferencia = new Date();
+      mesReferencia.setMonth(mesReferencia.getMonth() - (meses - i - 1));
+      mesReferencia.setDate(1);
+      mesReferencia.setHours(0, 0, 0, 0);
+
+      const proximoMes = new Date(mesReferencia);
+      proximoMes.setMonth(proximoMes.getMonth() + 1);
+
+      const cobrancasAtrasadas = await CobrancaMensal.count({
+        where: {
+          mes_referencia: mesReferencia,
+          status: 'atrasado'
+        }
+      });
+
+      const cobrancasPendentes = await CobrancaMensal.count({
+        where: {
+          mes_referencia: mesReferencia,
+          status: 'pendente'
+        }
+      });
+
+      const cobrancasPagas = await CobrancaMensal.count({
+        where: {
+          mes_referencia: mesReferencia,
+          status: 'pago'
+        }
+      });
+
+      evolucaoInadimplencia.push({
+        mes: mesReferencia.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }),
+        atrasadas: cobrancasAtrasadas,
+        pendentes: cobrancasPendentes,
+        pagas: cobrancasPagas,
+        total: cobrancasAtrasadas + cobrancasPendentes + cobrancasPagas
+      });
+    }
+
+    // Gráfico de inadimplência por consultor (barra)
+    const inadimplenciaPorConsultor = await CobrancaMensal.findAll({
+      where: {
+        status: 'atrasado'
+      },
+      include: [
+        {
+          association: 'processoCobranca',
+          include: [
+            {
+              association: 'cota',
+              include: [
+                { association: 'consultor' }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+
+    const consultoresMap = {};
+    inadimplenciaPorConsultor.forEach(cobranca => {
+      const consultor = cobranca.processoCobranca?.cota?.consultor;
+      if (consultor) {
+        const nome = consultor.nome;
+        if (!consultoresMap[nome]) {
+          consultoresMap[nome] = {
+            nome,
+            quantidade: 0,
+            valor: 0
+          };
+        }
+        consultoresMap[nome].quantidade++;
+        consultoresMap[nome].valor += parseFloat(cobranca.valor);
+      }
+    });
+
+    const inadimplenciaPorConsultorArray = Object.values(consultoresMap)
+      .sort((a, b) => b.quantidade - a.quantidade)
+      .slice(0, 10); // Top 10
+
+    // Gráfico de taxa de recuperação (pizza)
+    const totalCobrancas = await CobrancaMensal.count({
+      where: {
+        mes_referencia: {
+          [Op.gte]: dataInicial
+        }
+      }
+    });
+
+    const cobrancasPagas = await CobrancaMensal.count({
+      where: {
+        mes_referencia: {
+          [Op.gte]: dataInicial
+        },
+        status: 'pago'
+      }
+    });
+
+    const cobrancasAtrasadas = await CobrancaMensal.count({
+      where: {
+        mes_referencia: {
+          [Op.gte]: dataInicial
+        },
+        status: 'atrasado'
+      }
+    });
+
+    const cobrancasPendentes = await CobrancaMensal.count({
+      where: {
+        mes_referencia: {
+          [Op.gte]: dataInicial
+        },
+        status: 'pendente'
+      }
+    });
+
+    const distribuicaoStatus = {
+      pagas: cobrancasPagas,
+      atrasadas: cobrancasAtrasadas,
+      pendentes: cobrancasPendentes,
+      total: totalCobrancas
+    };
+
+    // Gráfico de valor em atraso por mês (área)
+    const valorAtrasoPorMes = [];
+    for (let i = 0; i < meses; i++) {
+      const mesReferencia = new Date();
+      mesReferencia.setMonth(mesReferencia.getMonth() - (meses - i - 1));
+      mesReferencia.setDate(1);
+      mesReferencia.setHours(0, 0, 0, 0);
+
+      const cobrancasAtrasadas = await CobrancaMensal.findAll({
+        where: {
+          mes_referencia: mesReferencia,
+          status: 'atrasado'
+        }
+      });
+
+      const valorTotal = cobrancasAtrasadas.reduce((sum, c) => sum + parseFloat(c.valor), 0);
+
+      valorAtrasoPorMes.push({
+        mes: mesReferencia.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }),
+        valor: valorTotal
+      });
+    }
+
+    return {
+      evolucaoInadimplencia,
+      inadimplenciaPorConsultor: inadimplenciaPorConsultorArray,
+      distribuicaoStatus,
+      valorAtrasoPorMes
+    };
+  }
+}
+
+module.exports = new InadimplenciaService();

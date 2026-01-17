@@ -99,5 +99,137 @@ module.exports = {
         mensagem: 'Erro ao executar detecção'
       });
     }
+  },
+
+  /**
+   * GET /api/inadimplencia/relatorios/processo/:id/pdf
+   * Gerar relatório PDF de um processo
+   */
+  async gerarRelatorioPDF(req, res) {
+    try {
+      const { id } = req.params;
+      const relatoriosService = require('../services/relatorios');
+      
+      const pdfBuffer = await relatoriosService.gerarRelatorioPDF(id);
+      
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename=processo-${id}.pdf`);
+      
+      return res.send(pdfBuffer);
+    } catch (erro) {
+      console.error('[Inadimplencia] Erro ao gerar PDF:', erro);
+      return res.status(500).json({
+        sucesso: false,
+        mensagem: 'Erro ao gerar relatório PDF',
+        erro: erro.message
+      });
+    }
+  },
+
+  /**
+   * GET /api/inadimplencia/relatorios/inadimplencia/pdf
+   * Gerar relatório consolidado de inadimplência em PDF
+   */
+  async gerarRelatorioInadimplenciaPDF(req, res) {
+    try {
+      const { dataInicio, dataFim } = req.query;
+      const relatoriosService = require('../services/relatorios');
+      
+      const filtros = {};
+      if (dataInicio) filtros.dataInicio = dataInicio;
+      if (dataFim) filtros.dataFim = dataFim;
+      
+      const pdfBuffer = await relatoriosService.gerarRelatorioInadimplenciaPDF(filtros);
+      
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'attachment; filename=relatorio-inadimplencia.pdf');
+      
+      return res.send(pdfBuffer);
+    } catch (erro) {
+      console.error('[Inadimplencia] Erro ao gerar PDF inadimplência:', erro);
+      return res.status(500).json({
+        sucesso: false,
+        mensagem: 'Erro ao gerar relatório de inadimplência',
+        erro: erro.message
+      });
+    }
+  },
+
+  /**
+   * GET /api/inadimplencia/exportar/processos/excel
+   * Exportar processos para Excel
+   */
+  async exportarProcessosExcel(req, res) {
+    try {
+      const { status } = req.query;
+      const relatoriosService = require('../services/relatorios');
+      
+      const filtros = {};
+      if (status) filtros.status = status;
+      
+      const excelBuffer = await relatoriosService.exportarProcessosExcel(filtros);
+      
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', 'attachment; filename=processos-cobranca.xlsx');
+      
+      return res.send(excelBuffer);
+    } catch (erro) {
+      console.error('[Inadimplencia] Erro ao exportar Excel:', erro);
+      return res.status(500).json({
+        sucesso: false,
+        mensagem: 'Erro ao exportar processos para Excel',
+        erro: erro.message
+      });
+    }
+  },
+
+  /**
+   * GET /api/inadimplencia/exportar/atrasadas/excel
+   * Exportar cobranças atrasadas para Excel
+   */
+  async exportarCobrancasAtrasadasExcel(req, res) {
+    try {
+      const relatoriosService = require('../services/relatorios');
+      
+      const excelBuffer = await relatoriosService.exportarCobrancasAtrasadasExcel();
+      
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', 'attachment; filename=cobrancas-atrasadas.xlsx');
+      
+      return res.send(excelBuffer);
+    } catch (erro) {
+      console.error('[Inadimplencia] Erro ao exportar atrasadas Excel:', erro);
+      return res.status(500).json({
+        sucesso: false,
+        mensagem: 'Erro ao exportar cobranças atrasadas para Excel',
+        erro: erro.message
+      });
+    }
+  },
+
+  /**
+   * GET /api/inadimplencia/estatisticas/graficos
+   * Obter dados para gráficos
+   */
+  async obterDadosGraficos(req, res) {
+    try {
+      const { meses = 6 } = req.query;
+      const inadimplenciaService = require('../services/inadimplencia');
+      
+      const dados = await inadimplenciaService.obterDadosGraficos(parseInt(meses));
+      
+      return res.status(200).json({
+        sucesso: true,
+        mensagem: 'Dados para gráficos obtidos com sucesso',
+        dados
+      });
+    } catch (erro) {
+      console.error('[Inadimplencia] Erro ao obter dados gráficos:', erro);
+      return res.status(500).json({
+        sucesso: false,
+        mensagem: 'Erro ao obter dados para gráficos',
+        erro: erro.message
+      });
+    }
   }
 };
