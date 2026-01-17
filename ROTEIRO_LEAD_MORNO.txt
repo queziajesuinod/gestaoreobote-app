@@ -1,0 +1,172 @@
+================================================================================
+🌡️ ROTEIRO DE CONVERSA: LEAD MORNO
+================================================================================
+
+OBJETIVO: Simular um lead com interesse moderado, ainda pesquisando e comparando
+NÚMERO SUGERIDO: Use um número de teste seu ou de um colega (diferente do Lead Quente)
+DURAÇÃO: Espalhar ao longo de 2-3 dias (simule respostas espaçadas)
+
+================================================================================
+INSTRUÇÕES PARA O TESTE:
+================================================================================
+
+1. Configure um número de WhatsApp para ser o "lead"
+2. Importe esse número no sistema (Importar por Contato)
+3. Siga o roteiro abaixo, MAS com intervalos maiores entre mensagens
+4. Envie as mensagens do LEAD pelo WhatsApp real
+5. Responda como CONSULTOR pelo WhatsApp real
+6. IMPORTANTE: Simule respostas lentas (horas ou até 1 dia entre mensagens)
+7. Após concluir a conversa, sincronize o lead no sistema
+8. Acesse "Insights de Leads" para ver a classificação
+
+================================================================================
+ROTEIRO DA CONVERSA:
+================================================================================
+
+--- DIA 1: MANHÃ ---
+
+--- MENSAGEM 1 (LEAD) ---
+Oi, estou pesquisando sobre consórcio de imóvel. Pode me dar mais informações?
+
+[AGUARDE 30 MINUTOS]
+
+--- MENSAGEM 2 (CONSULTOR) ---
+Olá! Claro, temos várias opções de consórcio. Qual valor de imóvel você está pensando?
+
+[AGUARDE 3-4 HORAS OU ATÉ O DIA SEGUINTE]
+
+--- DIA 1: TARDE OU DIA 2 ---
+
+--- MENSAGEM 3 (LEAD) ---
+Ainda não sei ao certo, estou só pesquisando. Talvez algo entre 200 e 400 mil.
+
+[AGUARDE 1-2 HORAS]
+
+--- MENSAGEM 4 (CONSULTOR) ---
+Entendo. Você já tem alguma entrada guardada? Isso ajuda a escolher o melhor plano.
+
+[AGUARDE 4-6 HORAS]
+
+--- DIA 2: NOITE ---
+
+--- MENSAGEM 5 (LEAD) ---
+Tenho uns 20 mil, mas não sei se vou usar tudo. Ainda estou comparando com financiamento também.
+
+[AGUARDE 2-3 HORAS]
+
+--- MENSAGEM 6 (CONSULTOR) ---
+O consórcio tem vantagens: sem juros, parcelas menores e você pode ser contemplado antes. Quer uma simulação?
+
+[AGUARDE ATÉ O DIA SEGUINTE]
+
+--- DIA 3: MANHÃ ---
+
+--- MENSAGEM 7 (LEAD) ---
+Interessante... Mas ainda não tenho certeza. Preciso pensar melhor. Pode me mandar por email?
+
+[AGUARDE 30 MINUTOS]
+
+--- MENSAGEM 8 (CONSULTOR) ---
+Claro! Qual seu email? Vou enviar a simulação. Qualquer dúvida, estou à disposição.
+
+[AGUARDE 2-3 HORAS]
+
+--- DIA 3: TARDE ---
+
+--- MENSAGEM 9 (LEAD) ---
+É maria.santos@email.com. Obrigada!
+
+[AGUARDE 4-6 HORAS]
+
+--- MENSAGEM 10 (CONSULTOR) ---
+Email enviado! Vi o email. Ainda estou analisando as opções. Vocês têm alguma promoção no momento?
+
+[AGUARDE 1-2 HORAS]
+
+--- MENSAGEM 11 (CONSULTOR) ---
+Sim! Temos taxa de adesão reduzida este mês. Quer agendar uma conversa para ver os detalhes?
+
+[AGUARDE VÁRIAS HORAS]
+
+--- DIA 3: NOITE ---
+
+--- MENSAGEM 12 (LEAD) ---
+Vou ver minha agenda e te aviso. Obrigada pelas informações!
+
+[FIM DA CONVERSA - SEM COMPROMISSO]
+
+================================================================================
+SINAIS DE LEAD MORNO QUE A IA DEVE IDENTIFICAR:
+================================================================================
+
+⚠️ Interesse moderado mas sem urgência
+   - "Estou pesquisando"
+   - "Ainda não sei ao certo"
+   - "Estou só pesquisando"
+
+⚠️ Comparando opções
+   - "Ainda estou comparando com financiamento também"
+   - "Ainda estou analisando as opções"
+
+⚠️ Orçamento indefinido ou vago
+   - "Talvez algo entre 200 e 400 mil"
+   - "Tenho uns 20 mil, mas não sei se vou usar tudo"
+
+⚠️ Respostas espaçadas
+   - Horas ou dias entre mensagens
+   - Baixo engajamento
+
+⚠️ Adia decisões
+   - "Preciso pensar melhor"
+   - "Vou ver minha agenda e te aviso"
+
+⚠️ Pede informações por email
+   - Menos engajamento direto
+   - Quer "pensar depois"
+
+⚠️ Pergunta sobre promoções
+   - Sensível a preço
+   - Buscando desconto
+
+⚠️ Não compromete com próximos passos
+   - Não agenda reunião
+   - Não define data
+   - "Te aviso depois"
+
+⚠️ Sentimento neutro
+   - Sem empolgação
+   - Sem urgência
+   - Apenas "obrigada"
+
+================================================================================
+RESULTADO ESPERADO NO SISTEMA:
+================================================================================
+
+🌡️ TEMPERATURA: MORNO (40-79%)
+
+SINAIS DE COMPRA IDENTIFICADOS:
+- Interesse inicial demonstrado
+- Tem algum orçamento (20 mil)
+- Perguntou sobre promoções
+
+OBJEÇÕES:
+- Ainda comparando com outras opções
+- Orçamento indefinido
+- Sem urgência
+
+SENTIMENTO: Neutro, cauteloso
+
+RECOMENDAÇÃO: Manter contato periódico, enviar conteúdo educativo, oferecer simulações, acompanhar em 7-15 dias
+
+================================================================================
+DICAS PARA SIMULAR REALISMO:
+================================================================================
+
+✓ NÃO responda imediatamente - espere horas entre mensagens
+✓ Simule que está "ocupado" ou "pensando"
+✓ Use linguagem neutra, sem empolgação
+✓ Demonstre dúvida e incerteza
+✓ Não comprometa com datas ou reuniões
+✓ Peça para "pensar" e "analisar"
+
+================================================================================

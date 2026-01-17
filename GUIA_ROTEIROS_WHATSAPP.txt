@@ -1,0 +1,313 @@
+================================================================================
+📱 GUIA MESTRE: ROTEIROS DE TESTE NO WHATSAPP REAL
+================================================================================
+
+Este guia explica como usar os 3 roteiros de conversa para testar a classificação
+de temperatura de leads com conversas REAIS no WhatsApp.
+
+================================================================================
+📁 ARQUIVOS DOS ROTEIROS:
+================================================================================
+
+1. ROTEIRO_LEAD_QUENTE.txt  - Lead com alto interesse 🔥
+2. ROTEIRO_LEAD_MORNO.txt   - Lead com interesse moderado 🌡️
+3. ROTEIRO_LEAD_FRIO.txt    - Lead com baixo interesse ❄️
+
+================================================================================
+🎯 OBJETIVO DOS TESTES:
+================================================================================
+
+Validar se a IA está classificando corretamente os leads com base em conversas
+reais do WhatsApp, identificando:
+
+✓ Temperatura do lead (Quente/Morno/Frio)
+✓ Sinais de compra
+✓ Objeções
+✓ Sentimento da conversa
+✓ Urgência
+✓ Engajamento
+
+================================================================================
+🛠️ PREPARAÇÃO PARA OS TESTES:
+================================================================================
+
+OPÇÃO 1: Usar 3 números diferentes (RECOMENDADO)
+----------------------------------------------
+- Use 3 números de telefone diferentes (seus, de colegas ou familiares)
+- Cada número será um "personagem" (João Quente, Maria Morna, Carlos Frio)
+- Você precisará alternar entre os números para simular as conversas
+
+OPÇÃO 2: Usar o mesmo número em momentos diferentes
+---------------------------------------------------
+- Use 1 número de teste
+- Faça a conversa completa do Lead Quente
+- Aguarde sincronização e análise
+- Delete o lead do sistema
+- Repita com Lead Morno
+- Repita com Lead Frio
+
+OPÇÃO 3: Pedir ajuda de colegas (MAIS REALISTA)
+-----------------------------------------------
+- Peça para 3 colegas seguirem os roteiros
+- Eles enviam as mensagens do "lead"
+- Você responde como consultor
+- Mais realista pois simula timing real de respostas
+
+================================================================================
+📋 PASSO A PASSO COMPLETO:
+================================================================================
+
+ETAPA 1: PREPARAR O AMBIENTE
+----------------------------
+1. Certifique-se de que a instância Evolution está conectada
+2. Acesse o sistema e vá em "Configuração do WhatsApp"
+3. Verifique se a sincronização automática está ativa
+4. Tenha os 3 números de teste prontos
+
+ETAPA 2: IMPORTAR O PRIMEIRO LEAD (QUENTE)
+------------------------------------------
+1. No sistema, clique em "Importar por contato"
+2. Digite o número do primeiro teste (ex: 11999999001)
+3. Clique em "Buscar"
+4. Clique em "Importar" no contato encontrado
+5. Aguarde confirmação de importação
+
+ETAPA 3: EXECUTAR O ROTEIRO QUENTE
+----------------------------------
+1. Abra o arquivo ROTEIRO_LEAD_QUENTE.txt
+2. Usando o número de teste, envie a MENSAGEM 1 (LEAD) pelo WhatsApp
+3. Aguarde o tempo indicado no roteiro (2-3 minutos)
+4. Responda como CONSULTOR pelo WhatsApp (MENSAGEM 2)
+5. Continue alternando entre LEAD e CONSULTOR
+6. IMPORTANTE: Respeite os tempos de espera (simula engajamento alto)
+7. Complete todas as 11 mensagens do roteiro
+
+ETAPA 4: SINCRONIZAR E ANALISAR
+-------------------------------
+1. Aguarde 1-2 minutos após a última mensagem
+2. No sistema, acesse o lead importado
+3. Clique em "Sincronizar" para atualizar as mensagens
+4. Aguarde a sincronização completar
+5. Vá em "Insights de Leads" no menu
+6. Aguarde a análise de IA processar
+7. Verifique a temperatura do lead
+
+ETAPA 5: VALIDAR RESULTADO DO LEAD QUENTE
+-----------------------------------------
+Resultado esperado:
+- 🔥 Temperatura: QUENTE (80-100%)
+- Sinais de compra identificados
+- Poucas ou nenhuma objeção
+- Sentimento positivo
+- Recomendação: Priorizar atendimento
+
+ETAPA 6: REPETIR PARA LEAD MORNO
+--------------------------------
+1. Use um número diferente (ex: 11999999002)
+2. Importe o contato no sistema
+3. Abra o arquivo ROTEIRO_LEAD_MORNO.txt
+4. Execute o roteiro (ATENÇÃO: respostas espaçadas em horas/dias!)
+5. Sincronize e analise
+6. Valide: Temperatura MORNA (40-79%)
+
+ETAPA 7: REPETIR PARA LEAD FRIO
+-------------------------------
+1. Use um terceiro número (ex: 11999999003)
+2. Importe o contato no sistema
+3. Abra o arquivo ROTEIRO_LEAD_FRIO.txt
+4. Execute o roteiro (ATENÇÃO: respostas muito espaçadas, pare de responder!)
+5. Sincronize e analise
+6. Valide: Temperatura FRIA (0-39%)
+
+================================================================================
+⏱️ TIMING DAS CONVERSAS:
+================================================================================
+
+LEAD QUENTE:
+- Duração total: 5-10 minutos
+- Intervalo entre mensagens: 1-3 minutos
+- Simula: Alta urgência e engajamento
+
+LEAD MORNO:
+- Duração total: 2-3 dias
+- Intervalo entre mensagens: Horas ou 1 dia
+- Simula: Interesse moderado, ainda pesquisando
+
+LEAD FRIO:
+- Duração total: 3-5 dias
+- Intervalo entre mensagens: Dias
+- Simula: Baixo interesse, objeções, ghosting
+
+================================================================================
+✅ CRITÉRIOS DE SUCESSO:
+================================================================================
+
+O teste é APROVADO se:
+
+1. ✅ Lead Quente classificado como QUENTE (≥ 80%)
+   - Sinais de compra identificados
+   - Urgência detectada
+   - Sentimento positivo
+
+2. ✅ Lead Morno classificado como MORNO (40-79%)
+   - Interesse moderado identificado
+   - Objeções leves detectadas
+   - Sentimento neutro
+
+3. ✅ Lead Frio classificado como FRIO (≤ 39%)
+   - Baixo engajamento identificado
+   - Objeções fortes detectadas
+   - Sentimento negativo
+
+4. ✅ Recomendações coerentes com cada temperatura
+
+================================================================================
+🎭 DICAS PARA SIMULAR REALISMO:
+================================================================================
+
+PARA LEAD QUENTE:
+✓ Responda RÁPIDO (1-3 minutos)
+✓ Use palavras de urgência ("urgente", "rápido", "agora")
+✓ Demonstre empolgação (use "!", "😊")
+✓ Faça perguntas específicas sobre processo
+✓ Confirme reuniões e próximos passos
+
+PARA LEAD MORNO:
+✓ Demore para responder (horas)
+✓ Use palavras de dúvida ("talvez", "não sei", "vou pensar")
+✓ Seja educado mas sem empolgação
+✓ Peça informações por email
+✓ Não comprometa com datas
+
+PARA LEAD FRIO:
+✓ Demore MUITO para responder (dias)
+✓ Levante objeções ("mas...", "eu ouvi que...")
+✓ Seja cético e desconfiado
+✓ Respostas curtas ("sei", "valeu")
+✓ NO FINAL: Pare de responder (ghosting)
+
+================================================================================
+🔧 TROUBLESHOOTING:
+================================================================================
+
+PROBLEMA: Mensagens não aparecem no sistema
+SOLUÇÃO: 
+- Verifique se a instância Evolution está conectada
+- Clique em "Sincronizar" no lead
+- Aguarde até 15 minutos (sincronização automática)
+
+PROBLEMA: Análise de IA não executa
+SOLUÇÃO:
+- Verifique se há mensagens suficientes (mínimo 5-6)
+- Aguarde alguns minutos e atualize a página
+- Verifique os logs do servidor
+
+PROBLEMA: Temperatura classificada incorretamente
+SOLUÇÃO:
+- Verifique se seguiu o roteiro fielmente
+- Certifique-se de respeitar os timings (importante!)
+- Adicione mais mensagens seguindo o padrão do roteiro
+
+PROBLEMA: Não consigo simular dias diferentes
+SOLUÇÃO:
+- Para testes rápidos, use intervalos menores (minutos ao invés de dias)
+- O importante é a PROPORÇÃO: Lead Quente responde 10x mais rápido que Frio
+- Ou execute o teste ao longo de dias reais
+
+================================================================================
+📊 COMPARAÇÃO DOS 3 LEADS:
+================================================================================
+
+┌─────────────────┬──────────────┬──────────────┬──────────────┐
+│ CARACTERÍSTICA  │ LEAD QUENTE  │ LEAD MORNO   │ LEAD FRIO    │
+├─────────────────┼──────────────┼──────────────┼──────────────┤
+│ Tempo resposta  │ 1-3 minutos  │ Horas/1 dia  │ Dias/semanas │
+│ Urgência        │ Alta         │ Baixa        │ Nenhuma      │
+│ Orçamento       │ Definido     │ Vago         │ Inexistente  │
+│ Objeções        │ Nenhuma      │ Algumas      │ Muitas       │
+│ Sentimento      │ Positivo     │ Neutro       │ Negativo     │
+│ Próximos passos │ Agenda       │ "Vou pensar" │ Ghosting     │
+│ Temperatura     │ 80-100%      │ 40-79%       │ 0-39%        │
+└─────────────────┴──────────────┴──────────────┴──────────────┘
+
+================================================================================
+🧹 LIMPEZA APÓS TESTES:
+================================================================================
+
+Após validar os 3 leads, você pode:
+
+OPÇÃO 1: Manter como exemplos
+- Deixe os leads no sistema como referência
+- Adicione tag "TESTE" para identificar
+
+OPÇÃO 2: Deletar os leads de teste
+- Acesse cada lead
+- Delete manualmente pela interface
+- Ou use SQL: DELETE FROM dev.leads WHERE telefone IN ('11999999001', '11999999002', '11999999003');
+
+================================================================================
+📝 CHECKLIST DE VALIDAÇÃO:
+================================================================================
+
+Antes de considerar o teste completo, verifique:
+
+□ Lead Quente importado e sincronizado
+□ Conversa Quente completa (11 mensagens)
+□ Lead Quente classificado como QUENTE
+□ Sinais de compra identificados no Lead Quente
+
+□ Lead Morno importado e sincronizado
+□ Conversa Morna completa (11-12 mensagens)
+□ Lead Morno classificado como MORNO
+□ Objeções leves identificadas no Lead Morno
+
+□ Lead Frio importado e sincronizado
+□ Conversa Fria completa (12 mensagens + ghosting)
+□ Lead Frio classificado como FRIO
+□ Objeções fortes identificadas no Lead Frio
+
+□ Dashboard de Insights mostra os 3 leads corretamente
+□ Recomendações coerentes para cada temperatura
+
+================================================================================
+💡 DICAS FINAIS:
+================================================================================
+
+1. **Seja paciente**: A sincronização pode levar alguns minutos
+2. **Respeite os timings**: O tempo entre mensagens é crucial para a análise
+3. **Siga o roteiro**: Não improvise muito, os roteiros foram criados com base em padrões reais
+4. **Use números reais**: Não use números fake, use números de WhatsApp válidos
+5. **Documente**: Tire prints dos resultados para comparar
+6. **Itere**: Se a classificação não estiver correta, ajuste os prompts da IA
+
+================================================================================
+📞 NÚMEROS SUGERIDOS PARA TESTE:
+================================================================================
+
+Se você não tem 3 números disponíveis, considere:
+
+✓ Seu número pessoal
+✓ Número de um colega de trabalho
+✓ Número de um familiar
+✓ Número secundário (chip extra)
+✓ Número de WhatsApp Business de teste
+
+IMPORTANTE: NÃO use números de clientes reais!
+
+================================================================================
+🎓 PRÓXIMOS PASSOS APÓS VALIDAÇÃO:
+================================================================================
+
+Após validar que a classificação está funcionando:
+
+1. Treine sua equipe nos padrões de cada temperatura
+2. Use os insights para priorizar atendimentos
+3. Configure automações para leads frios
+4. Crie playbooks para leads mornos
+5. Foque esforços de vendas em leads quentes
+
+================================================================================
+
+Boa sorte com os testes! 🚀
+
+================================================================================

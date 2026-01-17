@@ -1,0 +1,209 @@
+================================================================================
+❄️ ROTEIRO DE CONVERSA: LEAD FRIO
+================================================================================
+
+OBJETIVO: Simular um lead com baixo interesse, objeções fortes ou apenas curiosidade
+NÚMERO SUGERIDO: Use um número de teste seu ou de um colega (diferente dos outros dois)
+DURAÇÃO: Espalhar ao longo de 3-5 dias com respostas muito espaçadas
+
+================================================================================
+INSTRUÇÕES PARA O TESTE:
+================================================================================
+
+1. Configure um número de WhatsApp para ser o "lead"
+2. Importe esse número no sistema (Importar por Contato)
+3. Siga o roteiro abaixo, com MUITOS intervalos entre mensagens
+4. Envie as mensagens do LEAD pelo WhatsApp real
+5. Responda como CONSULTOR pelo WhatsApp real
+6. IMPORTANTE: Simule desinteresse, objeções e até pare de responder
+7. Após concluir a conversa, sincronize o lead no sistema
+8. Acesse "Insights de Leads" para ver a classificação
+
+================================================================================
+ROTEIRO DA CONVERSA:
+================================================================================
+
+--- DIA 1: MANHÃ ---
+
+--- MENSAGEM 1 (LEAD) ---
+Oi, quanto custa um consórcio?
+
+[AGUARDE 1-2 HORAS]
+
+--- MENSAGEM 2 (CONSULTOR) ---
+Olá! O valor depende do bem que você quer. Está pensando em imóvel, carro ou outro bem?
+
+[AGUARDE 1 DIA INTEIRO OU MAIS]
+
+--- DIA 2 OU 3: QUALQUER HORA ---
+
+--- MENSAGEM 3 (LEAD) ---
+Imóvel, mas só estou dando uma olhada.
+
+[AGUARDE 30 MINUTOS]
+
+--- MENSAGEM 4 (CONSULTOR) ---
+Entendo. Qual valor de imóvel você tem em mente? Posso te passar algumas opções.
+
+[AGUARDE VÁRIAS HORAS]
+
+--- DIA 3: TARDE ---
+
+--- MENSAGEM 5 (LEAD) ---
+Não tenho nada guardado ainda. E consórcio demora muito para ser contemplado, né?
+
+[AGUARDE 2-3 HORAS]
+
+--- MENSAGEM 6 (CONSULTOR) ---
+Nem sempre! Você pode ser contemplado logo nos primeiros meses. E as parcelas são menores que financiamento.
+
+[AGUARDE 1 DIA]
+
+--- DIA 4: MANHÃ ---
+
+--- MENSAGEM 7 (LEAD) ---
+Mas eu ouvi falar que tem muita taxa e que às vezes a pessoa paga anos e não é contemplada...
+
+[AGUARDE 1 HORA]
+
+--- MENSAGEM 8 (CONSULTOR) ---
+Isso é mito! O consórcio é regulado pelo Banco Central. Todos são contemplados, é só questão de tempo.
+
+[AGUARDE VÁRIAS HORAS]
+
+--- DIA 4: TARDE ---
+
+--- MENSAGEM 9 (LEAD) ---
+Sei... Vou pensar. Mas acho que não é para mim agora. Muito caro.
+
+[AGUARDE 30 MINUTOS]
+
+--- MENSAGEM 10 (CONSULTOR) ---
+Entendo sua preocupação. Posso fazer uma simulação sem compromisso para você ver que cabe no bolso?
+
+[AGUARDE 1 DIA OU MAIS]
+
+--- DIA 5 OU 6: QUALQUER HORA ---
+
+--- MENSAGEM 11 (LEAD) ---
+Depois eu vejo. Valeu.
+
+[AGUARDE 1 HORA]
+
+--- MENSAGEM 12 (CONSULTOR) ---
+Ok! Qualquer dúvida, estou aqui. Posso te adicionar na nossa lista de novidades?
+
+[AGUARDE INDEFINIDAMENTE - LEAD NÃO RESPONDE MAIS]
+
+[FIM DA CONVERSA - LEAD PAROU DE RESPONDER (GHOSTING)]
+
+================================================================================
+SINAIS DE LEAD FRIO QUE A IA DEVE IDENTIFICAR:
+================================================================================
+
+❄️ Perguntas muito genéricas e superficiais
+   - "Quanto custa um consórcio?" (sem especificar nada)
+   - "Só estou dando uma olhada"
+
+❄️ Respostas muito espaçadas
+   - Dias entre mensagens
+   - Desinteresse evidente
+
+❄️ Sem orçamento ou entrada
+   - "Não tenho nada guardado ainda"
+   - Sem planejamento financeiro
+
+❄️ Múltiplas objeções fortes
+   - "Demora muito para ser contemplado"
+   - "Tem muita taxa"
+   - "A pessoa paga anos e não é contemplada"
+   - "Muito caro"
+
+❄️ Descrença no produto/serviço
+   - "Eu ouvi falar que..."
+   - Baseado em "achismos"
+   - Não confia no sistema
+
+❄️ Falta de urgência total
+   - "Depois eu vejo"
+   - "Vou pensar"
+   - Sem pressa alguma
+
+❄️ Respostas curtas e desinteressadas
+   - "Sei..."
+   - "Valeu"
+   - Monossilábicas
+
+❄️ Para de responder (ghosting)
+   - Não responde à última mensagem
+   - Abandona a conversa
+
+❄️ Sentimento negativo ou cético
+   - Dúvida constante
+   - Foco em problemas
+   - Tom desconfiado
+
+❄️ Não aceita simulações ou reuniões
+   - Recusa propostas
+   - Não quer compromisso
+
+❄️ Foco apenas em preço e problemas
+   - Não pergunta sobre benefícios
+   - Só vê obstáculos
+
+================================================================================
+RESULTADO ESPERADO NO SISTEMA:
+================================================================================
+
+❄️ TEMPERATURA: FRIO (0-39%)
+
+SINAIS DE COMPRA IDENTIFICADOS:
+- Nenhum ou muito poucos
+
+OBJEÇÕES:
+- Sem orçamento disponível
+- Desconfiança sobre contemplação
+- Preocupação com taxas
+- Acha caro
+- Não tem urgência
+
+SENTIMENTO: Negativo, cético, desinteressado
+
+RECOMENDAÇÃO: Lead de baixa prioridade. Incluir em campanha de nutrição de longo prazo (email marketing, conteúdo educativo). Não investir tempo de consultor agora. Reavaliar em 3-6 meses.
+
+================================================================================
+DICAS PARA SIMULAR REALISMO:
+================================================================================
+
+✓ Demore MUITO para responder (dias)
+✓ Use linguagem negativa e cética
+✓ Levante objeções sem aceitar explicações
+✓ Seja monossilábico e desinteressado
+✓ Recuse propostas de simulação/reunião
+✓ NO FINAL: Simplesmente PARE de responder (ghosting)
+✓ Demonstre que está "só olhando" sem intenção real
+
+================================================================================
+VARIAÇÃO OPCIONAL (LEAD FRIO AGRESSIVO):
+================================================================================
+
+Se quiser testar um lead frio mais problemático, adicione mensagens como:
+
+"Isso é golpe, né?"
+"Consórcio é furada, todo mundo sabe"
+"Vocês só querem empurrar produto"
+"Não confio nessas coisas"
+"Já vi gente se dar mal com consórcio"
+
+Isso ajuda a IA a identificar leads tóxicos que devem ser despriorizados.
+
+================================================================================
+IMPORTANTE:
+================================================================================
+
+⚠️ Este tipo de lead NÃO deve receber atenção prioritária do consultor
+⚠️ O sistema deve recomendar automação e nutrição de longo prazo
+⚠️ Não vale a pena investir tempo de vendas neste momento
+⚠️ Pode ser reavaliado no futuro se demonstrar mudança de comportamento
+
+================================================================================
