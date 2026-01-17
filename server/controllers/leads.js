@@ -695,15 +695,33 @@ async function sincronizarLead(req, res) {
     }
     console.log(`[SYNC] Instância encontrada: ${instancia.instanceName}`);
     
-    const conversa = lead.conversas && lead.conversas[0];
+    // Buscar ou criar conversa
+    const { Conversa } = require('../models');
+    let conversa = lead.conversas && lead.conversas[0];
+    
     if (!conversa) {
       console.log(`[SYNC] Nenhuma conversa encontrada para o lead ${leadId}`);
-      return res.status(400).json({
-        sucesso: false,
-        mensagem: 'Nenhuma conversa encontrada para sincronizar'
+      console.log(`[SYNC] Criando conversa automaticamente...`);
+      
+      // Criar chatId baseado no telefone do lead
+      const telefone = lead.telefone.replace(/\D/g, ''); // Remove caracteres não numéricos
+      const chatId = `${telefone}@s.whatsapp.net`;
+      
+      console.log(`[SYNC] ChatId gerado: ${chatId}`);
+      
+      // Criar conversa
+      conversa = await Conversa.create({
+        leadId: lead.id,
+        consultorId: lead.consultorId,
+        plataforma: 'whatsapp',
+        chatId: chatId,
+        status: 'ativa'
       });
+      
+      console.log(`[SYNC] Conversa criada com sucesso: ID=${conversa.id}`);
+    } else {
+      console.log(`[SYNC] Conversa encontrada: chatId=${conversa.chatId}`);
     }
-    console.log(`[SYNC] Conversa encontrada: chatId=${conversa.chatId}`);
     
     // Sincronizar
     console.log(`[SYNC] Chamando evolutionService.sincronizarChat...`);
