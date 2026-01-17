@@ -726,6 +726,12 @@ async function sincronizarLead(req, res) {
       // Buscar chat que corresponde ao telefone do lead
       let chatEncontrado = null;
       
+      console.log(`[SYNC] Primeiros 5 chats para debug:`);
+      resultadoChats.chats.slice(0, 5).forEach((chat, idx) => {
+        const remoteJid = chat.id || chat.remoteJid || chat.jid;
+        console.log(`[SYNC]   Chat ${idx + 1}: ${remoteJid}`);
+      });
+      
       for (const chat of resultadoChats.chats) {
         const remoteJid = chat.id || chat.remoteJid || chat.jid;
         if (!remoteJid) continue;
