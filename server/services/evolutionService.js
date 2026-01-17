@@ -58,7 +58,7 @@ const createEvolutionClient = (apiUrl, apiKey) => {
   };
   const apiHeaderValue = buildAuthHeader(apiKey);
   if (apiHeaderValue) {
-    headers.apikey = apiHeaderValue;
+    headers.apiKey = apiHeaderValue;
   }
 
     console.log('Evolution client request', {
