@@ -250,20 +250,7 @@ function EvolutionConfig() {
     }
   }, [consultorIdLogado, consultorSelecionado, isAdminPerfil]);
 
-  useEffect(() => {
-    if (!contatosDialogAberto) return;
-    const termo = contatosPesquisa.trim();
-    if (!termo) {
-      setContatosResultados([]);
-      setContatosErroBusca('');
-      setCarregandoContatosBusca(false);
-      return;
-    }
-    const handler = setTimeout(() => {
-      carregarContatosParaPesquisa(termo);
-    }, 400);
-    return () => clearTimeout(handler);
-  }, [contatosDialogAberto, contatosPesquisa, carregarContatosParaPesquisa]);
+  // Busca removida do useEffect - agora é manual via botão
 
   const handleChange = (campo) => (event) => {
     const value = event.target.type === 'checkbox' ? event.target.checked : event.target.value;
@@ -366,6 +353,15 @@ function EvolutionConfig() {
     setContatosPesquisa('');
     setContatosResultados([]);
     setContatosErroBusca('');
+  };
+
+  const handleBuscarContatos = () => {
+    const termo = contatosPesquisa.trim();
+    if (!termo) {
+      setContatosErroBusca('Digite um número ou nome para buscar.');
+      return;
+    }
+    carregarContatosParaPesquisa(termo);
   };
 
   const handleImportarContato = async (contato) => {
@@ -561,30 +557,43 @@ function EvolutionConfig() {
       >
         <DialogTitle>Importar histórico por contato</DialogTitle>
         <DialogContent dividers>
-          <TextField
-            label="Buscar contato"
-            value={contatosPesquisa}
-            onChange={(event) => setContatosPesquisa(event.target.value)}
-            fullWidth
-            margin="dense"
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon fontSize="small" />
-                </InputAdornment>
-              )
-            }}
-          />
-          {contatosErroBusca && contatosPesquisa.trim() && (
+          <Box display="flex" gap={1} alignItems="flex-start">
+            <TextField
+              label="Buscar contato"
+              value={contatosPesquisa}
+              onChange={(event) => setContatosPesquisa(event.target.value)}
+              onKeyPress={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  handleBuscarContatos();
+                }
+              }}
+              fullWidth
+              margin="dense"
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" />
+                  </InputAdornment>
+                )
+              }}
+            />
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={handleBuscarContatos}
+              disabled={carregandoContatosBusca || !contatosPesquisa.trim()}
+              sx={{ mt: 1, minWidth: 100 }}
+            >
+              {carregandoContatosBusca ? 'Buscando...' : 'Buscar'}
+            </Button>
+          </Box>
+          {contatosErroBusca && (
             <Typography variant="body2" color="error" gutterBottom>
               {contatosErroBusca}
             </Typography>
           )}
-          {!contatosPesquisa.trim() ? (
-            <Typography variant="body2" color="textSecondary" sx={{ py: 2 }}>
-              Digite um número ou nome para procurar o contato desejado.
-            </Typography>
-          ) : carregandoContatosBusca ? (
+          {carregandoContatosBusca ? (
             <Box display="flex" justifyContent="center" py={2}>
               <CircularProgress size={24} />
             </Box>
