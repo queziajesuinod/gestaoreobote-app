@@ -156,29 +156,45 @@ const importarHistoricoContato = async (
   contato,
   { limiteMensagens = 1000, criarSeNaoExiste = true } = {}
 ) => {
+  console.log('[IMPORT_HISTORICO] Iniciando importação de histórico:', {
+    instanceId: instance?.id,
+    consultorId,
+    contato: { remoteJid: contato?.remoteJid, name: contato?.name },
+    limiteMensagens
+  });
+  
   const chatId = contato?.remoteJid
     || contato?.id
     || contato?.jid
     || contato?.key?.remoteJid;
   const normalizedChatId = normalizeChatId(chatId);
   if (!normalizedChatId) {
+    console.log('[IMPORT_HISTORICO] ChatId inválido:', chatId);
     throw new Error('ChatId inválido');
   }
+  
+  console.log('[IMPORT_HISTORICO] ChatId normalizado:', normalizedChatId);
 
   const telefone = normalizedChatId.split('@')[0];
   const nome = contato?.name || contato?.pushName || telefone;
+  console.log('[IMPORT_HISTORICO] Dados extraídos:', { telefone, nome });
+  
   const { Lead } = require('../models');
 
   let lead = await Lead.findOne({
     where: { telefone, consultorId }
   });
+  
+  console.log('[IMPORT_HISTORICO] Lead existente:', lead ? `ID: ${lead.id}` : 'Não encontrado');
 
   let leadCriado = false;
   if (!lead) {
     if (!criarSeNaoExiste) {
+      console.log('[IMPORT_HISTORICO] Lead não existe e criarSeNaoExiste=false');
       return { lead: null, leadCriado: false };
     }
     leadCriado = true;
+    console.log('[IMPORT_HISTORICO] Criando novo lead...');
     lead = await Lead.create({
       consultorId,
       nome,
@@ -189,10 +205,15 @@ const importarHistoricoContato = async (
       evolutionInstanceId: instance.id,
       evolutionSyncEnabled: true
     });
+    console.log('[IMPORT_HISTORICO] Lead criado com ID:', lead.id);
   }
 
+  console.log('[IMPORT_HISTORICO] Sincronizando chat...');
   await sincronizarChat(instance, normalizedChatId, lead.id, limiteMensagens);
+  console.log('[IMPORT_HISTORICO] Sincronização concluída');
 
+  console.log('[IMPORT_HISTORICO] Importação de histórico concluída com sucesso');
+  
   return {
     lead,
     leadCriado

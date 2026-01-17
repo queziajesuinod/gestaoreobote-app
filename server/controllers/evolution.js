@@ -354,7 +354,10 @@ async function listarContatos(req, res) {
 async function importarContato(req, res) {
   try {
     const { chatId, nome, pushName } = req.body;
+    console.log('[IMPORT_CONTATO] Iniciando importação de contato:', { chatId, nome, pushName });
+    
     if (!chatId) {
+      console.log('[IMPORT_CONTATO] ChatId não informado');
       return res.status(400).json({
         sucesso: false,
         mensagem: 'Identificador do contato não informado.'
@@ -362,15 +365,33 @@ async function importarContato(req, res) {
     }
 
     const contexto = await buscarInstanciaConsultor(req, res);
-    if (!contexto) return;
+    if (!contexto) {
+      console.log('[IMPORT_CONTATO] Contexto não encontrado (instância ou consultor)');
+      return;
+    }
+    
+    console.log('[IMPORT_CONTATO] Contexto obtido:', {
+      consultorId: contexto.consultorId,
+      instanciaId: contexto.instancia.id,
+      instanceName: contexto.instancia.instanceName
+    });
 
+    console.log('[IMPORT_CONTATO] Chamando evolutionService.importarHistoricoContato...');
     const resultado = await evolutionService.importarHistoricoContato(
       contexto.instancia,
       contexto.consultorId,
       { remoteJid: chatId, name: nome, pushName },
       { limiteMensagens: 1000 }
     );
+    
+    console.log('[IMPORT_CONTATO] Resultado:', {
+      leadId: resultado.lead?.id,
+      leadNome: resultado.lead?.nome,
+      leadCriado: resultado.leadCriado
+    });
 
+    console.log('[IMPORT_CONTATO] Importação concluída com sucesso');
+    
     res.json({
       sucesso: true,
       lead: {
@@ -383,7 +404,8 @@ async function importarContato(req, res) {
       mensagem: `${resultado.lead.nome} sincronizado com sucesso.`
     });
   } catch (error) {
-    console.error('Erro ao importar contato Evolution:', error);
+    console.error('[IMPORT_CONTATO] Erro ao importar contato Evolution:', error);
+    console.error('[IMPORT_CONTATO] Stack trace:', error.stack);
     res.status(500).json({ sucesso: false, erro: error.message });
   }
 }
