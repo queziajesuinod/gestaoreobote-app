@@ -341,7 +341,12 @@ async function buscarMensagensChat(apiUrl, instanceName, apiKey, chatId, limite 
   try {
     const client = createEvolutionClient(apiUrl, apiKey);
     
-    console.log(`[BUSCAR_MSG] Buscando mensagens com filtro: ${sincronizarApenas}`);
+    console.log(`[BUSCAR_MSG] ===== INÍCIO DA BUSCA =====`);
+    console.log(`[BUSCAR_MSG] API URL: ${apiUrl}`);
+    console.log(`[BUSCAR_MSG] Instance: ${instanceName}`);
+    console.log(`[BUSCAR_MSG] ChatId: ${chatId}`);
+    console.log(`[BUSCAR_MSG] Limite: ${limite}`);
+    console.log(`[BUSCAR_MSG] Filtro: ${sincronizarApenas}`);
     
     // Construir filtro baseado em sincronizarApenas
     const where = {
@@ -359,20 +364,35 @@ async function buscarMensagensChat(apiUrl, instanceName, apiKey, chatId, limite 
       console.log(`[BUSCAR_MSG] Filtro 24h aplicado: timestamp >= ${timestampOntem}`);
     }
     
-    // Para 'nao_lidas' e 'todas', o filtro é aplicado no backend após buscar
-    // pois a Evolution API não tem filtro nativo de "não lidas"
+    const requestBody = { where, limit: limite };
+    console.log(`[BUSCAR_MSG] Request body:`, JSON.stringify(requestBody, null, 2));
     
-    const response = await client.post(`/chat/findMessages/${instanceName}`, {
-      where,
-      limit: limite
-    });
+    const endpoint = `/chat/findMessages/${instanceName}`;
+    console.log(`[BUSCAR_MSG] Endpoint: POST ${endpoint}`);
+    
+    const response = await client.post(endpoint, requestBody);
+    
+    console.log(`[BUSCAR_MSG] Status: ${response.status}`);
+    console.log(`[BUSCAR_MSG] Mensagens retornadas: ${Array.isArray(response.data) ? response.data.length : 'N/A'}`);
+    
+    if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+      console.log(`[BUSCAR_MSG] Primeira mensagem:`, JSON.stringify(response.data[0], null, 2).substring(0, 500));
+    } else {
+      console.log(`[BUSCAR_MSG] Resposta completa:`, JSON.stringify(response.data, null, 2));
+    }
+    
+    console.log(`[BUSCAR_MSG] ===== FIM DA BUSCA =====`);
     
     return {
       sucesso: true,
       mensagens: response.data || []
     };
   } catch (error) {
-    console.error('Erro ao buscar mensagens:', error.message);
+    console.error(`[BUSCAR_MSG] ===== ERRO NA BUSCA =====`);
+    console.error(`[BUSCAR_MSG] Erro:`, error.message);
+    console.error(`[BUSCAR_MSG] Status:`, error.response?.status);
+    console.error(`[BUSCAR_MSG] Resposta:`, JSON.stringify(error.response?.data, null, 2));
+    console.error(`[BUSCAR_MSG] ===== FIM DO ERRO =====`);
     return {
       sucesso: false,
       erro: error.response?.data?.message || error.message,
