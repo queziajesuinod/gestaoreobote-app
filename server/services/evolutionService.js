@@ -409,6 +409,8 @@ async function buscarChats(apiUrl, instanceName, apiKey) {
     const client = createEvolutionClient(apiUrl, apiKey);
     
     console.log(`[BUSCAR_CHATS] Buscando chats da instância: ${instanceName}`);
+    console.log(`[BUSCAR_CHATS] Headers configurados:`, JSON.stringify(client.defaults.headers, null, 2));
+    console.log(`[BUSCAR_CHATS] apiKey presente:`, !!client.defaults.headers.apiKey);
     
     // POST com body vazio ou com filtros opcionais
     const response = await client.post(`/chat/findChats/${instanceName}`, {});
