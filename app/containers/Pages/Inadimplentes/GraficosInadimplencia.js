@@ -23,7 +23,7 @@ import {
   Filler
 } from 'chart.js';
 import { Line, Bar, Pie, Doughnut } from 'react-chartjs-2';
-import inadimplenciaApi from '../../../services/inadimplenciaApi';
+import * as inadimplenciaApi from '../../../services/inadimplentesApi';
 
 // Registrar componentes do Chart.js
 ChartJS.register(

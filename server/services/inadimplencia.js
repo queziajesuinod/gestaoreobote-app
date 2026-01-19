@@ -448,17 +448,14 @@ class InadimplenciaService {
 
     return resultado;
   }
-}
-
-module.exports = new InadimplenciaService();
 
   /**
    * Obter dados para gráficos (evolução de inadimplência)
    */
   async obterDadosGraficos(meses = 6) {
-    const dataFinal = new Date();
-    const dataInicial = new Date();
-    dataInicial.setMonth(dataInicial.getMonth() - meses);
+      const dataFinal = new Date();
+      const dataInicial = new Date();
+      dataInicial.setMonth(dataInicial.getMonth() - meses);
 
     // Gráfico de evolução de inadimplência (linha)
     const evolucaoInadimplencia = [];

@@ -151,6 +151,16 @@ export const adicionarAnotacao = async (id, dados) => {
   return response.json();
 };
 
+export const forcarNotificacao = async (cobrancaId) => {
+  const response = await fetch(`${API_URL}/api/inadimplentes/cobrancas/${cobrancaId}/notificar`, {
+    method: 'POST',
+    headers: getHeaders()
+  });
+
+  if (!response.ok) throw new Error('Erro ao forçar notificação');
+  return response.json();
+};
+
 // ============================================================================
 // DASHBOARD E ESTATÍSTICAS
 // ============================================================================
@@ -389,6 +399,34 @@ export const obterDadosGraficos = async (meses = 6) => {
   });
   
   if (!response.ok) throw new Error('Erro ao obter dados para gráficos');
+  return response.json();
+};
+
+export const detectarManual = async () => {
+  const response = await fetch(`${API_URL}/api/inadimplentes/detectar`, {
+    method: 'POST',
+    headers: getHeaders()
+  });
+
+  if (!response.ok) throw new Error('Erro ao disparar detecção manual');
+  return response.json();
+};
+
+export const obterEstatisticas = async () => {
+  const response = await fetch(`${API_URL}/api/inadimplentes/cobrancas/estatisticas`, {
+    headers: getHeaders()
+  });
+
+  if (!response.ok) throw new Error('Erro ao obter estatísticas das cobranças');
+  return response.json();
+};
+
+export const obterEstatisticasWebhook = async () => {
+  const response = await fetch(`${API_URL}/api/inadimplentes/webhooks/estatisticas`, {
+    headers: getHeaders()
+  });
+
+  if (!response.ok) throw new Error('Erro ao obter estatísticas de webhooks');
   return response.json();
 };
 

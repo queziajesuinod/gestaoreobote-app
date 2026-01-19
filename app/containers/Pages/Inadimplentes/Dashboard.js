@@ -351,53 +351,6 @@ function Dashboard() {
           </Grid>
         </Grid>
 
-<<<<<<< HEAD
-=======
-        {/* Valores */}
-        <Grid container spacing={3} sx={{ mb: 3 }}>
-          {/* Valor Total */}
-          <Grid item xs={12} sm={6} md={4}>
-            <Card>
-              <CardContent>
-                <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                  Valor Total em Cobrança
-                </Typography>
-                <Typography variant="h5">
-                  {inadimplentesApi.formatarMoeda(dashboard?.valorTotal || 0)}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Valor Pago */}
-          <Grid item xs={12} sm={6} md={4}>
-            <Card>
-              <CardContent>
-                <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                  Valor Pago
-                </Typography>
-                <Typography variant="h5" color="success.main">
-                  {inadimplentesApi.formatarMoeda(dashboard?.valorPago || 0)}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Valor em Atraso */}
-          <Grid item xs={12} sm={6} md={4}>
-            <Card>
-              <CardContent>
-                <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                  Valor em Atraso
-                </Typography>
-                <Typography variant="h5" color="error.main">
-                  {inadimplentesApi.formatarMoeda(dashboard?.valorAtrasado || 0)}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-
         {/* Gráficos de Inadimplência */}
         {mostrarGraficos && (
           <Card sx={{ mb: 3 }}>
@@ -430,7 +383,7 @@ function Dashboard() {
           </Box>
         )}
 
->>>>>>> 6a94eb90029a046b5714e435eaee828935165391
+
         {/* Tabela de Cobranças Atrasadas */}
         <Card>
           <CardContent>
