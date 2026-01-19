@@ -323,3 +323,127 @@ module.exports = {
     }
   }
 };
+,
+
+  /**
+   * POST /api/inadimplentes/configuracoes/webhook/testar
+   * Testar webhook enviando payload de exemplo
+   */
+  async testar(req, res) {
+    try {
+      const configuracao = await ConfiguracaoWebhook.findOne({
+        where: { ativo: true }
+      });
+
+      if (!configuracao) {
+        return res.status(404).json({
+          sucesso: false,
+          mensagem: 'Nenhuma configuração ativa encontrada'
+        });
+      }
+
+      // Payload de teste
+      const payloadTeste = {
+        evento: 'webhook_teste',
+        timestamp: new Date().toISOString(),
+        mensagem: 'Este é um webhook de teste do sistema Reobote',
+        dados: {
+          teste: true,
+          configuracao: {
+            nome: configuracao.nome,
+            url: configuracao.url
+          }
+        }
+      };
+
+      // Gerar assinatura
+      const crypto = require('crypto');
+      const hmac = crypto.createHmac('sha256', configuracao.secretKey || '');
+      hmac.update(JSON.stringify(payloadTeste));
+      const assinatura = 'sha256=' + hmac.digest('hex');
+
+      // Enviar webhook
+      const axios = require('axios');
+      const inicio = Date.now();
+
+      try {
+        const response = await axios({
+          method: configuracao.metodo || 'POST',
+          url: configuracao.url,
+          data: payloadTeste,
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Webhook-Signature': assinatura,
+            'X-Webhook-Event': 'webhook_teste',
+            'X-Webhook-ID': crypto.randomUUID(),
+            'X-Webhook-Timestamp': new Date().toISOString()
+          },
+          timeout: configuracao.timeout || 30000
+        });
+
+        const tempoResposta = Date.now() - inicio;
+
+        // Registrar log
+        const { WebhookLog } = require('../models');
+        await WebhookLog.create({
+          cobrancaMensalId: null,
+          tipo: 'teste',
+          url: configuracao.url,
+          payload: payloadTeste,
+          statusCode: response.status,
+          resposta: response.data,
+          tentativa: 1,
+          sucesso: true,
+          tempoResposta
+        });
+
+        return res.status(200).json({
+          sucesso: true,
+          mensagem: 'Webhook de teste enviado com sucesso',
+          dados: {
+            statusCode: response.status,
+            tempoResposta,
+            resposta: response.data
+          }
+        });
+
+      } catch (erroEnvio) {
+        const tempoResposta = Date.now() - inicio;
+
+        // Registrar log de erro
+        const { WebhookLog } = require('../models');
+        await WebhookLog.create({
+          cobrancaMensalId: null,
+          tipo: 'teste',
+          url: configuracao.url,
+          payload: payloadTeste,
+          statusCode: erroEnvio.response?.status,
+          resposta: erroEnvio.response?.data,
+          erro: erroEnvio.message,
+          tentativa: 1,
+          sucesso: false,
+          tempoResposta
+        });
+
+        return res.status(200).json({
+          sucesso: false,
+          mensagem: 'Erro ao enviar webhook de teste',
+          erro: erroEnvio.message,
+          dados: {
+            statusCode: erroEnvio.response?.status,
+            tempoResposta,
+            resposta: erroEnvio.response?.data
+          }
+        });
+      }
+
+    } catch (erro) {
+      console.error('[ConfiguracaoWebhook] Erro ao testar:', erro);
+      return res.status(500).json({
+        sucesso: false,
+        mensagem: 'Erro ao testar webhook',
+        erro: erro.message
+      });
+    }
+  }
+};

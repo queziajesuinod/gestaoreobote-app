@@ -184,9 +184,22 @@ function ConfiguracoesWebhook() {
 
     try {
       setTestando(true);
-      // Aqui você pode criar uma função específica na API para testar o webhook
-      // Por enquanto, vamos simular
-      mostrarSnackbar('Webhook de teste enviado! Verifique os logs abaixo.', 'info');
+      const response = await fetch('/api/inadimplentes/configuracoes/webhook/testar', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      const data = await response.json();
+      
+      if (data.sucesso) {
+        mostrarSnackbar('Webhook de teste enviado com sucesso! Verifique os logs abaixo.', 'success');
+      } else {
+        mostrarSnackbar(`Erro ao enviar webhook: ${data.erro || data.mensagem}`, 'error');
+      }
+      
+      await carregarLogs();
       
       // Recarregar logs após 2 segundos
       setTimeout(() => {

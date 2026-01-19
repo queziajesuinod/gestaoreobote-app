@@ -237,6 +237,12 @@ router.post('/configuracoes/webhook/:id/ativar', configuracaoWebhookController.a
  */
 router.post('/configuracoes/webhook/:id/desativar', configuracaoWebhookController.desativar);
 
+/**
+ * POST /api/inadimplentes/configuracoes/webhook/testar
+ * Testar webhook enviando payload de exemplo
+ */
+router.post('/configuracoes/webhook/testar', configuracaoWebhookController.testar);
+
 // ----------------------------------------------------------------------------
 // RELATÓRIOS E EXPORTAÇÕES
 // ----------------------------------------------------------------------------
