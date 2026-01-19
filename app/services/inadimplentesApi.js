@@ -141,7 +141,7 @@ export const marcarComoPago = async (id, dados) => {
 };
 
 export const adicionarAnotacao = async (id, dados) => {
-  const response = await fetch(`${API_URL}/api/inadimplentes/cobrancas/${id}/anotacao`, {
+  const response = await fetch(`${API_URL}/api/inadimplentes/cobrancas/${id}/notificacoes`, {
     method: 'POST',
     headers: getHeaders(),
     body: JSON.stringify(dados)
@@ -278,6 +278,11 @@ export const formatarData = (data) => {
 export const formatarDataHora = (data) => {
   if (!data) return '-';
   return new Date(data).toLocaleString('pt-BR');
+};
+
+export const formatarMes = (data) => {
+  if (!data) return '-';
+  return new Date(data).toLocaleDateString('pt-BR', { month: 'long' });
 };
 
 export const getStatusColor = (status) => {
@@ -498,6 +503,7 @@ export default {
   gerarRelatorioInadimplenciaPDF,
   exportarProcessosExcel,
   exportarCobrancasAtrasadasExcel,
+  formatarMes,
   obterDadosGraficos,
   
   // Utilitários

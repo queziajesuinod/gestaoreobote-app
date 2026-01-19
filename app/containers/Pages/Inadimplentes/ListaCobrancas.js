@@ -303,9 +303,9 @@ function ListaCobrancas() {
                           {cobranca.processoCobranca?.cota?.cliente?.telefone || '-'}
                         </Typography>
                       </TableCell>
-                      <TableCell>
-                        {inadimplentesApi.formatarData(cobranca.mesReferencia)}
-                      </TableCell>
+                        <TableCell>
+                          {inadimplentesApi.formatarMes(cobranca.mesReferencia)}
+                        </TableCell>
                       <TableCell>
                         {inadimplentesApi.formatarData(cobranca.dataVencimento)}
                       </TableCell>

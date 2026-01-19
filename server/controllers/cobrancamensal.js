@@ -200,6 +200,31 @@ module.exports = {
   },
 
   /**
+   * GET /api/inadimplentes/cobrancas/:id/notificacoes
+   * Listar notificações da cobrança
+   */
+  async listarNotificacoes(req, res) {
+    try {
+      const { id } = req.params;
+
+      const notificacoes = await inadimplenciaService.listarNotificacoes(id);
+
+      return res.status(200).json({
+        sucesso: true,
+        mensagem: 'Notificações listadas com sucesso',
+        dados: notificacoes
+      });
+
+    } catch (erro) {
+      console.error('[CobrancaMensal] Erro ao listar notificações:', erro);
+      return res.status(500).json({
+        sucesso: false,
+        mensagem: 'Erro ao listar notificações'
+      });
+    }
+  },
+
+  /**
    * GET /api/inadimplentes/cobrancas/estatisticas
    * Obter estatísticas de cobranças
    */

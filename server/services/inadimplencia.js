@@ -9,11 +9,31 @@ class InadimplenciaService {
   async detectarInadimplenciaAutomatico() {
     console.log('[Inadimplência] Iniciando detecção automática...');
 
+    const cobrancasAtrasadas = await this.buscarCobrancasAtrasadasParaNotificar();
+
+    console.log(`[Inadimplência] Encontradas ${cobrancasAtrasadas.length} cobranças atrasadas`);
+
+    const resultado = await this.processarCobrancasAtrasadas(
+      cobrancasAtrasadas,
+      { respeitarNotificacaoHoje: true }
+    );
+
+    console.log('[Inadimplência] Detecção concluída:', {
+      cobrancasVerificadas: cobrancasAtrasadas.length,
+      ...resultado
+    });
+
+    return {
+      cobrancasVerificadas: cobrancasAtrasadas.length,
+      ...resultado
+    };
+  }
+
+  async buscarCobrancasAtrasadasParaNotificar() {
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
 
-    // Buscar cobranças pendentes ou atrasadas com vencimento passado
-    const cobrancasAtrasadas = await CobrancaMensal.findAll({
+    return CobrancaMensal.findAll({
       where: {
         status: {
           [Op.in]: ['pendente', 'atrasado']
@@ -26,7 +46,7 @@ class InadimplenciaService {
         {
           association: 'processoCobranca',
           where: {
-            status: 'ativo' // Apenas processos ativos
+            status: 'ativo'
           },
           include: [
             {
@@ -40,56 +60,64 @@ class InadimplenciaService {
         }
       ]
     });
+  }
 
-    console.log(`[Inadimplência] Encontradas ${cobrancasAtrasadas.length} cobranças atrasadas`);
-
+  async processarCobrancasAtrasadas(cobrancas, { respeitarNotificacaoHoje = true } = {}) {
     let statusAtualizados = 0;
     let webhooksEnviados = 0;
     let webhooksFalharam = 0;
 
-    for (const cobranca of cobrancasAtrasadas) {
+    for (const cobranca of cobrancas) {
       try {
-        // 1. Atualizar status para "atrasado" se ainda estiver "pendente"
         if (cobranca.status === 'pendente') {
           await cobranca.update({ status: 'atrasado' });
           statusAtualizados++;
           console.log(`[Inadimplência] Cobrança ${cobranca.id} marcada como atrasada`);
         }
 
-        // 2. Verificar se já foi notificado hoje
-        const notificadoHoje = await this.verificarNotificacaoHoje(cobranca.id);
-        
-        if (!notificadoHoje) {
-          // 3. Disparar webhook
-          const resultado = await this.dispararWebhookInadimplencia(cobranca);
-          
-          if (resultado.sucesso) {
-            webhooksEnviados++;
-          } else {
-            webhooksFalharam++;
+        if (respeitarNotificacaoHoje) {
+          const notificadoHoje = await this.verificarNotificacaoHoje(cobranca.id);
+          if (notificadoHoje) {
+            console.log(`[Inadimplência] Cobrança ${cobranca.id} já foi notificada hoje`);
+            continue;
           }
-        } else {
-          console.log(`[Inadimplência] Cobrança ${cobranca.id} já foi notificada hoje`);
         }
 
+        const resultado = await this.dispararWebhookInadimplencia(cobranca);
+        if (resultado.sucesso) {
+          webhooksEnviados++;
+        } else {
+          webhooksFalharam++;
+        }
       } catch (erro) {
         console.error(`[Inadimplência] Erro ao processar cobrança ${cobranca.id}:`, erro.message);
         webhooksFalharam++;
       }
     }
 
-    console.log('[Inadimplência] Detecção concluída:', {
+    return { statusAtualizados, webhooksEnviados, webhooksFalharam };
+  }
+
+  async notificarManualmente() {
+    console.log('[Inadimplência] Iniciando notificação manual...');
+
+    const cobrancasAtrasadas = await this.buscarCobrancasAtrasadasParaNotificar();
+
+    console.log(`[Inadimplência] Encontradas ${cobrancasAtrasadas.length} cobranças para notificar manualmente`);
+
+    const resultado = await this.processarCobrancasAtrasadas(
+      cobrancasAtrasadas,
+      { respeitarNotificacaoHoje: false }
+    );
+
+    console.log('[Inadimplência] Notificação manual concluída:', {
       cobrancasVerificadas: cobrancasAtrasadas.length,
-      statusAtualizados,
-      webhooksEnviados,
-      webhooksFalharam
+      ...resultado
     });
 
     return {
       cobrancasVerificadas: cobrancasAtrasadas.length,
-      statusAtualizados,
-      webhooksEnviados,
-      webhooksFalharam
+      ...resultado
     };
   }
 
@@ -308,7 +336,7 @@ class InadimplenciaService {
 
     // Validar tipo e canal
     const tiposValidos = ['manual'];
-    const canaisValidos = ['ligacao', 'whatsapp_manual', 'email', 'observacao'];
+    const canaisValidos = ['ligacao', 'whatsapp_manual', 'email', 'observacao', 'sistema'];
 
     if (!tiposValidos.includes(tipo)) {
       throw new Error('Tipo de notificação inválido');
@@ -331,6 +359,21 @@ class InadimplenciaService {
     console.log(`[Inadimplência] Anotação adicionada à cobrança ${cobrancaId}`);
 
     return notificacao;
+  }
+
+  async listarNotificacoes(cobrancaId) {
+    const notificacoes = await NotificacaoCobranca.findAll({
+      where: { cobrancaMensalId: cobrancaId },
+      include: [
+        {
+          association: 'usuario',
+          attributes: ['id', 'name', 'email']
+        }
+      ],
+      order: [['createdAt', 'DESC']]
+    });
+
+    return notificacoes;
   }
 
   /**

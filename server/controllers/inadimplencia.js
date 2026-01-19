@@ -84,7 +84,7 @@ module.exports = {
    */
   async detectarManual(req, res) {
     try {
-      const resultado = await inadimplenciaService.detectarInadimplenciaAutomatico();
+      const resultado = await inadimplenciaService.notificarManualmente();
 
       return res.status(200).json({
         sucesso: true,
@@ -216,7 +216,7 @@ module.exports = {
       console.log('[Inadimplencia] Iniciando notificação manual...');
       
       const inadimplenciaService = require('../services/inadimplencia');
-      const resultado = await inadimplenciaService.detectarInadimplenciaAutomatico();
+      const resultado = await inadimplenciaService.notificarManualmente();
       
       console.log('[Inadimplencia] Notificação manual concluída:', resultado);
       

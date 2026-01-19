@@ -459,7 +459,7 @@ function Dashboard() {
                           </Typography>
                         </TableCell>
                         <TableCell>
-                          {inadimplentesApi.formatarData(cobranca.mesReferencia)}
+                          {inadimplentesApi.formatarMes(cobranca.mesReferencia)}
                         </TableCell>
                         <TableCell>
                           {inadimplentesApi.formatarData(cobranca.dataVencimento)}

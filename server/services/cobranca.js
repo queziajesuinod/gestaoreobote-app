@@ -3,6 +3,28 @@ const { Op } = require('sequelize');
 
 class CobrancaService {
   /**
+   * Extrair ano e mês do primeiro mês pago (formato YYYY-MM ou YYYY-MM-DD)
+   */
+  extrairAnoMes(valor) {
+    if (!valor) {
+      throw new Error('Primeiro mês pago inválido');
+    }
+
+    const partes = valor.split('-').map((item) => Number(item));
+    if (partes.length < 2) {
+      throw new Error('Primeiro mês pago deve conter ano e mês');
+    }
+
+    const ano = partes[0];
+    const mes = partes[1];
+
+    if (!Number.isInteger(ano) || !Number.isInteger(mes) || mes < 1 || mes > 12) {
+      throw new Error('Ano ou mês do histórico retroativo inválidos');
+    }
+
+    return { ano, mes };
+  }
+  /**
    * Criar processo de cobrança com histórico retroativo opcional
    */
   async criarProcessoCobranca(dados) {
@@ -66,17 +88,19 @@ class CobrancaService {
     console.log(`[Cobrança] Importando ${quantidadeMeses} meses de histórico retroativo...`);
 
     const cobrancas = [];
-    const dataInicial = new Date(primeiroMesPago);
+
+    const { ano: anoInicial, mes: mesInicial } = this.extrairAnoMes(primeiroMesPago);
 
     for (let i = 0; i < quantidadeMeses; i++) {
-      const mesReferencia = new Date(dataInicial);
-      mesReferencia.setMonth(dataInicial.getMonth() + i);
-      
+      const mesCorrigido = mesInicial - 1 + i;
+      const ano = anoInicial + Math.floor(mesCorrigido / 12);
+      const mes = mesCorrigido % 12;
+
       // Primeiro dia do mês
-      const primeiroDiaMes = new Date(mesReferencia.getFullYear(), mesReferencia.getMonth(), 1);
-      
+      const primeiroDiaMes = new Date(Date.UTC(ano, mes, 1));
+
       // Data de vencimento
-      const dataVencimento = new Date(mesReferencia.getFullYear(), mesReferencia.getMonth(), diaVencimento);
+      const dataVencimento = new Date(Date.UTC(ano, mes, diaVencimento));
 
       cobrancas.push({
         processoCobrancaId: processoId,

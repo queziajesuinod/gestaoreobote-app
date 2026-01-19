@@ -1,6 +1,51 @@
 const webhookService = require('../services/webhook');
 const { WebhookLog, ConfiguracaoWebhook } = require('../models');
 
+const toJsonString = (value) => {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string') return value;
+  try {
+    return JSON.stringify(value);
+  } catch (err) {
+    return String(value);
+  }
+};
+
+const mapLogParaFront = (log) => {
+  const json = log.toJSON();
+
+  const cobrancaMensal = json.cobrancaMensal;
+  const processoCobranca = cobrancaMensal?.processoCobranca;
+  const cota = processoCobranca?.cota;
+  const cliente = cota?.cliente;
+  const consultor = cota?.consultor;
+
+  const processoComAlias = processoCobranca
+    ? {
+        ...processoCobranca,
+        Cota: {
+          ...cota,
+          Cliente: cliente,
+          Consultor: consultor
+        }
+      }
+    : null;
+
+  const cobrancaComAlias = cobrancaMensal
+    ? {
+        ...cobrancaMensal,
+        ProcessoCobranca: processoComAlias
+      }
+    : null;
+
+  return {
+    ...json,
+    tentativas: json.tentativa,
+    respostaServidor: toJsonString(json.resposta) || json.erro,
+    CobrancaMensal: cobrancaComAlias
+  };
+};
+
 module.exports = {
   /**
    * POST /api/inadimplentes/webhook/callback
@@ -62,7 +107,8 @@ module.exports = {
                   {
                     association: 'cota',
                     include: [
-                      { association: 'cliente' }
+                      { association: 'cliente' },
+                      { association: 'consultor' }
                     ]
                   }
                 ]
@@ -77,7 +123,7 @@ module.exports = {
       return res.status(200).json({
         sucesso: true,
         mensagem: 'Logs listados com sucesso',
-        dados: logs
+        dados: logs.map(mapLogParaFront)
       });
 
     } catch (erro) {
@@ -129,7 +175,7 @@ module.exports = {
       return res.status(200).json({
         sucesso: true,
         mensagem: 'Log encontrado',
-        dados: log
+        dados: mapLogParaFront(log)
       });
 
     } catch (erro) {

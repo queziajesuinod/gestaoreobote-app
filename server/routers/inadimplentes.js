@@ -109,6 +109,12 @@ router.get('/cobrancas', cobrancaMensalController.listar);
 router.get('/cobrancas/:id', cobrancaMensalController.buscarPorId);
 
 /**
+ * GET /api/inadimplentes/cobrancas/:id/notificacoes
+ * Listar notificações da cobrança
+ */
+router.get('/cobrancas/:id/notificacoes', cobrancaMensalController.listarNotificacoes);
+
+/**
  * POST /api/inadimplentes/cobrancas/:id/pagar
  * Marcar cobrança como paga
  * Body: { dataPagamento, observacao }

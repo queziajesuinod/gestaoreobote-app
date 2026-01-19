@@ -216,7 +216,7 @@ function DetalhesProcesso() {
     try {
       await inadimplentesApi.adicionarAnotacao(dialogAnotacao.cobranca.id, {
         tipo: 'manual',
-        canal: 'sistema',
+        canal: 'observacao',
         mensagem: dialogAnotacao.mensagem
       });
 
@@ -461,6 +461,7 @@ function DetalhesProcesso() {
                   <TableCell>Mês</TableCell>
                   <TableCell>Vencimento</TableCell>
                   <TableCell>Status</TableCell>
+                  <TableCell>Observação</TableCell>
                   <TableCell>Atraso</TableCell>
                   <TableCell align="right">Ações</TableCell>
                   </TableRow>
@@ -479,7 +480,7 @@ function DetalhesProcesso() {
                       <React.Fragment key={cobranca.id}>
                         <TableRow>
                           <TableCell>
-                            {inadimplentesApi.formatarData(cobranca.mesReferencia)}
+                            {inadimplentesApi.formatarMes(cobranca.mesReferencia)}
                             {cobranca.historicoRetroativo && (
                               <Typography variant="caption" display="block" color="textSecondary">
                                 (Retroativo)
@@ -500,6 +501,13 @@ function DetalhesProcesso() {
                                 <ScheduleIcon />
                               }
                             />
+                          </TableCell>
+                          <TableCell>
+                            {cobranca.observacao ? (
+                              <Typography variant="caption" color="textSecondary" display="block">
+                                {cobranca.observacao}
+                              </Typography>
+                            ) : '-'}
                           </TableCell>
                           <TableCell>
                             {cobranca.diasAtraso > 0 && (
@@ -575,9 +583,9 @@ function DetalhesProcesso() {
         <DialogContent>
           <DialogContentText sx={{ mb: 2 }}>
             Confirme o pagamento da cobrança referente a{' '}
-            <strong>
-              {dialogPago.cobranca && inadimplentesApi.formatarData(dialogPago.cobranca.mesReferencia)}
-            </strong>
+              <strong>
+                {dialogPago.cobranca && inadimplentesApi.formatarMes(dialogPago.cobranca.mesReferencia)}
+              </strong>
           </DialogContentText>
 
           <TextField
@@ -614,9 +622,9 @@ function DetalhesProcesso() {
         <DialogContent>
           <DialogContentText sx={{ mb: 2 }}>
             Adicione uma anotação sobre a cobrança de{' '}
-            <strong>
-              {dialogAnotacao.cobranca && inadimplentesApi.formatarData(dialogAnotacao.cobranca.mesReferencia)}
-            </strong>
+              <strong>
+                {dialogAnotacao.cobranca && inadimplentesApi.formatarMes(dialogAnotacao.cobranca.mesReferencia)}
+              </strong>
           </DialogContentText>
 
           <TextField
@@ -720,7 +728,7 @@ function NotificacoesCobranca({ cobrancaId }) {
               color={notif.tipo === 'automatico' ? 'primary' : 'secondary'}
             />
             <Typography variant="caption" color="textSecondary">
-              {inadimplentesApi.formatarDataHora(notif.createdAt)}
+              Data/Hora: {inadimplentesApi.formatarDataHora(notif.createdAt)}
             </Typography>
           </Box>
 

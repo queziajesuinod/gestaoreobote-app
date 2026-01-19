@@ -1,5 +1,11 @@
 const cobrancaService = require('../services/cobranca');
-const { ProcessoCobranca, Cota, Cliente } = require('../models');
+const {
+  ProcessoCobranca,
+  Cota,
+  Cliente,
+  CobrancaMensal,
+  NotificacaoCobranca
+} = require('../models');
 
 module.exports = {
   /**
@@ -223,20 +229,32 @@ module.exports = {
         });
       }
 
-      // Verificar se há cobranças associadas
-      const { CobrancaMensal } = require('../models');
-      const totalCobrancas = await CobrancaMensal.count({
-        where: { processoCobrancaId: id }
-      });
+      const transaction = await ProcessoCobranca.sequelize.transaction();
 
-      if (totalCobrancas > 0) {
-        return res.status(400).json({
-          sucesso: false,
-          mensagem: `Não é possível excluir. Existem ${totalCobrancas} cobranças associadas a este processo.`
+      try {
+        const cobrancas = await CobrancaMensal.findAll({
+          where: { processoCobrancaId: id },
+          transaction
         });
-      }
 
-      await processo.destroy();
+        if (cobrancas.length > 0) {
+          const cobrancaIds = cobrancas.map((c) => c.id);
+          await NotificacaoCobranca.destroy({
+            where: { cobrancaMensalId: cobrancaIds },
+            transaction
+          });
+          await CobrancaMensal.destroy({
+            where: { id: cobrancaIds },
+            transaction
+          });
+        }
+
+        await processo.destroy({ transaction });
+        await transaction.commit();
+      } catch (erroInterno) {
+        await transaction.rollback();
+        throw erroInterno;
+      }
 
       return res.status(200).json({
         sucesso: true,

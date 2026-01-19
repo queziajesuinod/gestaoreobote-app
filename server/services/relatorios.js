@@ -1,33 +1,36 @@
-// server/services/relatorios.js
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
 const { Op } = require('sequelize');
-const { ProcessoCobranca, Cobranca, NotificacaoInadimplencia } = require('../models');
-const { Cota, Cliente, User } = require('../models');
+const {
+  ProcessoCobranca,
+  CobrancaMensal
+} = require('../models');
+
+const formatarValor = (valor) => `R$ ${valor.toFixed(2)}`;
 
 /**
- * Service para geração de relatórios em PDF e Excel
+ * Service para geracao de relatórios em PDF e Excel
  */
 class RelatoriosService {
-  /**
-   * Gerar relatório PDF de um processo específico
-   */
   async gerarRelatorioPDF(processoId) {
     const processo = await ProcessoCobranca.findByPk(processoId, {
       include: [
         {
-          model: Cota,
+          association: 'cota',
           include: [
-            { model: Cliente },
-            { model: User, as: 'Consultor' }
+            { association: 'cliente' },
+            { association: 'consultor' }
           ]
         },
         {
-          model: Cobranca,
+          association: 'cobrancas',
           include: [
-            { model: NotificacaoInadimplencia }
+            {
+              association: 'notificacoes',
+              order: [['createdAt', 'DESC']]
+            }
           ],
-          order: [['mes_referencia', 'DESC']]
+          order: [['mesReferencia', 'DESC']]
         }
       ]
     });
@@ -36,6 +39,16 @@ class RelatoriosService {
       throw new Error('Processo não encontrado');
     }
 
+    const valorMensal = parseFloat(processo.cota?.valor) || 0;
+    const cobrancas = processo.cobrancas || [];
+    const totalCobrancas = cobrancas.length;
+    const cobrancasPagas = cobrancas.filter(c => c.status === 'pago').length;
+    const cobrancasAtrasadas = cobrancas.filter(c => c.status === 'atrasado').length;
+    const cobrancasPendentes = cobrancas.filter(c => c.status === 'pendente').length;
+    const valorTotal = totalCobrancas * valorMensal;
+    const valorPago = cobrancasPagas * valorMensal;
+    const valorPendente = (cobrancasPendentes + cobrancasAtrasadas) * valorMensal;
+
     return new Promise((resolve, reject) => {
       try {
         const doc = new PDFDocument({ margin: 50 });
@@ -45,103 +58,87 @@ class RelatoriosService {
         doc.on('end', () => resolve(Buffer.concat(chunks)));
         doc.on('error', reject);
 
-        // Cabeçalho
-        doc.fontSize(20).text('Relatório de Processo de Cobrança', { align: 'center' });
+        doc.fontSize(20).text('Relatorio de Processo de Cobranca', { align: 'center' });
         doc.moveDown();
 
-        // Informações do Processo
-        doc.fontSize(14).text('Informações do Processo', { underline: true });
+        doc.fontSize(14).text('Informacoes do Processo', { underline: true });
         doc.moveDown(0.5);
         doc.fontSize(10);
         doc.text(`ID do Processo: ${processo.id}`);
         doc.text(`Status: ${processo.status.toUpperCase()}`);
-        doc.text(`Valor Mensal: R$ ${processo.valor.toFixed(2)}`);
-        doc.text(`Dia de Vencimento: ${processo.dia_vencimento}`);
-        doc.text(`Data de Início: ${new Date(processo.data_inicio).toLocaleDateString('pt-BR')}`);
+        doc.text(`Valor Mensal: R$ ${valorMensal.toFixed(2)}`);
+        doc.text(`Dia de Vencimento: ${processo.diaVencimento}`);
+        doc.text(`Data de Inicio: ${new Date(processo.dataInicioCobranca).toLocaleDateString('pt-BR')}`);
         doc.moveDown();
 
-        // Informações da Cota
-        doc.fontSize(14).text('Informações da Cota', { underline: true });
+        doc.fontSize(14).text('Informacoes da Cota', { underline: true });
         doc.moveDown(0.5);
         doc.fontSize(10);
-        doc.text(`Número da Cota: ${processo.Cota.numero}`);
-        doc.text(`Grupo: ${processo.Cota.grupo || 'N/A'}`);
+        doc.text(`Numero da Cota: ${processo.cota?.cota || '-'}`);
+        doc.text(`Grupo: ${processo.cota?.grupo || 'N/A'}`);
         doc.moveDown();
 
-        // Informações do Cliente
-        doc.fontSize(14).text('Informações do Cliente', { underline: true });
+        doc.fontSize(14).text('Informacoes do Cliente', { underline: true });
         doc.moveDown(0.5);
         doc.fontSize(10);
-        doc.text(`Nome: ${processo.Cota.Cliente.nome}`);
-        doc.text(`Telefone: ${processo.Cota.Cliente.telefone || 'N/A'}`);
-        doc.text(`Email: ${processo.Cota.Cliente.email || 'N/A'}`);
+        doc.text(`Nome: ${processo.cota?.cliente?.nome || '-'}`);
+        doc.text(`Telefone: ${processo.cota?.cliente?.telefone || 'N/A'}`);
+        doc.text(`Email: ${processo.cota?.cliente?.email || 'N/A'}`);
         doc.moveDown();
 
-        // Informações do Consultor
-        if (processo.Cota.Consultor) {
-          doc.fontSize(14).text('Informações do Consultor', { underline: true });
+        if (processo.cota?.consultor) {
+          doc.fontSize(14).text('Informacoes do Consultor', { underline: true });
           doc.moveDown(0.5);
           doc.fontSize(10);
-          doc.text(`Nome: ${processo.Cota.Consultor.nome}`);
-          doc.text(`Telefone: ${processo.Cota.Consultor.telefone || 'N/A'}`);
+          doc.text(`Nome: ${processo.cota.consultor.nome}`);
+          doc.text(`Telefone: ${processo.cota.consultor.telefone || 'N/A'}`);
           doc.moveDown();
         }
 
-        // Estatísticas
-        const totalCobrancas = processo.Cobrancas.length;
-        const cobrancasPagas = processo.Cobrancas.filter(c => c.status === 'pago').length;
-        const cobrancasAtrasadas = processo.Cobrancas.filter(c => c.status === 'atrasado').length;
-        const cobrancasPendentes = processo.Cobrancas.filter(c => c.status === 'pendente').length;
-        const valorTotal = totalCobrancas * processo.valor;
-        const valorPago = cobrancasPagas * processo.valor;
-        const valorPendente = (cobrancasPendentes + cobrancasAtrasadas) * processo.valor;
-
-        doc.fontSize(14).text('Estatísticas', { underline: true });
+        doc.fontSize(14).text('Estatisticas', { underline: true });
         doc.moveDown(0.5);
         doc.fontSize(10);
-        doc.text(`Total de Cobranças: ${totalCobrancas}`);
-        doc.text(`Cobranças Pagas: ${cobrancasPagas}`);
-        doc.text(`Cobranças Atrasadas: ${cobrancasAtrasadas}`);
-        doc.text(`Cobranças Pendentes: ${cobrancasPendentes}`);
+        doc.text(`Total de Cobrancas: ${totalCobrancas}`);
+        doc.text(`Cobrancas Pagas: ${cobrancasPagas}`);
+        doc.text(`Cobrancas Atrasadas: ${cobrancasAtrasadas}`);
+        doc.text(`Cobrancas Pendentes: ${cobrancasPendentes}`);
         doc.text(`Valor Total: R$ ${valorTotal.toFixed(2)}`);
         doc.text(`Valor Pago: R$ ${valorPago.toFixed(2)}`);
         doc.text(`Valor Pendente: R$ ${valorPendente.toFixed(2)}`);
         doc.moveDown();
 
-        // Histórico de Cobranças
         doc.addPage();
-        doc.fontSize(14).text('Histórico de Cobranças', { underline: true });
+        doc.fontSize(14).text('Historico de Cobrancas', { underline: true });
         doc.moveDown();
 
-        processo.Cobrancas.forEach((cobranca, index) => {
+        cobrancas.forEach((cobranca, index) => {
           if (index > 0 && index % 10 === 0) {
             doc.addPage();
           }
 
           doc.fontSize(10);
-          doc.text(`Mês: ${new Date(cobranca.mes_referencia).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`);
-          doc.text(`Vencimento: ${new Date(cobranca.data_vencimento).toLocaleDateString('pt-BR')}`);
-          doc.text(`Valor: R$ ${cobranca.valor.toFixed(2)}`);
+          doc.text(`Mes: ${new Date(cobranca.mesReferencia).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`);
+          doc.text(`Vencimento: ${new Date(cobranca.dataVencimento).toLocaleDateString('pt-BR')}`);
+          doc.text(`Valor: R$ ${parseFloat(cobranca.valor).toFixed(2)}`);
           doc.text(`Status: ${cobranca.status.toUpperCase()}`);
-          
-          if (cobranca.pago_em) {
-            doc.text(`Pago em: ${new Date(cobranca.pago_em).toLocaleDateString('pt-BR')}`);
+
+          if (cobranca.dataPagamento) {
+            doc.text(`Pago em: ${new Date(cobranca.dataPagamento).toLocaleDateString('pt-BR')}`);
           }
 
-          if (cobranca.NotificacaoInadimplencias && cobranca.NotificacaoInadimplencias.length > 0) {
-            doc.text(`Notificações: ${cobranca.NotificacaoInadimplencias.length}`);
+          if (cobranca.notificacoes?.length > 0) {
+            doc.text(`Notificacoes: ${cobranca.notificacoes.length}`);
           }
 
           doc.moveDown(0.5);
         });
 
-        // Rodapé
         const pages = doc.bufferedPageRange();
         for (let i = 0; i < pages.count; i++) {
           doc.switchToPage(i);
           doc.fontSize(8);
           doc.text(
-            `Página ${i + 1} de ${pages.count} - Gerado em ${new Date().toLocaleString('pt-BR')}`,
+            `Pagina ${i + 1} de ${pages.count} - Gerado em ${new Date().toLocaleString('pt-BR')}`,
             50,
             doc.page.height - 50,
             { align: 'center' }
@@ -155,37 +152,31 @@ class RelatoriosService {
     });
   }
 
-  /**
-   * Gerar relatório consolidado de inadimplência em PDF
-   */
   async gerarRelatorioInadimplenciaPDF(filtros = {}) {
-    const whereClause = {};
-    
+    const whereClause = { status: 'atrasado' };
     if (filtros.dataInicio && filtros.dataFim) {
-      whereClause.data_vencimento = {
+      whereClause.dataVencimento = {
         [Op.between]: [filtros.dataInicio, filtros.dataFim]
       };
     }
 
-    whereClause.status = 'atrasado';
-
-    const cobrancasAtrasadas = await Cobranca.findAll({
+    const cobrancasAtrasadas = await CobrancaMensal.findAll({
       where: whereClause,
       include: [
         {
-          model: ProcessoCobranca,
+          association: 'processoCobranca',
           include: [
             {
-              model: Cota,
+              association: 'cota',
               include: [
-                { model: Cliente },
-                { model: User, as: 'Consultor' }
+                { association: 'cliente' },
+                { association: 'consultor' }
               ]
             }
           ]
         }
       ],
-      order: [['data_vencimento', 'ASC']]
+      order: [['dataVencimento', 'ASC']]
     });
 
     return new Promise((resolve, reject) => {
@@ -197,25 +188,22 @@ class RelatoriosService {
         doc.on('end', () => resolve(Buffer.concat(chunks)));
         doc.on('error', reject);
 
-        // Cabeçalho
-        doc.fontSize(20).text('Relatório de Inadimplência', { align: 'center' });
+        doc.fontSize(20).text('Relatorio de Inadimplencia', { align: 'center' });
         doc.moveDown();
         doc.fontSize(10).text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, { align: 'center' });
         doc.moveDown(2);
 
-        // Resumo
         const totalCobrancas = cobrancasAtrasadas.length;
         const valorTotal = cobrancasAtrasadas.reduce((sum, c) => sum + parseFloat(c.valor), 0);
 
         doc.fontSize(14).text('Resumo', { underline: true });
         doc.moveDown(0.5);
         doc.fontSize(10);
-        doc.text(`Total de Cobranças Atrasadas: ${totalCobrancas}`);
+        doc.text(`Total de Cobrancas Atrasadas: ${totalCobrancas}`);
         doc.text(`Valor Total em Atraso: R$ ${valorTotal.toFixed(2)}`);
         doc.moveDown();
 
-        // Lista de Cobranças Atrasadas
-        doc.fontSize(14).text('Cobranças Atrasadas', { underline: true });
+        doc.fontSize(14).text('Cobranças atrasadas', { underline: true });
         doc.moveDown();
 
         cobrancasAtrasadas.forEach((cobranca, index) => {
@@ -223,34 +211,27 @@ class RelatoriosService {
             doc.addPage();
           }
 
-          const diasAtraso = Math.floor((new Date() - new Date(cobranca.data_vencimento)) / (1000 * 60 * 60 * 24));
-
+          const diasAtraso = Math.floor((new Date() - new Date(cobranca.dataVencimento)) / (1000 * 60 * 60 * 24));
           doc.fontSize(10);
-          doc.text(`Cliente: ${cobranca.ProcessoCobranca.Cota.Cliente.nome}`);
-          doc.text(`Cota: ${cobranca.ProcessoCobranca.Cota.numero}`);
-          doc.text(`Mês: ${new Date(cobranca.mes_referencia).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`);
-          doc.text(`Vencimento: ${new Date(cobranca.data_vencimento).toLocaleDateString('pt-BR')}`);
+          doc.text(`Cliente: ${cobranca.processoCobranca?.cota?.cliente?.nome || '-'}`);
+          doc.text(`Cota: ${cobranca.processoCobranca?.cota?.cota || '-'}`);
+          doc.text(`Mes: ${new Date(cobranca.mesReferencia).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`);
+          doc.text(`Vencimento: ${new Date(cobranca.dataVencimento).toLocaleDateString('pt-BR')}`);
           doc.text(`Dias em Atraso: ${diasAtraso}`);
-          doc.text(`Valor: R$ ${cobranca.valor.toFixed(2)}`);
-          
-          if (cobranca.ProcessoCobranca.Cota.Consultor) {
-            doc.text(`Consultor: ${cobranca.ProcessoCobranca.Cota.Consultor.nome}`);
+          doc.text(`Valor: R$ ${parseFloat(cobranca.valor).toFixed(2)}`);
+
+          if (cobranca.processoCobranca?.cota?.consultor) {
+            doc.text(`Consultor: ${cobranca.processoCobranca.cota.consultor.nome}`);
           }
 
           doc.moveDown(0.5);
         });
 
-        // Rodapé
         const pages = doc.bufferedPageRange();
         for (let i = 0; i < pages.count; i++) {
           doc.switchToPage(i);
           doc.fontSize(8);
-          doc.text(
-            `Página ${i + 1} de ${pages.count}`,
-            50,
-            doc.page.height - 50,
-            { align: 'center' }
-          );
+          doc.text(`Pagina ${i + 1} de ${pages.count}`, 50, doc.page.height - 50, { align: 'center' });
         }
 
         doc.end();
@@ -260,12 +241,8 @@ class RelatoriosService {
     });
   }
 
-  /**
-   * Exportar processos para Excel
-   */
   async exportarProcessosExcel(filtros = {}) {
     const whereClause = {};
-    
     if (filtros.status) {
       whereClause.status = filtros.status;
     }
@@ -274,38 +251,36 @@ class RelatoriosService {
       where: whereClause,
       include: [
         {
-          model: Cota,
+          association: 'cota',
           include: [
-            { model: Cliente },
-            { model: User, as: 'Consultor' }
+            { association: 'cliente' },
+            { association: 'consultor' }
           ]
         },
         {
-          model: Cobranca
+          association: 'cobrancas'
         }
       ],
-      order: [['created_at', 'DESC']]
+      order: [['createdAt', 'DESC']]
     });
 
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Processos de Cobrança');
+    const worksheet = workbook.addWorksheet('Processos de Cobranca');
 
-    // Definir colunas
     worksheet.columns = [
-      { header: 'ID', key: 'id', width: 10 },
+      { header: 'ID', key: 'id', width: 12 },
       { header: 'Cota', key: 'cota', width: 15 },
       { header: 'Cliente', key: 'cliente', width: 30 },
-      { header: 'Consultor', key: 'consultor', width: 30 },
+      { header: 'Consultor', key: 'consultor', width: 25 },
       { header: 'Valor Mensal', key: 'valor', width: 15 },
-      { header: 'Dia Vencimento', key: 'dia_vencimento', width: 15 },
-      { header: 'Data Início', key: 'data_inicio', width: 15 },
-      { header: 'Status', key: 'status', width: 15 },
-      { header: 'Total Cobranças', key: 'total_cobrancas', width: 15 },
-      { header: 'Cobranças Pagas', key: 'cobrancas_pagas', width: 15 },
-      { header: 'Cobranças Atrasadas', key: 'cobrancas_atrasadas', width: 18 }
+      { header: 'Dia Vencimento', key: 'diaVencimento', width: 15 },
+      { header: 'Data Inicio', key: 'dataInicio', width: 15 },
+      { header: 'Status', key: 'status', width: 12 },
+      { header: 'Total Cobrancas', key: 'totalCobrancas', width: 18 },
+      { header: 'Cobrancas Pagas', key: 'pagas', width: 16 },
+      { header: 'Cobrancas Atrasadas', key: 'atrasadas', width: 18 }
     ];
 
-    // Estilizar cabeçalho
     worksheet.getRow(1).font = { bold: true };
     worksheet.getRow(1).fill = {
       type: 'pattern',
@@ -313,27 +288,26 @@ class RelatoriosService {
       fgColor: { argb: 'FF4CAF50' }
     };
 
-    // Adicionar dados
     processos.forEach(processo => {
-      const cobrancasPagas = processo.Cobrancas.filter(c => c.status === 'pago').length;
-      const cobrancasAtrasadas = processo.Cobrancas.filter(c => c.status === 'atrasado').length;
+      const cobrancas = processo.cobrancas || [];
+      const cobrancasPagas = cobrancas.filter(c => c.status === 'pago').length;
+      const cobrancasAtrasadas = cobrancas.filter(c => c.status === 'atrasado').length;
 
       worksheet.addRow({
-        id: processo.id.substring(0, 8),
-        cota: processo.Cota.numero,
-        cliente: processo.Cota.Cliente.nome,
-        consultor: processo.Cota.Consultor ? processo.Cota.Consultor.nome : 'N/A',
-        valor: `R$ ${processo.valor.toFixed(2)}`,
-        dia_vencimento: processo.dia_vencimento,
-        data_inicio: new Date(processo.data_inicio).toLocaleDateString('pt-BR'),
+        id: processo.id.slice(0, 8),
+        cota: processo.cota?.cota || '-',
+        cliente: processo.cota?.cliente?.nome || '-',
+        consultor: processo.cota?.consultor?.nome || 'N/A',
+        valor: formatarValor(parseFloat(processo.cota?.valor) || 0),
+        diaVencimento: processo.diaVencimento,
+        dataInicio: new Date(processo.dataInicioCobranca).toLocaleDateString('pt-BR'),
         status: processo.status.toUpperCase(),
-        total_cobrancas: processo.Cobrancas.length,
-        cobrancas_pagas: cobrancasPagas,
-        cobrancas_atrasadas: cobrancasAtrasadas
+        totalCobrancas: cobrancas.length,
+        pagas: cobrancasPagas,
+        atrasadas: cobrancasAtrasadas
       });
     });
 
-    // Adicionar totalizadores
     worksheet.addRow({});
     const totalRow = worksheet.addRow({
       id: 'TOTAL',
@@ -341,12 +315,12 @@ class RelatoriosService {
       cliente: '',
       consultor: '',
       valor: '',
-      dia_vencimento: '',
-      data_inicio: '',
+      diaVencimento: '',
+      dataInicio: '',
       status: '',
-      total_cobrancas: processos.reduce((sum, p) => sum + p.Cobrancas.length, 0),
-      cobrancas_pagas: processos.reduce((sum, p) => sum + p.Cobrancas.filter(c => c.status === 'pago').length, 0),
-      cobrancas_atrasadas: processos.reduce((sum, p) => sum + p.Cobrancas.filter(c => c.status === 'atrasado').length, 0)
+      totalCobrancas: processos.reduce((sum, p) => sum + (p.cobrancas || []).length, 0),
+      pagas: processos.reduce((sum, p) => sum + ((p.cobrancas || []).filter(c => c.status === 'pago').length), 0),
+      atrasadas: processos.reduce((sum, p) => sum + ((p.cobrancas || []).filter(c => c.status === 'atrasado').length), 0)
     });
 
     totalRow.font = { bold: true };
@@ -359,46 +333,41 @@ class RelatoriosService {
     return workbook.xlsx.writeBuffer();
   }
 
-  /**
-   * Exportar cobranças atrasadas para Excel
-   */
   async exportarCobrancasAtrasadasExcel() {
-    const cobrancasAtrasadas = await Cobranca.findAll({
+    const cobrancas = await CobrancaMensal.findAll({
       where: { status: 'atrasado' },
       include: [
         {
-          model: ProcessoCobranca,
+          association: 'processoCobranca',
           include: [
             {
-              model: Cota,
+              association: 'cota',
               include: [
-                { model: Cliente },
-                { model: User, as: 'Consultor' }
+                { association: 'cliente' },
+                { association: 'consultor' }
               ]
             }
           ]
         }
       ],
-      order: [['data_vencimento', 'ASC']]
+      order: [['dataVencimento', 'ASC']]
     });
 
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Cobranças Atrasadas');
+    const worksheet = workbook.addWorksheet('Cobrancas Atrasadas');
 
-    // Definir colunas
     worksheet.columns = [
       { header: 'Cota', key: 'cota', width: 15 },
       { header: 'Cliente', key: 'cliente', width: 30 },
-      { header: 'Consultor', key: 'consultor', width: 30 },
-      { header: 'Telefone Cliente', key: 'telefone', width: 18 },
-      { header: 'Mês Referência', key: 'mes_referencia', width: 18 },
-      { header: 'Data Vencimento', key: 'data_vencimento', width: 18 },
-      { header: 'Dias em Atraso', key: 'dias_atraso', width: 15 },
-      { header: 'Valor', key: 'valor', width: 15 },
-      { header: 'Status', key: 'status', width: 15 }
+      { header: 'Consultor', key: 'consultor', width: 25 },
+      { header: 'Telefone', key: 'telefone', width: 18 },
+      { header: 'Mes Referencia', key: 'mesReferencia', width: 20 },
+      { header: 'Vencimento', key: 'dataVencimento', width: 18 },
+      { header: 'Dias em Atraso', key: 'diasAtraso', width: 18 },
+      { header: 'Valor', key: 'valor', width: 18 },
+      { header: 'Status', key: 'status', width: 12 }
     ];
 
-    // Estilizar cabeçalho
     worksheet.getRow(1).font = { bold: true };
     worksheet.getRow(1).fill = {
       type: 'pattern',
@@ -406,34 +375,31 @@ class RelatoriosService {
       fgColor: { argb: 'FFF44336' }
     };
 
-    // Adicionar dados
-    cobrancasAtrasadas.forEach(cobranca => {
-      const diasAtraso = Math.floor((new Date() - new Date(cobranca.data_vencimento)) / (1000 * 60 * 60 * 24));
-
+    cobrancas.forEach(cobranca => {
+      const diasAtraso = Math.floor((new Date() - new Date(cobranca.dataVencimento)) / (1000 * 60 * 60 * 24));
       worksheet.addRow({
-        cota: cobranca.ProcessoCobranca.Cota.numero,
-        cliente: cobranca.ProcessoCobranca.Cota.Cliente.nome,
-        consultor: cobranca.ProcessoCobranca.Cota.Consultor ? cobranca.ProcessoCobranca.Cota.Consultor.nome : 'N/A',
-        telefone: cobranca.ProcessoCobranca.Cota.Cliente.telefone || 'N/A',
-        mes_referencia: new Date(cobranca.mes_referencia).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
-        data_vencimento: new Date(cobranca.data_vencimento).toLocaleDateString('pt-BR'),
-        dias_atraso: diasAtraso,
-        valor: `R$ ${cobranca.valor.toFixed(2)}`,
+        cota: cobranca.processoCobranca?.cota?.cota || '-',
+        cliente: cobranca.processoCobranca?.cota?.cliente?.nome || '-',
+        consultor: cobranca.processoCobranca?.cota?.consultor?.nome || 'N/A',
+        telefone: cobranca.processoCobranca?.cota?.cliente?.telefone || 'N/A',
+        mesReferencia: new Date(cobranca.mesReferencia).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
+        dataVencimento: new Date(cobranca.dataVencimento).toLocaleDateString('pt-BR'),
+        diasAtraso,
+        valor: `R$ ${parseFloat(cobranca.valor).toFixed(2)}`,
         status: cobranca.status.toUpperCase()
       });
     });
 
-    // Adicionar totalizadores
     worksheet.addRow({});
-    const valorTotal = cobrancasAtrasadas.reduce((sum, c) => sum + parseFloat(c.valor), 0);
+    const valorTotal = cobrancas.reduce((sum, c) => sum + parseFloat(c.valor), 0);
     const totalRow = worksheet.addRow({
       cota: 'TOTAL',
       cliente: '',
       consultor: '',
       telefone: '',
-      mes_referencia: '',
-      data_vencimento: '',
-      dias_atraso: cobrancasAtrasadas.length,
+      mesReferencia: '',
+      dataVencimento: '',
+      diasAtraso: cobrancas.length,
       valor: `R$ ${valorTotal.toFixed(2)}`,
       status: ''
     });
