@@ -9,7 +9,12 @@ module.exports = {
    */
   async listar(req, res) {
     try {
-      const { status, dataInicio, dataFim, processoCobrancaId, limite } = req.query;
+      const { status, dataInicio, dataFim, processoCobrancaId, limite, consultorId, mes, ano, cotaId, clienteId } = req.query;
+
+      const perfilUsuario = (req.user?.perfil || '').toUpperCase();
+      const isConsultorPerfil = perfilUsuario === 'CONSULTOR';
+      const podeSelecionarConsultor = perfilUsuario === 'ADMIN' || perfilUsuario === 'GESTOR';
+      const consultorLogadoId = req.user?.consultorId || null;
 
       const filtros = {};
       if (status) filtros.status = status;
@@ -17,6 +22,15 @@ module.exports = {
       if (dataFim) filtros.dataFim = dataFim;
       if (processoCobrancaId) filtros.processoCobrancaId = processoCobrancaId;
       if (limite) filtros.limite = limite;
+      if (isConsultorPerfil && consultorLogadoId) {
+        filtros.consultorId = consultorLogadoId;
+      } else if (podeSelecionarConsultor && consultorId) {
+        filtros.consultorId = consultorId;
+      }
+      if (mes) filtros.mes = mes;
+      if (ano) filtros.ano = ano;
+      if (cotaId) filtros.cotaId = cotaId;
+      if (clienteId) filtros.clienteId = clienteId;
 
       const cobrancas = await cobrancaService.listarCobrancas(filtros);
 

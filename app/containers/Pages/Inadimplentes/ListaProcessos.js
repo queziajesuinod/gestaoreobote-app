@@ -43,6 +43,7 @@ import {
 import { PapperBlock } from 'dan-components';
 import brand from 'dan-api/dummy/brand';
 import * as inadimplentesApi from '../../../services/inadimplentesApi';
+import { getStoredUser } from '../../../utils/userStorage';
 
 function ListaProcessos() {
   const navigate = useNavigate();
@@ -53,6 +54,19 @@ function ListaProcessos() {
   const [loading, setLoading] = useState(false);
   const [processos, setProcessos] = useState([]);
   const [filtroStatus, setFiltroStatus] = useState('');
+  const [clientesFiltro, setClientesFiltro] = useState([]);
+  const [consultoresFiltro, setConsultoresFiltro] = useState([]);
+  const [filtroCliente, setFiltroCliente] = useState('');
+  const [filtroConsultor, setFiltroConsultor] = useState('');
+  const [filtroDiaVencimento, setFiltroDiaVencimento] = useState('');
+  const [storedUser, setStoredUserState] = useState(() => getStoredUser());
+  const perfilUsuario = storedUser?.perfil?.toUpperCase() || '';
+  const isConsultorPerfil = perfilUsuario === 'CONSULTOR';
+  const podeSelecionarConsultor = perfilUsuario === 'ADMIN' || perfilUsuario === 'GESTOR';
+  const consultorIdLogado = storedUser?.consultorId ? String(storedUser.consultorId) : '';
+  const consultorNomeLogado = storedUser?.consultor?.nome || storedUser?.consultorNome || storedUser?.name || '';
+  const podeGerenciarProcessos = !isConsultorPerfil;
+  const tooltipRestrito = 'Somente administradores e gestores podem realizar esta ação.';
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   
@@ -71,16 +85,43 @@ function ListaProcessos() {
     acao: null
   });
 
+  useEffect(() => {
+    const handleUserUpdated = (event) => {
+      setStoredUserState(event?.detail || getStoredUser());
+    };
+
+    window.addEventListener('app:user-updated', handleUserUpdated);
+    return () => window.removeEventListener('app:user-updated', handleUserUpdated);
+  }, []);
+
+  useEffect(() => {
+    if (isConsultorPerfil) {
+      setFiltroConsultor(consultorIdLogado);
+    }
+  }, [isConsultorPerfil, consultorIdLogado]);
+
   // Carregar processos
   useEffect(() => {
     carregarProcessos();
-  }, [filtroStatus]);
+  }, [filtroStatus, filtroCliente, filtroConsultor, filtroDiaVencimento]);
+
+  useEffect(() => {
+    carregarConsultores();
+    carregarClientes();
+  }, [podeSelecionarConsultor]);
 
   const carregarProcessos = async () => {
     try {
       setLoading(true);
       const filtros = {};
       if (filtroStatus) filtros.status = filtroStatus;
+      if (filtroCliente) filtros.clienteId = filtroCliente;
+      if (isConsultorPerfil && consultorIdLogado) {
+        filtros.consultorId = consultorIdLogado;
+      } else if (podeSelecionarConsultor && filtroConsultor) {
+        filtros.consultorId = filtroConsultor;
+      }
+      if (filtroDiaVencimento) filtros.diaVencimento = filtroDiaVencimento;
       
       const response = await inadimplentesApi.listarProcessos(filtros);
       setProcessos(response.dados || []);
@@ -98,6 +139,30 @@ function ListaProcessos() {
 
   const fecharSnackbar = () => {
     setSnackbar({ ...snackbar, open: false });
+  };
+
+  const carregarConsultores = async () => {
+    if (!podeSelecionarConsultor) {
+      setConsultoresFiltro([]);
+      return;
+    }
+
+    try {
+      const consultores = await inadimplentesApi.listarConsultores();
+      setConsultoresFiltro(Array.isArray(consultores) ? consultores : []);
+    } catch (error) {
+      console.error('Erro ao carregar consultores:', error);
+    }
+  };
+
+  const carregarClientes = async () => {
+    try {
+      const clientes = await inadimplentesApi.listarClientes();
+      const lista = Array.isArray(clientes?.dados) ? clientes.dados : clientes;
+      setClientesFiltro(Array.isArray(lista) ? lista : []);
+    } catch (error) {
+      console.error('Erro ao carregar clientes:', error);
+    }
   };
 
   const abrirDialogConfirmacao = (titulo, mensagem, acao) => {
@@ -221,15 +286,20 @@ function ListaProcessos() {
         icon="ion-ios-cash-outline"
       >
         {/* Barra de Ações */}
-        <Box sx={{ mb: 3, display: 'flex', gap: 2, alignItems: 'center' }}>
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<AddIcon />}
-            href="/app/inadimplentes/processos/novo"
-          >
-            Novo Processo
-          </Button>
+        <Box sx={{ mb: 3, display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+          <Tooltip title={podeGerenciarProcessos ? 'Novo Processo' : tooltipRestrito}>
+            <span>
+              <Button
+                variant="contained"
+                color="primary"
+                startIcon={<AddIcon />}
+                href="/app/inadimplentes/processos/novo"
+                disabled={!podeGerenciarProcessos}
+              >
+                Novo Processo
+              </Button>
+            </span>
+          </Tooltip>
 
           <FormControl sx={{ minWidth: 200 }}>
             <InputLabel>Filtrar por Status</InputLabel>
@@ -244,6 +314,55 @@ function ListaProcessos() {
               <MenuItem value="encerrado">Encerrado</MenuItem>
             </Select>
           </FormControl>
+
+          <FormControl sx={{ minWidth: 220 }}>
+            <InputLabel>Filtrar por Cliente</InputLabel>
+            <Select
+              value={filtroCliente}
+              label="Filtrar por Cliente"
+              onChange={(event) => setFiltroCliente(event.target.value)}
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {clientesFiltro.map((cliente) => (
+                <MenuItem key={cliente.id} value={cliente.id}>
+                  {cliente.nome}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          {podeSelecionarConsultor ? (
+            <FormControl sx={{ minWidth: 200 }}>
+              <InputLabel>Filtrar por Consultor</InputLabel>
+              <Select
+                value={filtroConsultor}
+                label="Filtrar por Consultor"
+                onChange={(event) => setFiltroConsultor(event.target.value)}
+              >
+                <MenuItem value="">Todos</MenuItem>
+                {consultoresFiltro.map((consultor) => (
+                  <MenuItem key={consultor.id} value={String(consultor.id)}>
+                    {consultor.nome}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          ) : (
+            isConsultorPerfil && (
+              <Typography variant="body2" color="textSecondary">
+                Consultor logado: {consultorNomeLogado || '—'}
+              </Typography>
+            )
+          )}
+
+          <TextField
+            label="Dia do Vencimento"
+            type="number"
+            size="small"
+            value={filtroDiaVencimento}
+            onChange={(event) => setFiltroDiaVencimento(event.target.value)}
+            inputProps={{ min: 1, max: 31 }}
+          />
 
           <Box sx={{ flexGrow: 1 }} />
 
@@ -326,59 +445,74 @@ function ListaProcessos() {
                             </IconButton>
                           </Tooltip>
 
-                          <Tooltip title="Editar">
-                            <IconButton
-                              size="small"
-                              onClick={() => navigate(`/app/inadimplentes/processos/${processo.id}/editar`)}
-                            >
-                              <EditIcon fontSize="small" />
-                            </IconButton>
+                          <Tooltip title={podeGerenciarProcessos ? 'Editar' : tooltipRestrito}>
+                            <span>
+                              <IconButton
+                                size="small"
+                                onClick={() => navigate(`/app/inadimplentes/processos/${processo.id}/editar`)}
+                                disabled={!podeGerenciarProcessos}
+                              >
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                            </span>
                           </Tooltip>
 
                           {processo.status === 'ativo' && (
-                            <Tooltip title="Pausar">
-                              <IconButton
-                                size="small"
-                                onClick={() => handlePausar(processo)}
-                                color="warning"
-                              >
-                                <PauseIcon fontSize="small" />
-                              </IconButton>
+                            <Tooltip title={podeGerenciarProcessos ? 'Pausar' : tooltipRestrito}>
+                              <span>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handlePausar(processo)}
+                                  color="warning"
+                                  disabled={!podeGerenciarProcessos}
+                                >
+                                  <PauseIcon fontSize="small" />
+                                </IconButton>
+                              </span>
                             </Tooltip>
                           )}
 
                           {processo.status === 'pausado' && (
-                            <Tooltip title="Reativar">
-                              <IconButton
-                                size="small"
-                                onClick={() => handleReativar(processo)}
-                                color="success"
-                              >
-                                <PlayArrowIcon fontSize="small" />
-                              </IconButton>
+                            <Tooltip title={podeGerenciarProcessos ? 'Reativar' : tooltipRestrito}>
+                              <span>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleReativar(processo)}
+                                  color="success"
+                                  disabled={!podeGerenciarProcessos}
+                                >
+                                  <PlayArrowIcon fontSize="small" />
+                                </IconButton>
+                              </span>
                             </Tooltip>
                           )}
 
                           {processo.status !== 'encerrado' && (
-                            <Tooltip title="Encerrar">
-                              <IconButton
-                                size="small"
-                                onClick={() => handleEncerrar(processo)}
-                                color="error"
-                              >
-                                <StopIcon fontSize="small" />
-                              </IconButton>
+                            <Tooltip title={podeGerenciarProcessos ? 'Encerrar' : tooltipRestrito}>
+                              <span>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleEncerrar(processo)}
+                                  color="error"
+                                  disabled={!podeGerenciarProcessos}
+                                >
+                                  <StopIcon fontSize="small" />
+                                </IconButton>
+                              </span>
                             </Tooltip>
                           )}
 
-                          <Tooltip title="Excluir">
-                            <IconButton
-                              size="small"
-                              onClick={() => handleExcluir(processo)}
-                              color="error"
-                            >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
+                          <Tooltip title={podeGerenciarProcessos ? 'Excluir' : tooltipRestrito}>
+                            <span>
+                              <IconButton
+                                size="small"
+                                onClick={() => handleExcluir(processo)}
+                                color="error"
+                                disabled={!podeGerenciarProcessos}
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </span>
                           </Tooltip>
                         </TableCell>
                       </TableRow>

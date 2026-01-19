@@ -84,11 +84,40 @@ module.exports = {
    */
   async listar(req, res) {
     try {
-      const { status, cotaId } = req.query;
+      const { status, cotaId, clienteId, consultorId, diaVencimento } = req.query;
+
+      const perfilUsuario = (req.user?.perfil || '').toUpperCase();
+      const isConsultorPerfil = perfilUsuario === 'CONSULTOR';
+      const podeSelecionarConsultor = perfilUsuario === 'ADMIN' || perfilUsuario === 'GESTOR';
+      const consultorLogadoId = req.user?.consultorId || null;
+      let filtroConsultor = null;
+      if (isConsultorPerfil && consultorLogadoId) {
+        filtroConsultor = consultorLogadoId;
+      } else if (podeSelecionarConsultor && consultorId) {
+        filtroConsultor = consultorId;
+      }
 
       const where = {};
       if (status) where.status = status;
       if (cotaId) where.cotaId = cotaId;
+      if (diaVencimento) {
+        const dia = Number(diaVencimento);
+        if (!Number.isNaN(dia)) {
+          where.diaVencimento = dia;
+        }
+      }
+
+      const includeCliente = { association: 'cliente' };
+      if (clienteId) {
+        includeCliente.where = { id: clienteId };
+        includeCliente.required = true;
+      }
+
+      const includeConsultor = { association: 'consultor' };
+      if (filtroConsultor) {
+        includeConsultor.where = { id: filtroConsultor };
+        includeConsultor.required = true;
+      }
 
       const processos = await ProcessoCobranca.findAll({
         where,
@@ -96,8 +125,8 @@ module.exports = {
           {
             association: 'cota',
             include: [
-              { association: 'cliente' },
-              { association: 'consultor' }
+              includeCliente,
+              includeConsultor
             ]
           }
         ],

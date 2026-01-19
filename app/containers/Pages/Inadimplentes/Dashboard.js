@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Helmet } from 'react-helmet';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -25,6 +25,7 @@ import {
   TableHead,
   TableRow,
   TextField,
+  MenuItem,
   Tooltip,
   Typography
 } from '@mui/material';
@@ -47,6 +48,23 @@ import { PapperBlock } from 'dan-components';
 import brand from 'dan-api/dummy/brand';
 import * as inadimplentesApi from '../../../services/inadimplentesApi';
 import GraficosInadimplencia from './GraficosInadimplencia';
+import { getStoredUser } from '../../../utils/userStorage';
+
+const MESES = [
+  { value: '', label: 'Todos os meses' },
+  { value: '01', label: 'Janeiro' },
+  { value: '02', label: 'Fevereiro' },
+  { value: '03', label: 'Março' },
+  { value: '04', label: 'Abril' },
+  { value: '05', label: 'Maio' },
+  { value: '06', label: 'Junho' },
+  { value: '07', label: 'Julho' },
+  { value: '08', label: 'Agosto' },
+  { value: '09', label: 'Setembro' },
+  { value: '10', label: 'Outubro' },
+  { value: '11', label: 'Novembro' },
+  { value: '12', label: 'Dezembro' }
+];
 
 function Dashboard() {
   const navigate = useNavigate();
@@ -62,6 +80,41 @@ function Dashboard() {
   const [atualizando, setAtualizando] = useState(false);
   const [exportando, setExportando] = useState(false);
   const [mostrarGraficos, setMostrarGraficos] = useState(true);
+  const [storedUser, setStoredUserState] = useState(() => getStoredUser());
+  const perfilUsuario = storedUser?.perfil?.toUpperCase() || '';
+  const isConsultorPerfil = perfilUsuario === 'CONSULTOR';
+  const podeSelecionarConsultor = perfilUsuario === 'ADMIN' || perfilUsuario === 'GESTOR';
+  const consultorIdLogado = storedUser?.consultorId ? String(storedUser.consultorId) : '';
+  const consultorNomeLogado = storedUser?.consultor?.nome
+    || storedUser?.consultorNome
+    || storedUser?.name
+    || '';
+  const [consultoresFiltro, setConsultoresFiltro] = useState([]);
+  const [filtrosDashboard, setFiltrosDashboard] = useState({
+    consultorId: isConsultorPerfil ? consultorIdLogado : '',
+    mes: '',
+    ano: ''
+  });
+
+  useEffect(() => {
+    const handleUserUpdated = (event) => {
+      setStoredUserState(event?.detail || getStoredUser());
+    };
+
+    window.addEventListener('app:user-updated', handleUserUpdated);
+    return () => window.removeEventListener('app:user-updated', handleUserUpdated);
+  }, []);
+
+  useEffect(() => {
+    if (isConsultorPerfil) {
+      setFiltrosDashboard(prev => ({ ...prev, consultorId: consultorIdLogado }));
+    }
+  }, [isConsultorPerfil, consultorIdLogado]);
+
+  const anosDashboard = useMemo(() => {
+    const anoAtual = new Date().getFullYear();
+    return Array.from({ length: 4 }, (_, index) => (anoAtual - index).toString());
+  }, []);
 
   // Dialog de marcar como pago
   const [dialogPago, setDialogPago] = useState({
@@ -79,21 +132,36 @@ function Dashboard() {
   });
 
   useEffect(() => {
+    carregarConsultores();
+  }, [podeSelecionarConsultor]);
+
+  useEffect(() => {
     carregarDados();
   }, []);
 
-  const carregarDados = async () => {
+  const prepararFiltrosDashboard = (filtros = {}) => {
+    const resultado = {};
+    if (filtros.consultorId) resultado.consultorId = filtros.consultorId;
+    if (filtros.mes) resultado.mes = filtros.mes;
+    if (filtros.ano) resultado.ano = filtros.ano;
+    return resultado;
+  };
+
+  const carregarDados = async (filtros = null) => {
+    const filtrosAplicados = prepararFiltrosDashboard(filtros || filtrosDashboard);
+
     try {
       setLoading(true);
 
       // Carregar dashboard
-      const dashResponse = await inadimplentesApi.obterDashboard();
+      const dashResponse = await inadimplentesApi.obterDashboard(filtrosAplicados);
       setDashboard(dashResponse.dados);
 
       // Carregar cobranças atrasadas
       const cobrancasResponse = await inadimplentesApi.listarCobrancas({
         status: 'atrasado',
-        limite: 10
+        limite: 10,
+        ...filtrosAplicados
       });
       setCobrancasAtrasadas(cobrancasResponse.dados || []);
     } catch (error) {
@@ -101,6 +169,20 @@ function Dashboard() {
       mostrarSnackbar('Erro ao carregar dados do dashboard', 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const carregarConsultores = async () => {
+    if (!podeSelecionarConsultor) {
+      setConsultoresFiltro([]);
+      return;
+    }
+
+    try {
+      const consultores = await inadimplentesApi.listarConsultores();
+      setConsultoresFiltro(Array.isArray(consultores) ? consultores : []);
+    } catch (error) {
+      console.error('Erro ao carregar consultores:', error);
     }
   };
 
@@ -117,6 +199,16 @@ function Dashboard() {
     await carregarDados();
     setAtualizando(false);
     mostrarSnackbar('Dashboard atualizado');
+  };
+
+  const handleAplicarFiltros = async () => {
+    await carregarDados(filtrosDashboard);
+  };
+
+  const handleLimparFiltros = async () => {
+    const filtrosLimpos = { consultorId: '', mes: '', ano: '' };
+    setFiltrosDashboard(filtrosLimpos);
+    await carregarDados(filtrosLimpos);
   };
 
   const handleDetectarInadimplencia = async () => {
@@ -289,6 +381,99 @@ function Dashboard() {
           >
             Exportar Excel
           </Button>
+        </Box>
+
+        <Box sx={{ mb: 3 }}>
+          <Grid container spacing={2} alignItems="flex-end">
+            {podeSelecionarConsultor ? (
+              <Grid item xs={12} md={4}>
+                <TextField
+                  select
+                  label="Consultor"
+                  size="small"
+                  fullWidth
+                  value={filtrosDashboard.consultorId}
+                  onChange={(event) => setFiltrosDashboard(prev => ({
+                    ...prev,
+                    consultorId: event.target.value
+                  }))}
+                >
+                  <MenuItem value="">Todos os consultores</MenuItem>
+                  {consultoresFiltro.map((consultor) => (
+                    <MenuItem key={consultor.id} value={String(consultor.id)}>
+                      {consultor.nome}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+            ) : (
+              <Grid item xs={12} md={4}>
+                <Typography variant="body2">
+                  Consultor: {consultorNomeLogado || '—'}
+                </Typography>
+              </Grid>
+            )}
+
+            <Grid item xs={6} md={3}>
+              <TextField
+                select
+                label="Mês"
+                size="small"
+                fullWidth
+                value={filtrosDashboard.mes}
+                onChange={(event) => setFiltrosDashboard(prev => ({
+                  ...prev,
+                  mes: event.target.value
+                }))}
+              >
+                {MESES.map((mes) => (
+                  <MenuItem key={mes.value} value={mes.value}>
+                    {mes.label}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+
+            <Grid item xs={6} md={2}>
+              <TextField
+                select
+                label="Ano"
+                size="small"
+                fullWidth
+                value={filtrosDashboard.ano}
+                onChange={(event) => setFiltrosDashboard(prev => ({
+                  ...prev,
+                  ano: event.target.value
+                }))}
+              >
+                <MenuItem value="">Todos os anos</MenuItem>
+                {anosDashboard.map((ano) => (
+                  <MenuItem key={ano} value={ano}>
+                    {ano}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+
+            <Grid item xs={12} md={3}>
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                <Button
+                  variant="contained"
+                  size="small"
+                  onClick={handleAplicarFiltros}
+                >
+                  Aplicar filtros
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={handleLimparFiltros}
+                >
+                  Limpar filtros
+                </Button>
+              </Box>
+            </Grid>
+          </Grid>
         </Box>
 
         {/* Cards de Estatísticas */}

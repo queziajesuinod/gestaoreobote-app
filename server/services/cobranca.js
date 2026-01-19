@@ -96,11 +96,14 @@ class CobrancaService {
       const ano = anoInicial + Math.floor(mesCorrigido / 12);
       const mes = mesCorrigido % 12;
 
-      // Primeiro dia do mês
-      const primeiroDiaMes = new Date(Date.UTC(ano, mes, 1));
+      const formatarData = (year, m, day) => {
+        const mesFormatado = String(m + 1).padStart(2, '0');
+        const diaFormatado = String(day).padStart(2, '0');
+        return `${year}-${mesFormatado}-${diaFormatado}`;
+      };
 
-      // Data de vencimento
-      const dataVencimento = new Date(Date.UTC(ano, mes, diaVencimento));
+      const primeiroDiaMes = formatarData(ano, mes, 1);
+      const dataVencimento = formatarData(ano, mes, diaVencimento);
 
       cobrancas.push({
         processoCobrancaId: processoId,
@@ -184,8 +187,13 @@ class CobrancaService {
     const anoAtual = hoje.getFullYear();
     const mesAtual = hoje.getMonth(); // 0-11
 
-    // Primeiro dia do mês atual
-    const mesReferencia = new Date(anoAtual, mesAtual, 1);
+    const formatarData = (day) => {
+      const mesFormatado = String(mesAtual + 1).padStart(2, '0');
+      const diaFormatado = String(day).padStart(2, '0');
+      return `${anoAtual}-${mesFormatado}-${diaFormatado}`;
+    };
+
+    const mesReferencia = formatarData(1);
 
     // Verificar se já passou da data de início
     const dataInicio = new Date(processo.dataInicioCobranca);
@@ -211,7 +219,7 @@ class CobrancaService {
     const valorBase = !Number.isNaN(valorCota) ? valorCota : 0;
 
     // Data de vencimento
-    const dataVencimento = new Date(anoAtual, mesAtual, processo.diaVencimento);
+    const dataVencimento = formatarData(processo.diaVencimento);
 
     // Criar cobrança
     const cobranca = await CobrancaMensal.create({
@@ -269,6 +277,10 @@ class CobrancaService {
    */
   async listarCobrancas(filtros = {}) {
     const where = {};
+    const consultorFiltro = filtros.consultorId || null;
+    const periodo = this.montarRangeMesReferencia(filtros.mes, filtros.ano);
+    const cotaFiltro = filtros.cotaId;
+    const clienteFiltro = filtros.clienteId;
 
     // Filtro por status
     if (filtros.status) {
@@ -282,9 +294,45 @@ class CobrancaService {
       };
     }
 
+    if (periodo) {
+      where.mesReferencia = {
+        [Op.gte]: periodo.inicio,
+        [Op.lt]: periodo.fim
+      };
+    }
+
     // Filtro por processo
     if (filtros.processoCobrancaId) {
       where.processoCobrancaId = filtros.processoCobrancaId;
+    }
+
+    const clienteInclude = { association: 'cliente' };
+    if (clienteFiltro) {
+      const clienteId = this.parseNumero(clienteFiltro);
+      if (Number.isFinite(clienteId)) {
+        clienteInclude.where = { id: clienteId };
+        clienteInclude.required = true;
+      }
+    }
+
+    const consultorInclude = { association: 'consultor' };
+    if (consultorFiltro) {
+      consultorInclude.where = { id: consultorFiltro };
+      consultorInclude.required = true;
+    }
+
+    const cotaInclude = {
+      association: 'cota',
+      include: [
+        clienteInclude,
+        consultorInclude
+      ]
+    };
+
+    const cotaIdFiltro = this.parseNumero(cotaFiltro);
+    if (Number.isFinite(cotaIdFiltro)) {
+      cotaInclude.where = { id: cotaIdFiltro };
+      cotaInclude.required = true;
     }
 
     // Opções de query
@@ -293,15 +341,7 @@ class CobrancaService {
       include: [
         {
           association: 'processoCobranca',
-          include: [
-            {
-              association: 'cota',
-              include: [
-                { association: 'cliente' },
-                { association: 'consultor' }
-              ]
-            }
-          ]
+          include: [cotaInclude]
         }
       ],
       order: [['dataVencimento', 'DESC']]
@@ -440,6 +480,54 @@ class CobrancaService {
     console.log(`[Cobrança] Processo ${processoId} encerrado`);
 
     return processo;
+  }
+
+  montarRangeMesReferencia(mes, ano) {
+    const possuiMes = mes !== undefined && mes !== null && mes !== '';
+    const possuiAno = ano !== undefined && ano !== null && ano !== '';
+
+    if (!possuiMes && !possuiAno) {
+      return null;
+    }
+
+    const anoReferencia = this.parseNumero(ano, new Date().getFullYear());
+    if (!Number.isFinite(anoReferencia)) {
+      return null;
+    }
+
+    if (possuiMes) {
+      const mesReferencia = this.parseNumero(mes);
+      if (!Number.isFinite(mesReferencia) || mesReferencia < 1 || mesReferencia > 12) {
+        return null;
+      }
+      const inicio = new Date(anoReferencia, mesReferencia - 1, 1);
+      const fim = new Date(anoReferencia, mesReferencia, 1);
+      return {
+        inicio: this.formatarPrimeiroDia(inicio),
+        fim: this.formatarPrimeiroDia(fim)
+      };
+    }
+
+    const inicio = new Date(anoReferencia, 0, 1);
+    const fim = new Date(anoReferencia + 1, 0, 1);
+    return {
+      inicio: this.formatarPrimeiroDia(inicio),
+      fim: this.formatarPrimeiroDia(fim)
+    };
+  }
+
+  formatarPrimeiroDia(data) {
+    const mes = String(data.getMonth() + 1).padStart(2, '0');
+    const ano = data.getFullYear();
+    return `${ano}-${mes}-01`;
+  }
+
+  parseNumero(valor, fallback = null) {
+    if (valor === undefined || valor === null || valor === '') {
+      return fallback;
+    }
+    const inteiro = Number(valor);
+    return Number.isFinite(inteiro) ? inteiro : fallback;
   }
 }
 

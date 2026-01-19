@@ -35,6 +35,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import inadimplentesApi from '../../../services/inadimplentesApi';
+import { getStoredUser } from '../../../utils/userStorage';
 
 function ListaCobrancas() {
   const navigate = useNavigate();
@@ -46,12 +47,25 @@ function ListaCobrancas() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
   const [totalCobrancas, setTotalCobrancas] = useState(0);
+  const [consultoresFiltro, setConsultoresFiltro] = useState([]);
+  const [storedUser, setStoredUserState] = useState(() => getStoredUser());
+  const perfilUsuario = storedUser?.perfil?.toUpperCase() || '';
+  const isConsultorPerfil = perfilUsuario === 'CONSULTOR';
+  const podeSelecionarConsultor = perfilUsuario === 'ADMIN' || perfilUsuario === 'GESTOR';
+  const consultorIdLogado = storedUser?.consultorId ? String(storedUser.consultorId) : '';
+  const podeGerenciarCobrancas = !isConsultorPerfil;
+  const tooltipRestritoCobrancas = 'Somente administradores e gestores podem alterar cobranças.';
 
   // Filtros
   const [filtros, setFiltros] = useState({
     status: searchParams.get('status') || '',
-    processoCobrancaId: searchParams.get('processoId') || ''
+    processoCobrancaId: searchParams.get('processoId') || '',
+    cotaId: searchParams.get('cotaId') || '',
+    clienteId: searchParams.get('clienteId') || '',
+    consultorId: searchParams.get('consultorId') || ''
   });
+  const [clientesFiltro, setClientesFiltro] = useState([]);
+  const [cotasFiltro, setCotasFiltro] = useState([]);
 
   // Dialog de pagamento
   const [dialogPago, setDialogPago] = useState({
@@ -69,8 +83,26 @@ function ListaCobrancas() {
   });
 
   useEffect(() => {
+    const handleUserUpdated = (event) => {
+      setStoredUserState(event?.detail || getStoredUser());
+    };
+
+    window.addEventListener('app:user-updated', handleUserUpdated);
+    return () => window.removeEventListener('app:user-updated', handleUserUpdated);
+  }, []);
+
+  useEffect(() => {
     carregarCobrancas();
   }, [page, rowsPerPage, filtros]);
+
+  useEffect(() => {
+    carregarConsultores();
+  }, [podeSelecionarConsultor]);
+
+  useEffect(() => {
+    carregarClientes();
+    carregarCotas();
+  }, []);
 
   const carregarCobrancas = async () => {
     try {
@@ -81,6 +113,10 @@ function ListaCobrancas() {
         limite: rowsPerPage,
         offset: page * rowsPerPage
       };
+
+      if (isConsultorPerfil && consultorIdLogado) {
+        params.consultorId = consultorIdLogado;
+      }
 
       // Remover parâmetros vazios
       Object.keys(params).forEach(key => {
@@ -95,6 +131,40 @@ function ListaCobrancas() {
       mostrarSnackbar('Erro ao carregar cobranças', 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const carregarClientes = async () => {
+    try {
+      const response = await inadimplentesApi.listarClientes();
+      const lista = Array.isArray(response?.dados) ? response.dados : response;
+      setClientesFiltro(Array.isArray(lista) ? lista : []);
+    } catch (error) {
+      console.error('Erro ao carregar clientes:', error);
+    }
+  };
+
+  const carregarConsultores = async () => {
+    if (!podeSelecionarConsultor) {
+      setConsultoresFiltro([]);
+      return;
+    }
+
+    try {
+      const consultores = await inadimplentesApi.listarConsultores();
+      setConsultoresFiltro(Array.isArray(consultores) ? consultores : []);
+    } catch (error) {
+      console.error('Erro ao carregar consultores:', error);
+    }
+  };
+
+  const carregarCotas = async () => {
+    try {
+      const response = await inadimplentesApi.listarCotas({ limit: 200 });
+      const lista = Array.isArray(response?.dados) ? response.dados : response;
+      setCotasFiltro(Array.isArray(lista) ? lista : []);
+    } catch (error) {
+      console.error('Erro ao carregar cotas:', error);
     }
   };
 
@@ -122,7 +192,7 @@ function ListaCobrancas() {
   };
 
   const handleLimparFiltros = () => {
-    setFiltros({ status: '', processoCobrancaId: '' });
+    setFiltros({ status: '', processoCobrancaId: '', cotaId: '', clienteId: '', consultorId: '' });
     setSearchParams({});
     setPage(0);
   };
@@ -132,6 +202,10 @@ function ListaCobrancas() {
   };
 
   const handleAbrirDialogPago = (cobranca) => {
+    if (!podeGerenciarCobrancas) {
+      mostrarSnackbar('Você não tem permissão para marcar cobranças como pagas', 'warning');
+      return;
+    }
     setDialogPago({
       open: true,
       cobranca,
@@ -150,6 +224,10 @@ function ListaCobrancas() {
   };
 
   const handleMarcarComoPago = async () => {
+    if (!podeGerenciarCobrancas) {
+      mostrarSnackbar('Você não tem permissão para marcar cobranças como pagas', 'warning');
+      return;
+    }
     try {
       await inadimplentesApi.marcarComoPago(dialogPago.cobranca.id, {
         dataPagamento: dialogPago.dataPagamento,
@@ -217,7 +295,7 @@ function ListaCobrancas() {
         <Card sx={{ mb: 3 }}>
           <CardContent>
             <Grid container spacing={2} alignItems="center">
-              <Grid item xs={12} sm={4}>
+              <Grid item xs={12} sm={4} md={3}>
                 <TextField
                   select
                   fullWidth
@@ -233,7 +311,71 @@ function ListaCobrancas() {
                 </TextField>
               </Grid>
 
-              <Grid item xs={12} sm={4}>
+              <Grid item xs={12} sm={4} md={3}>
+                <TextField
+                  select
+                  fullWidth
+                  label="Cota"
+                  value={filtros.cotaId}
+                  onChange={(e) => handleFiltroChange('cotaId', e.target.value)}
+                  size="small"
+                >
+                  <MenuItem value="">Todas</MenuItem>
+                  {cotasFiltro.map((cota) => (
+                    <MenuItem key={cota.id} value={cota.id}>
+                      {`${cota.grupo || ''}-${cota.cota || ''}`.trim() || cota.id}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+
+              <Grid item xs={12} sm={4} md={3}>
+                <TextField
+                  select
+                  fullWidth
+                  label="Cliente"
+                  value={filtros.clienteId}
+                  onChange={(e) => handleFiltroChange('clienteId', e.target.value)}
+                  size="small"
+                >
+                  <MenuItem value="">Todos</MenuItem>
+                  {clientesFiltro.map((cliente) => (
+                    <MenuItem key={cliente.id} value={cliente.id}>
+                      {cliente.nome}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+
+              {podeSelecionarConsultor ? (
+                <Grid item xs={12} sm={4} md={3}>
+                  <TextField
+                    select
+                    fullWidth
+                    label="Consultor"
+                    value={filtros.consultorId}
+                    onChange={(e) => handleFiltroChange('consultorId', e.target.value)}
+                    size="small"
+                  >
+                    <MenuItem value="">Todos</MenuItem>
+                    {consultoresFiltro.map((consultor) => (
+                      <MenuItem key={consultor.id} value={String(consultor.id)}>
+                        {consultor.nome}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                </Grid>
+              ) : (
+                isConsultorPerfil && (
+                  <Grid item xs={12} sm={4} md={3}>
+                    <Typography variant="body2" color="textSecondary">
+                      Consultor logado: {storedUser?.consultor?.nome || storedUser?.consultorNome || storedUser?.name || '—'}
+                    </Typography>
+                  </Grid>
+                )
+              )}
+
+              <Grid item xs={12} sm={6} md={3}>
                 <Button
                   variant="outlined"
                   startIcon={<FilterIcon />}
@@ -244,7 +386,7 @@ function ListaCobrancas() {
                 </Button>
               </Grid>
 
-              <Grid item xs={12} sm={4}>
+              <Grid item xs={12} sm={6} md={3}>
                 <Typography variant="body2" color="textSecondary" align="right">
                   Total: {totalCobrancas} cobrança(s)
                 </Typography>
@@ -344,14 +486,17 @@ function ListaCobrancas() {
                         </Tooltip>
 
                         {cobranca.status !== 'pago' && (
-                          <Tooltip title="Marcar como Pago">
-                            <IconButton
-                              size="small"
-                              color="success"
-                              onClick={() => handleAbrirDialogPago(cobranca)}
-                            >
-                              <PaymentIcon fontSize="small" />
-                            </IconButton>
+                          <Tooltip title={podeGerenciarCobrancas ? 'Marcar como Pago' : tooltipRestritoCobrancas}>
+                            <span>
+                              <IconButton
+                                size="small"
+                                color="success"
+                                onClick={() => handleAbrirDialogPago(cobranca)}
+                                disabled={!podeGerenciarCobrancas}
+                              >
+                                <PaymentIcon fontSize="small" />
+                              </IconButton>
+                            </span>
                           </Tooltip>
                         )}
                       </TableCell>
@@ -401,7 +546,12 @@ function ListaCobrancas() {
           </DialogContent>
           <DialogActions>
             <Button onClick={handleFecharDialogPago}>Cancelar</Button>
-            <Button variant="contained" color="success" onClick={handleMarcarComoPago}>
+            <Button
+              variant="contained"
+              color="success"
+              onClick={handleMarcarComoPago}
+              disabled={!podeGerenciarCobrancas}
+            >
               Confirmar Pagamento
             </Button>
           </DialogActions>

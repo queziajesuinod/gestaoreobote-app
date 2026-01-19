@@ -1,5 +1,22 @@
 const inadimplenciaService = require('../services/inadimplencia');
 
+function obterConsultorFiltro(req, consultorIdParam) {
+  const perfilUsuario = (req.user?.perfil || '').toUpperCase();
+  const isConsultorPerfil = perfilUsuario === 'CONSULTOR';
+  const podeSelecionarConsultor = perfilUsuario === 'ADMIN' || perfilUsuario === 'GESTOR';
+  const consultorLogadoId = req.user?.consultorId || null;
+
+  if (isConsultorPerfil && consultorLogadoId) {
+    return consultorLogadoId;
+  }
+
+  if (podeSelecionarConsultor && consultorIdParam) {
+    return consultorIdParam;
+  }
+
+  return null;
+}
+
 module.exports = {
   /**
    * GET /api/inadimplentes/inadimplentes
@@ -7,11 +24,15 @@ module.exports = {
    */
   async listar(req, res) {
     try {
-      const { diasAtrasoMin, diasAtrasoMax } = req.query;
+      const { diasAtrasoMin, diasAtrasoMax, consultorId } = req.query;
+      const consultorFiltro = obterConsultorFiltro(req, consultorId);
 
       const filtros = {};
-      if (diasAtrasoMin) filtros.diasAtrasoMin = parseInt(diasAtrasoMin);
-      if (diasAtrasoMax) filtros.diasAtrasoMax = parseInt(diasAtrasoMax);
+      if (diasAtrasoMin) filtros.diasAtrasoMin = parseInt(diasAtrasoMin, 10);
+      if (diasAtrasoMax) filtros.diasAtrasoMax = parseInt(diasAtrasoMax, 10);
+      if (consultorFiltro !== null) {
+        filtros.consultorId = consultorFiltro;
+      }
 
       const inadimplentes = await inadimplenciaService.listarInadimplentes(filtros);
 
@@ -61,7 +82,16 @@ module.exports = {
    */
   async dashboard(req, res) {
     try {
-      const estatisticas = await inadimplenciaService.obterEstatisticasInadimplencia();
+      const { consultorId, mes, ano } = req.query;
+      const consultorFiltro = obterConsultorFiltro(req, consultorId);
+
+      const filtros = {
+        consultorId: consultorFiltro,
+        mes,
+        ano
+      };
+
+      const estatisticas = await inadimplenciaService.obterEstatisticasInadimplencia(filtros);
 
       return res.status(200).json({
         sucesso: true,
@@ -241,10 +271,13 @@ module.exports = {
    */
   async obterDadosGraficos(req, res) {
     try {
-      const { meses = 6 } = req.query;
-      const inadimplenciaService = require('../services/inadimplencia');
+      const { meses = 6, consultorId } = req.query;
+      const mesesNumeros = Number.isFinite(Number(meses)) ? Number(meses) : 6;
+      const consultorFiltro = obterConsultorFiltro(req, consultorId);
       
-      const dados = await inadimplenciaService.obterDadosGraficos(parseInt(meses));
+      const dados = await inadimplenciaService.obterDadosGraficos(mesesNumeros, {
+        consultorId: consultorFiltro
+      });
       
       return res.status(200).json({
         sucesso: true,

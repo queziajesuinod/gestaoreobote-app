@@ -245,6 +245,15 @@ class InadimplenciaService {
       }
     }
 
+    const consultorFiltro = filtros.consultorId || null;
+    const includeConsultor = {
+      association: 'consultor'
+    };
+    if (consultorFiltro) {
+      includeConsultor.where = { id: consultorFiltro };
+      includeConsultor.required = true;
+    }
+
     // Buscar inadimplentes
     const inadimplentes = await CobrancaMensal.findAll({
       where,
@@ -256,7 +265,7 @@ class InadimplenciaService {
               association: 'cota',
               include: [
                 { association: 'cliente' },
-                { association: 'consultor' }
+                includeConsultor
               ]
             }
           ]
@@ -379,26 +388,47 @@ class InadimplenciaService {
   /**
    * Obter estatísticas de inadimplência
    */
-  async obterEstatisticasInadimplencia() {
-    const hoje = new Date();
+  async obterEstatisticasInadimplencia(filtros = {}) {
+    const { consultorId = null, mes = null, ano = null } = filtros;
+    const consultorFiltro = consultorId || null;
+    const periodo = this.montarRangeMesReferencia(mes, ano);
+    const includeConsultor = consultorFiltro
+      ? this.montarIncludeProcessoComConsultor(consultorFiltro)
+      : undefined;
 
-    // Total de inadimplentes
+    const montarWhere = (status) => {
+      const where = {};
+      if (status) where.status = status;
+      if (periodo) {
+        where.mesReferencia = {
+          [Op.gte]: periodo.inicio,
+          [Op.lt]: periodo.fim
+        };
+      }
+      return where;
+    };
+
+    const whereAtrasadas = montarWhere('atrasado');
+    const wherePagas = montarWhere('pago');
+    const whereTotal = montarWhere();
+
     const totalInadimplentes = await CobrancaMensal.count({
-      where: { status: 'atrasado' }
+      where: whereAtrasadas,
+      ...(includeConsultor ? { include: includeConsultor } : {})
     });
 
-    // Valor total em atraso
     const cobrancasAtrasadas = await CobrancaMensal.findAll({
-      where: { status: 'atrasado' },
-      attributes: ['valor', 'dataVencimento']
+      where: whereAtrasadas,
+      ...(includeConsultor ? { include: includeConsultor } : {}),
+      attributes: ['id', 'valor', 'dataVencimento']
     });
 
     const valorTotalAtraso = cobrancasAtrasadas.reduce(
-      (total, cobranca) => total + parseFloat(cobranca.valor),
+      (total, cobranca) => total + parseFloat(cobranca.valor || 0),
       0
     );
 
-    // Inadimplentes por faixa de dias
+    const hoje = new Date();
     const faixas = {
       ate7dias: 0,
       de8a15dias: 0,
@@ -421,7 +451,6 @@ class InadimplenciaService {
       }
     });
 
-    // Tempo médio de atraso
     let tempoMedioAtraso = 0;
     if (cobrancasAtrasadas.length > 0) {
       const somaAtrasos = cobrancasAtrasadas.reduce((total, cobranca) => {
@@ -432,44 +461,49 @@ class InadimplenciaService {
       tempoMedioAtraso = Math.round(somaAtrasos / cobrancasAtrasadas.length);
     }
 
-    // Total de notificações enviadas hoje
     const inicioHoje = new Date(hoje);
     inicioHoje.setHours(0, 0, 0, 0);
     
     const fimHoje = new Date(hoje);
     fimHoje.setHours(23, 59, 59, 999);
 
-    const notificacoesHoje = await NotificacaoCobranca.count({
-      where: {
-        tipo: 'automatica',
-        createdAt: {
-          [Op.between]: [inicioHoje, fimHoje]
-        }
-      }
-    });
+    const idsCobrancasAtrasadas = cobrancasAtrasadas.map(cobranca => cobranca.id);
+    const notificacoesHoje = idsCobrancasAtrasadas.length
+      ? await NotificacaoCobranca.count({
+          where: {
+            cobrancaMensalId: {
+              [Op.in]: idsCobrancasAtrasadas
+            },
+            tipo: 'automatica',
+            createdAt: {
+              [Op.between]: [inicioHoje, fimHoje]
+            }
+          }
+        })
+      : 0;
 
-    // KPIs adicionais para o dashboard
     const processosAtivos = await ProcessoCobranca.count({
-      where: { status: 'ativo' }
+      where: { status: 'ativo' },
+      ...(consultorFiltro ? { include: this.montarIncludeConsultorParaProcesso(consultorFiltro) } : {})
     });
 
-    const totalCobrancas = await CobrancaMensal.count();
+    const totalCobrancas = await CobrancaMensal.count({
+      where: whereTotal,
+      ...(includeConsultor ? { include: includeConsultor } : {})
+    });
     
     const cobrancasPagas = await CobrancaMensal.count({
-      where: { status: 'pago' }
+      where: wherePagas,
+      ...(includeConsultor ? { include: includeConsultor } : {})
     });
 
-    const countCobrancasAtrasadas = await CobrancaMensal.count({
-      where: { status: 'atrasado' }
-    });
+    const countCobrancasAtrasadas = totalInadimplentes;
 
     return {
-      // KPIs principais
       processosAtivos,
       totalCobrancas,
       cobrancasPagas,
       cobrancasAtrasadas: countCobrancasAtrasadas,
-      // Estatísticas de inadimplência
       totalInadimplentes,
       valorTotalAtraso,
       tempoMedioAtraso,
@@ -516,10 +550,18 @@ class InadimplenciaService {
   /**
    * Obter dados para gráficos (evolução de inadimplência)
    */
-  async obterDadosGraficos(meses = 6) {
-      const dataFinal = new Date();
-      const dataInicial = new Date();
-      dataInicial.setMonth(dataInicial.getMonth() - meses);
+  async obterDadosGraficos(meses = 6, filtros = {}) {
+    const dataInicial = new Date();
+    dataInicial.setMonth(dataInicial.getMonth() - meses);
+    const consultorFiltro = filtros.consultorId || null;
+    const includeConsultorParaCobrancas = consultorFiltro
+      ? this.montarIncludeProcessoComConsultor(consultorFiltro)
+      : undefined;
+
+    const montarOpcoesComConsultor = (where) => ({
+      where,
+      ...(includeConsultorParaCobrancas ? { include: includeConsultorParaCobrancas } : {})
+    });
 
     // Gráfico de evolução de inadimplência (linha)
     const evolucaoInadimplencia = [];
@@ -529,29 +571,26 @@ class InadimplenciaService {
       mesReferencia.setDate(1);
       mesReferencia.setHours(0, 0, 0, 0);
 
-      const proximoMes = new Date(mesReferencia);
-      proximoMes.setMonth(proximoMes.getMonth() + 1);
-
-      const cobrancasAtrasadas = await CobrancaMensal.count({
-        where: {
-          mesReferencia: mesReferencia,
+      const cobrancasAtrasadas = await CobrancaMensal.count(
+        montarOpcoesComConsultor({
+          mesReferencia,
           status: 'atrasado'
-        }
-      });
+        })
+      );
 
-      const cobrancasPendentes = await CobrancaMensal.count({
-        where: {
-          mesReferencia: mesReferencia,
+      const cobrancasPendentes = await CobrancaMensal.count(
+        montarOpcoesComConsultor({
+          mesReferencia,
           status: 'pendente'
-        }
-      });
+        })
+      );
 
-      const cobrancasPagas = await CobrancaMensal.count({
-        where: {
-          mesReferencia: mesReferencia,
+      const cobrancasPagas = await CobrancaMensal.count(
+        montarOpcoesComConsultor({
+          mesReferencia,
           status: 'pago'
-        }
-      });
+        })
+      );
 
       evolucaoInadimplencia.push({
         mes: mesReferencia.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }),
@@ -560,6 +599,14 @@ class InadimplenciaService {
         pagas: cobrancasPagas,
         total: cobrancasAtrasadas + cobrancasPendentes + cobrancasPagas
       });
+    }
+
+    const consultorInclude = {
+      association: 'consultor'
+    };
+    if (consultorFiltro) {
+      consultorInclude.where = { id: consultorFiltro };
+      consultorInclude.required = true;
     }
 
     // Gráfico de inadimplência por consultor (barra)
@@ -574,7 +621,7 @@ class InadimplenciaService {
             {
               association: 'cota',
               include: [
-                { association: 'consultor' }
+                consultorInclude
               ]
             }
           ]
@@ -604,40 +651,40 @@ class InadimplenciaService {
       .slice(0, 10); // Top 10
 
     // Gráfico de taxa de recuperação (pizza)
-    const totalCobrancas = await CobrancaMensal.count({
-      where: {
+    const totalCobrancas = await CobrancaMensal.count(
+      montarOpcoesComConsultor({
         mesReferencia: {
           [Op.gte]: dataInicial
         }
-      }
-    });
+      })
+    );
 
-    const cobrancasPagas = await CobrancaMensal.count({
-      where: {
+    const cobrancasPagas = await CobrancaMensal.count(
+      montarOpcoesComConsultor({
         mesReferencia: {
           [Op.gte]: dataInicial
         },
         status: 'pago'
-      }
-    });
+      })
+    );
 
-    const cobrancasAtrasadas = await CobrancaMensal.count({
-      where: {
+    const cobrancasAtrasadas = await CobrancaMensal.count(
+      montarOpcoesComConsultor({
         mesReferencia: {
           [Op.gte]: dataInicial
         },
         status: 'atrasado'
-      }
-    });
+      })
+    );
 
-    const cobrancasPendentes = await CobrancaMensal.count({
-      where: {
+    const cobrancasPendentes = await CobrancaMensal.count(
+      montarOpcoesComConsultor({
         mesReferencia: {
           [Op.gte]: dataInicial
         },
         status: 'pendente'
-      }
-    });
+      })
+    );
 
     const distribuicaoStatus = {
       pagas: cobrancasPagas,
@@ -655,19 +702,19 @@ class InadimplenciaService {
       mesReferencia.setHours(0, 0, 0, 0);
 
       // Total de cobranças do mês
-      const totalCobrancasMes = await CobrancaMensal.count({
-        where: {
-          mesReferencia: mesReferencia
-        }
-      });
+      const totalCobrancasMes = await CobrancaMensal.count(
+        montarOpcoesComConsultor({
+          mesReferencia
+        })
+      );
 
       // Cobranças atrasadas do mês
-      const cobrancasAtrasadasMes = await CobrancaMensal.count({
-        where: {
-          mesReferencia: mesReferencia,
+      const cobrancasAtrasadasMes = await CobrancaMensal.count(
+        montarOpcoesComConsultor({
+          mesReferencia,
           status: 'atrasado'
-        }
-      });
+        })
+      );
 
       // Calcular taxa de inadimplência (percentual)
       const taxa = totalCobrancasMes > 0 
@@ -688,6 +735,97 @@ class InadimplenciaService {
       distribuicaoStatus,
       taxaInadimplenciaPorMes
     };
+  }
+
+  montarRangeMesReferencia(mes, ano) {
+    const possuiMes = mes !== undefined && mes !== null && mes !== '';
+    const possuiAno = ano !== undefined && ano !== null && ano !== '';
+
+    if (!possuiMes && !possuiAno) {
+      return null;
+    }
+
+    const anoAtual = this.parseNumero(ano, new Date().getFullYear());
+    if (!Number.isFinite(anoAtual)) {
+      return null;
+    }
+
+    if (possuiMes) {
+      const mesAtual = this.parseNumero(mes);
+      if (!Number.isFinite(mesAtual) || mesAtual < 1 || mesAtual > 12) {
+        return null;
+      }
+      const inicio = new Date(anoAtual, mesAtual - 1, 1);
+      const fim = new Date(anoAtual, mesAtual, 1);
+      return {
+        inicio: this.formatarPrimeiroDia(inicio),
+        fim: this.formatarPrimeiroDia(fim)
+      };
+    }
+
+    const inicio = new Date(anoAtual, 0, 1);
+    const fim = new Date(anoAtual + 1, 0, 1);
+    return {
+      inicio: this.formatarPrimeiroDia(inicio),
+      fim: this.formatarPrimeiroDia(fim)
+    };
+  }
+
+  parseNumero(valor, fallback = null) {
+    if (valor === undefined || valor === null || valor === '') {
+      return fallback;
+    }
+    const inteiro = Number(valor);
+    return Number.isFinite(inteiro) ? inteiro : fallback;
+  }
+
+  formatarPrimeiroDia(data) {
+    const ano = data.getFullYear();
+    const mes = String(data.getMonth() + 1).padStart(2, '0');
+    return `${ano}-${mes}-01`;
+  }
+
+  montarIncludeProcessoComConsultor(consultorId) {
+    if (!consultorId) {
+      return undefined;
+    }
+
+    return [
+      {
+        association: 'processoCobranca',
+        include: [
+          {
+            association: 'cota',
+            include: [
+              {
+                association: 'consultor',
+                where: { id: consultorId },
+                required: true
+              }
+            ]
+          }
+        ]
+      }
+    ];
+  }
+
+  montarIncludeConsultorParaProcesso(consultorId) {
+    if (!consultorId) {
+      return undefined;
+    }
+
+    return [
+      {
+        association: 'cota',
+        include: [
+          {
+            association: 'consultor',
+            where: { id: consultorId },
+            required: true
+          }
+        ]
+      }
+    ];
   }
 }
 

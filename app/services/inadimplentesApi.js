@@ -21,6 +21,9 @@ export const listarProcessos = async (filtros = {}) => {
   const params = new URLSearchParams();
   if (filtros.status) params.append('status', filtros.status);
   if (filtros.cotaId) params.append('cotaId', filtros.cotaId);
+  if (filtros.clienteId) params.append('clienteId', filtros.clienteId);
+  if (filtros.consultorId) params.append('consultorId', filtros.consultorId);
+  if (filtros.diaVencimento) params.append('diaVencimento', filtros.diaVencimento);
   
   const response = await fetch(`${API_URL}/api/inadimplentes/processos?${params}`, {
     headers: getHeaders()
@@ -101,6 +104,39 @@ export const encerrarProcesso = async (id) => {
   return response.json();
 };
 
+export const listarConsultores = async () => {
+  const response = await fetch(`${API_URL}/consultor`, {
+    headers: getHeaders()
+  });
+
+  if (!response.ok) throw new Error('Erro ao listar consultores');
+  return response.json();
+};
+
+export const listarClientes = async () => {
+  const response = await fetch(`${API_URL}/clientes`, {
+    headers: getHeaders()
+  });
+
+  if (!response.ok) throw new Error('Erro ao listar clientes');
+  return response.json();
+};
+
+export const listarCotas = async (filtros = {}) => {
+  const params = new URLSearchParams();
+  if (filtros.clienteId) params.append('clienteId', filtros.clienteId);
+  if (filtros.consultorId) params.append('consultorId', filtros.consultorId);
+  if (filtros.grupo) params.append('grupo', filtros.grupo);
+  if (filtros.limit) params.append('limit', filtros.limit);
+
+  const response = await fetch(`${API_URL}/cotas?${params}`, {
+    headers: getHeaders()
+  });
+
+  if (!response.ok) throw new Error('Erro ao listar cotas');
+  return response.json();
+};
+
 // ============================================================================
 // COBRANÇAS MENSAIS
 // ============================================================================
@@ -111,6 +147,9 @@ export const listarCobrancas = async (filtros = {}) => {
   if (filtros.processoId) params.append('processoId', filtros.processoId);
   if (filtros.dataInicio) params.append('dataInicio', filtros.dataInicio);
   if (filtros.dataFim) params.append('dataFim', filtros.dataFim);
+  if (filtros.consultorId) params.append('consultorId', filtros.consultorId);
+  if (filtros.mes) params.append('mes', filtros.mes);
+  if (filtros.ano) params.append('ano', filtros.ano);
   
   const response = await fetch(`${API_URL}/api/inadimplentes/cobrancas?${params}`, {
     headers: getHeaders()
@@ -165,8 +204,14 @@ export const forcarNotificacao = async (cobrancaId) => {
 // DASHBOARD E ESTATÍSTICAS
 // ============================================================================
 
-export const obterDashboard = async () => {
-  const response = await fetch(`${API_URL}/api/inadimplentes/dashboard`, {
+export const obterDashboard = async (filtros = {}) => {
+  const params = new URLSearchParams();
+  if (filtros.consultorId) params.append('consultorId', filtros.consultorId);
+  if (filtros.mes) params.append('mes', filtros.mes);
+  if (filtros.ano) params.append('ano', filtros.ano);
+  const query = params.toString();
+  const url = `${API_URL}/api/inadimplentes/dashboard${query ? `?${query}` : ''}`;
+  const response = await fetch(url, {
     headers: getHeaders()
   });
   
@@ -472,6 +517,9 @@ export default {
   pausarProcesso,
   reativarProcesso,
   encerrarProcesso,
+  listarConsultores,
+  listarClientes,
+  listarCotas,
   
   // Cobranças
   listarCobrancas,
