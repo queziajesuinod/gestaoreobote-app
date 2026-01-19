@@ -91,11 +91,16 @@ function DetalhesProcesso() {
   const carregarDados = async () => {
     try {
       setLoading(true);
+      console.log('[DetalhesProcesso] Carregando processo ID:', id);
       const response = await inadimplentesApi.buscarProcesso(id);
+      console.log('[DetalhesProcesso] Resposta da API:', response);
+      console.log('[DetalhesProcesso] Dados do processo:', response.dados);
       setProcesso(response.dados);
       setCobrancas(response.dados.cobrancas || []);
+      console.log('[DetalhesProcesso] Processo carregado:', response.dados);
+      console.log('[DetalhesProcesso] Cobranças:', response.dados.cobrancas?.length || 0);
     } catch (error) {
-      console.error('Erro ao carregar processo:', error);
+      console.error('[DetalhesProcesso] Erro ao carregar processo:', error);
       mostrarSnackbar('Erro ao carregar processo', 'error');
     } finally {
       setLoading(false);

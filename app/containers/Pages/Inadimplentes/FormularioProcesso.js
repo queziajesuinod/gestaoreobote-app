@@ -208,8 +208,11 @@ function FormularioProcesso() {
   const carregarProcesso = async () => {
     try {
       setLoading(true);
+      console.log('[FormularioProcesso] Carregando processo ID:', id);
       const response = await inadimplentesApi.buscarProcesso(id);
+      console.log('[FormularioProcesso] Resposta da API:', response);
       const processo = response.dados;
+      console.log('[FormularioProcesso] Dados do processo:', processo);
 
       setForm({
         cotaId: processo.cotaId,
@@ -219,16 +222,19 @@ function FormularioProcesso() {
 
       // Buscar cota selecionada
       const cota = processo.Cota || processo.cota;
+      console.log('[FormularioProcesso] Cota encontrada:', cota);
       if (cota) {
         setCotaSelecionada(cota);
         const cliente = cota.Cliente || cota.cliente;
+        console.log('[FormularioProcesso] Cliente encontrado:', cliente);
         if (cliente) {
           setClienteSelecionado({ id: cliente.id, nome: cliente.nome });
         }
         setGrupoSelecionado(cota.grupo || '');
       }
+      console.log('[FormularioProcesso] Processo carregado com sucesso');
     } catch (error) {
-      console.error('Erro ao carregar processo:', error);
+      console.error('[FormularioProcesso] Erro ao carregar processo:', error);
       mostrarSnackbar('Erro ao carregar processo', 'error');
     } finally {
       setLoading(false);
