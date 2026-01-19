@@ -603,26 +603,39 @@ class InadimplenciaService {
       total: totalCobrancas
     };
 
-    // Gráfico de valor em atraso por mês (área)
-    const valorAtrasoPorMes = [];
+    // Gráfico de taxa de inadimplência por mês (linha)
+    const taxaInadimplenciaPorMes = [];
     for (let i = 0; i < meses; i++) {
       const mesReferencia = new Date();
       mesReferencia.setMonth(mesReferencia.getMonth() - (meses - i - 1));
       mesReferencia.setDate(1);
       mesReferencia.setHours(0, 0, 0, 0);
 
-      const cobrancasAtrasadas = await CobrancaMensal.findAll({
+      // Total de cobranças do mês
+      const totalCobrancasMes = await CobrancaMensal.count({
+        where: {
+          mesReferencia: mesReferencia
+        }
+      });
+
+      // Cobranças atrasadas do mês
+      const cobrancasAtrasadasMes = await CobrancaMensal.count({
         where: {
           mesReferencia: mesReferencia,
           status: 'atrasado'
         }
       });
 
-      const valorTotal = cobrancasAtrasadas.reduce((sum, c) => sum + parseFloat(c.valor), 0);
+      // Calcular taxa de inadimplência (percentual)
+      const taxa = totalCobrancasMes > 0 
+        ? ((cobrancasAtrasadasMes / totalCobrancasMes) * 100).toFixed(2)
+        : 0;
 
-      valorAtrasoPorMes.push({
+      taxaInadimplenciaPorMes.push({
         mes: mesReferencia.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }),
-        valor: valorTotal
+        taxa: parseFloat(taxa),
+        atrasadas: cobrancasAtrasadasMes,
+        total: totalCobrancasMes
       });
     }
 
@@ -630,7 +643,7 @@ class InadimplenciaService {
       evolucaoInadimplencia,
       inadimplenciaPorConsultor: inadimplenciaPorConsultorArray,
       distribuicaoStatus,
-      valorAtrasoPorMes
+      taxaInadimplenciaPorMes
     };
   }
 }

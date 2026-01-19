@@ -45,7 +45,7 @@ ChartJS.register(
  * 1. Evolução de Inadimplência (Linha)
  * 2. Inadimplência por Consultor (Barra)
  * 3. Distribuição de Status (Pizza)
- * 4. Valor em Atraso por Mês (Área)
+ * 4. Taxa de Inadimplência por Mês (Linha)
  */
 function GraficosInadimplencia({ meses = 6 }) {
   const [loading, setLoading] = useState(true);
@@ -268,22 +268,26 @@ function GraficosInadimplencia({ meses = 6 }) {
     }
   };
 
-  // Gráfico 4: Valor em Atraso por Mês (Área)
-  const valorAtrasadoData = {
-    labels: dados.valorAtrasoPorMes.map(item => item.mes),
+  // Gráfico 4: Taxa de Inadimplência por Mês (Linha)
+  const taxaInadimplenciaData = {
+    labels: dados.taxaInadimplenciaPorMes.map(item => item.mes),
     datasets: [
       {
-        label: 'Valor em Atraso (R$)',
-        data: dados.valorAtrasoPorMes.map(item => item.valor),
+        label: 'Taxa de Inadimplência (%)',
+        data: dados.taxaInadimplenciaPorMes.map(item => item.taxa),
         borderColor: '#f44336',
-        backgroundColor: 'rgba(244, 67, 54, 0.3)',
-        fill: true,
+        backgroundColor: 'rgba(244, 67, 54, 0.1)',
+        borderWidth: 3,
+        pointRadius: 5,
+        pointBackgroundColor: '#f44336',
+        pointBorderColor: '#fff',
+        pointBorderWidth: 2,
         tension: 0.4
       }
     ]
   };
 
-  const valorAtrasadoOptions = {
+  const taxaInadimplenciaOptions = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
@@ -292,7 +296,7 @@ function GraficosInadimplencia({ meses = 6 }) {
       },
       title: {
         display: true,
-        text: 'Valor em Atraso por Mês',
+        text: 'Taxa de Inadimplência por Mês',
         font: {
           size: 16,
           weight: 'bold'
@@ -301,7 +305,12 @@ function GraficosInadimplencia({ meses = 6 }) {
       tooltip: {
         callbacks: {
           label: function(context) {
-            return `R$ ${context.parsed.y.toFixed(2)}`;
+            const item = dados.taxaInadimplenciaPorMes[context.dataIndex];
+            return [
+              `Taxa: ${item.taxa}%`,
+              `Atrasadas: ${item.atrasadas}`,
+              `Total: ${item.total}`
+            ];
           }
         }
       }
@@ -309,9 +318,10 @@ function GraficosInadimplencia({ meses = 6 }) {
     scales: {
       y: {
         beginAtZero: true,
+        max: 100,
         ticks: {
           callback: function(value) {
-            return 'R$ ' + value.toFixed(2);
+            return value + '%';
           }
         }
       }
@@ -354,12 +364,12 @@ function GraficosInadimplencia({ meses = 6 }) {
           </Card>
         </Grid>
 
-        {/* Gráfico 4: Valor em Atraso por Mês */}
+        {/* Gráfico 4: Taxa de Inadimplência por Mês */}
         <Grid item xs={12} md={6}>
           <Card>
             <CardContent>
               <Box height={350}>
-                <Line data={valorAtrasadoData} options={valorAtrasadoOptions} />
+                <Line data={taxaInadimplenciaData} options={taxaInadimplenciaOptions} />
               </Box>
             </CardContent>
           </Card>
