@@ -263,8 +263,8 @@ class CobrancaService {
       where.processoCobrancaId = filtros.processoCobrancaId;
     }
 
-    // Buscar cobranças
-    const cobrancas = await CobrancaMensal.findAll({
+    // Opções de query
+    const options = {
       where,
       include: [
         {
@@ -281,7 +281,15 @@ class CobrancaService {
         }
       ],
       order: [['dataVencimento', 'DESC']]
-    });
+    };
+
+    // Limite de resultados
+    if (filtros.limite) {
+      options.limit = parseInt(filtros.limite, 10);
+    }
+
+    // Buscar cobranças
+    const cobrancas = await CobrancaMensal.findAll(options);
 
     return cobrancas;
   }

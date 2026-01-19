@@ -9,13 +9,14 @@ module.exports = {
    */
   async listar(req, res) {
     try {
-      const { status, dataInicio, dataFim, processoCobrancaId } = req.query;
+      const { status, dataInicio, dataFim, processoCobrancaId, limite } = req.query;
 
       const filtros = {};
       if (status) filtros.status = status;
       if (dataInicio) filtros.dataInicio = dataInicio;
       if (dataFim) filtros.dataFim = dataFim;
       if (processoCobrancaId) filtros.processoCobrancaId = processoCobrancaId;
+      if (limite) filtros.limite = limite;
 
       const cobrancas = await cobrancaService.listarCobrancas(filtros);
 

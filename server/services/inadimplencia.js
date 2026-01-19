@@ -416,7 +416,7 @@ class InadimplenciaService {
       where: { status: 'pago' }
     });
 
-    const cobrancasAtrasadas = await CobrancaMensal.count({
+    const countCobrancasAtrasadas = await CobrancaMensal.count({
       where: { status: 'atrasado' }
     });
 
@@ -425,7 +425,7 @@ class InadimplenciaService {
       processosAtivos,
       totalCobrancas,
       cobrancasPagas,
-      cobrancasAtrasadas,
+      cobrancasAtrasadas: countCobrancasAtrasadas,
       // Estatísticas de inadimplência
       totalInadimplentes,
       valorTotalAtraso,
