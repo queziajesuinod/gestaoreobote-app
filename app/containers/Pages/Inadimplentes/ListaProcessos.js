@@ -127,7 +127,7 @@ function ListaProcessos() {
   const handlePausar = (processo) => {
     abrirDialogConfirmacao(
       'Pausar Processo',
-      `Deseja pausar o processo de cobrança da cota ${processo.Cota?.numero}? Novas cobranças não serão geradas até reativar.`,
+      `Deseja pausar o processo de cobrança da cota ${processo.cota?.cota}? Novas cobranças não serão geradas até reativar.`,
       async () => {
         try {
           await inadimplentesApi.pausarProcesso(processo.id);
@@ -143,7 +143,7 @@ function ListaProcessos() {
   const handleReativar = (processo) => {
     abrirDialogConfirmacao(
       'Reativar Processo',
-      `Deseja reativar o processo de cobrança da cota ${processo.Cota?.numero}?`,
+      `Deseja reativar o processo de cobrança da cota ${processo.cota?.cota}?`,
       async () => {
         try {
           await inadimplentesApi.reativarProcesso(processo.id);
@@ -159,7 +159,7 @@ function ListaProcessos() {
   const handleEncerrar = (processo) => {
     abrirDialogConfirmacao(
       'Encerrar Processo',
-      `Deseja encerrar definitivamente o processo de cobrança da cota ${processo.Cota?.numero}? Esta ação não pode ser desfeita.`,
+      `Deseja encerrar definitivamente o processo de cobrança da cota ${processo.cota?.cota}? Esta ação não pode ser desfeita.`,
       async () => {
         try {
           await inadimplentesApi.encerrarProcesso(processo.id);
@@ -175,7 +175,7 @@ function ListaProcessos() {
   const handleExcluir = (processo) => {
     abrirDialogConfirmacao(
       'Excluir Processo',
-      `Deseja excluir o processo de cobrança da cota ${processo.Cota?.numero}? Esta ação não pode ser desfeita.`,
+      `Deseja excluir o processo de cobrança da cota ${processo.cota?.cota}? Esta ação não pode ser desfeita.`,
       async () => {
         try {
           await inadimplentesApi.excluirProcesso(processo.id);
@@ -285,23 +285,23 @@ function ListaProcessos() {
                       <TableRow key={processo.id} hover>
                         <TableCell>
                           <Typography variant="body2" fontWeight="bold">
-                            {processo.Cota?.numero || '-'}
+                            {processo.cota?.cota || '-'}
                           </Typography>
                           <Typography variant="caption" color="textSecondary">
-                            Grupo: {processo.Cota?.grupo || '-'}
+                            Grupo: {processo.cota?.grupo || '-'}
                           </Typography>
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2">
-                            {processo.Cota?.Cliente?.nome || '-'}
+                            {processo.cota?.cliente?.nome || '-'}
                           </Typography>
                           <Typography variant="caption" color="textSecondary">
-                            {processo.Cota?.Cliente?.telefone || '-'}
+                            {processo.cota?.cliente?.telefone || '-'}
                           </Typography>
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2">
-                            {processo.Cota?.Consultor?.nome || '-'}
+                            {processo.cota?.consultor?.nome || '-'}
                           </Typography>
                         </TableCell>
                         <TableCell>
