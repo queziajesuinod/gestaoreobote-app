@@ -131,7 +131,7 @@ module.exports = {
             ]
           },
           {
-            association: 'cobrancasMensais',
+            association: 'cobrancas',
             order: [['mesReferencia', 'DESC']],
             limit: 12 // Últimos 12 meses
           }

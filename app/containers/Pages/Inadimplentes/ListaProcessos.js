@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet';
+import { useNavigate } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -44,6 +45,7 @@ import brand from 'dan-api/dummy/brand';
 import * as inadimplentesApi from '../../../services/inadimplentesApi';
 
 function ListaProcessos() {
+  const navigate = useNavigate();
   const title = `${brand.name} - Processos de Cobrança`;
   const description = 'Gestão de processos de cobrança de inadimplentes';
 
@@ -318,7 +320,7 @@ function ListaProcessos() {
                           <Tooltip title="Visualizar">
                             <IconButton
                               size="small"
-                              href={`/app/inadimplentes/${processo.id}`}
+                              onClick={() => navigate(`/app/inadimplentes/processos/${processo.id}`)}
                             >
                               <VisibilityIcon fontSize="small" />
                             </IconButton>
@@ -327,7 +329,7 @@ function ListaProcessos() {
                           <Tooltip title="Editar">
                             <IconButton
                               size="small"
-                              href={`/app/inadimplentes/${processo.id}/editar`}
+                              onClick={() => navigate(`/app/inadimplentes/processos/${processo.id}/editar`)}
                             >
                               <EditIcon fontSize="small" />
                             </IconButton>
