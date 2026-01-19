@@ -278,27 +278,24 @@ function FormularioProcesso() {
   };
 
   const gruposDisponiveis = useMemo(() => {
-    if (!clienteSelecionado) return [];
+    if (!clienteSelecionado || cotas.length === 0) return [];
     const gruposSet = new Set();
     cotas.forEach((cota) => {
-      const cliente = cota.cliente || cota.Cliente;
-      if (!cliente || cliente.id !== clienteSelecionado.id) return;
-      if (cota.grupo) gruposSet.add(cota.grupo);
+      // A API já retorna cotas filtradas pelo cliente
+      if (cota.grupo) {
+        gruposSet.add(String(cota.grupo));
+      }
     });
-    const grupos = Array.from(gruposSet);
+    const grupos = Array.from(gruposSet).sort();
     console.log('[FormularioProcesso] Grupos disponíveis para cliente', clienteSelecionado?.nome, ':', grupos);
+    console.log('[FormularioProcesso] Cotas para extração de grupos:', cotas);
     return grupos;
   }, [cotas, clienteSelecionado]);
 
-  const cotasFiltradas = useMemo(() => {
-    const filtradas = cotas.filter((cota) => {
-      const cliente = cota.cliente || cota.Cliente;
-      if (clienteSelecionado && cliente?.id !== clienteSelecionado.id) return false;
-      if (grupoSelecionado && String(cota.grupo) !== String(grupoSelecionado)) return false;
-      return true;
-    });
-    console.log('[FormularioProcesso] Cotas filtradas:', filtradas.length, '| Cliente:', clienteSelecionado?.nome, '| Grupo:', grupoSelecionado);
-    return filtradas;
+  // Não precisamos filtrar aqui, a API já retorna filtrado
+  // Apenas logamos para debug
+  useEffect(() => {
+    console.log('[FormularioProcesso] Cotas disponíveis:', cotas.length, '| Cliente:', clienteSelecionado?.nome, '| Grupo:', grupoSelecionado);
   }, [cotas, clienteSelecionado, grupoSelecionado]);
 
   const handleSelectCliente = (event, novoCliente) => {
@@ -309,15 +306,26 @@ function FormularioProcesso() {
       ...prev,
       cotaId: ''
     }));
+    // Carregar cotas do cliente selecionado
+    if (novoCliente) {
+      carregarCotas('');
+    } else {
+      setCotas([]);
+    }
   };
 
   const handleSelectGrupo = (event) => {
-    setGrupoSelecionado(event.target.value);
+    const novoGrupo = event.target.value;
+    setGrupoSelecionado(novoGrupo);
     setCotaSelecionada(null);
     setForm((prev) => ({
       ...prev,
       cotaId: ''
     }));
+    // Recarregar cotas com o novo filtro de grupo
+    if (novoGrupo || clienteSelecionado) {
+      carregarCotas('');
+    }
   };
 
   const atualizarPreview = () => {
@@ -495,7 +503,7 @@ function FormularioProcesso() {
                   {/* Seleção de Cota */}
                   <Grid item xs={12}>
                   <Autocomplete
-                      options={cotasFiltradas}
+                      options={cotas}
                       getOptionLabel={(option) => {
                         if (!option) return '';
                         const numeroCota = option.cota || option.numero || '';
