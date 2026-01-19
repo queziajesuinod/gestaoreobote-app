@@ -453,8 +453,6 @@ export default {
   // Inadimplência
   obterDashboard,
   detectarManual,
-  listarInadimplentes,
-  buscarInadimplente,
   
   // Webhooks
   listarLogsWebhook,
