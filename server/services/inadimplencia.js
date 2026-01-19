@@ -405,7 +405,28 @@ class InadimplenciaService {
       }
     });
 
+    // KPIs adicionais para o dashboard
+    const processosAtivos = await ProcessoCobranca.count({
+      where: { status: 'ativo' }
+    });
+
+    const totalCobrancas = await CobrancaMensal.count();
+    
+    const cobrancasPagas = await CobrancaMensal.count({
+      where: { status: 'pago' }
+    });
+
+    const cobrancasAtrasadas = await CobrancaMensal.count({
+      where: { status: 'atrasado' }
+    });
+
     return {
+      // KPIs principais
+      processosAtivos,
+      totalCobrancas,
+      cobrancasPagas,
+      cobrancasAtrasadas,
+      // Estatísticas de inadimplência
       totalInadimplentes,
       valorTotalAtraso,
       tempoMedioAtraso,

@@ -338,7 +338,7 @@ function DetalhesProcesso() {
                       Número da Cota
                     </Typography>
                     <Typography variant="body1">
-                      {processo.Cota?.numero || '-'}
+                      {processo.cota?.cota || '-'}
                     </Typography>
                   </Grid>
 
@@ -347,7 +347,7 @@ function DetalhesProcesso() {
                       Grupo
                     </Typography>
                     <Typography variant="body1">
-                      {processo.Cota?.grupo || '-'}
+                      {processo.cota?.grupo || '-'}
                     </Typography>
                   </Grid>
 
@@ -360,10 +360,10 @@ function DetalhesProcesso() {
                       Cliente
                     </Typography>
                     <Typography variant="body1">
-                      {processo.Cota?.Cliente?.nome || '-'}
+                      {processo.cota?.cliente?.nome || '-'}
                     </Typography>
                     <Typography variant="caption" color="textSecondary">
-                      {processo.Cota?.Cliente?.telefone || '-'}
+                      {processo.cota?.cliente?.telefone || '-'}
                     </Typography>
                   </Grid>
 
@@ -372,7 +372,7 @@ function DetalhesProcesso() {
                       Consultor
                     </Typography>
                     <Typography variant="body1">
-                      {processo.Cota?.Consultor?.nome || '-'}
+                      {processo.cota?.consultor?.nome || '-'}
                     </Typography>
                   </Grid>
                 </Grid>
