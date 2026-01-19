@@ -48,9 +48,13 @@ function ConfiguracoesWebhook() {
 
   // Configuração
   const [config, setConfig] = useState({
+    nome: 'Webhook Inadimplência',
     url: '',
-    secret: '',
-    ativo: true
+    secretKey: '',
+    metodo: 'POST',
+    ativo: true,
+    maxTentativas: 4,
+    timeout: 30000
   });
 
   // Logs
@@ -89,9 +93,14 @@ function ConfiguracoesWebhook() {
       
       if (response.dados) {
         setConfig({
+          id: response.dados.id,
+          nome: response.dados.nome || 'Webhook Inadimplência',
           url: response.dados.url || '',
-          secret: response.dados.secret || '',
-          ativo: response.dados.ativo !== false
+          secretKey: response.dados.secretKey || '',
+          metodo: response.dados.metodo || 'POST',
+          ativo: response.dados.ativo !== false,
+          maxTentativas: response.dados.maxTentativas || 4,
+          timeout: response.dados.timeout || 30000
         });
       }
     } catch (error) {
@@ -144,13 +153,13 @@ function ConfiguracoesWebhook() {
       return;
     }
 
-    if (!config.secret.trim()) {
-      mostrarSnackbar('Secret é obrigatório para segurança', 'error');
+    if (!config.secretKey || !config.secretKey.trim()) {
+      mostrarSnackbar('Secret Key é obrigatório para segurança', 'error');
       return;
     }
 
-    if (config.secret.length < 16) {
-      mostrarSnackbar('Secret deve ter no mínimo 16 caracteres', 'error');
+    if (config.secretKey.length < 16) {
+      mostrarSnackbar('Secret Key deve ter no mínimo 16 caracteres', 'error');
       return;
     }
 
@@ -213,11 +222,12 @@ function ConfiguracoesWebhook() {
 
   const gerarSecret = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
-    let secret = '';
+    let secretKey = '';
     for (let i = 0; i < 32; i++) {
-      secret += chars.charAt(Math.floor(Math.random() * chars.length));
+      secretKey += chars.charAt(Math.floor(Math.random() * chars.length));
     }
-    setConfig({ ...config, secret });
+    setConfig({ ...config, secretKey });
+    mostrarSnackbar('Secret Key gerado com sucesso', 'success');
   };
 
   if (loading) {
@@ -267,9 +277,9 @@ function ConfiguracoesWebhook() {
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Secret (Chave Secreta)"
-                  value={config.secret}
-                  onChange={(e) => setConfig({ ...config, secret: e.target.value })}
+                  label="Secret Key (Chave Secreta)"
+                  value={config.secretKey}
+                  onChange={(e) => setConfig({ ...config, secretKey: e.target.value })}
                   placeholder="Mínimo 16 caracteres"
                   helperText="Usado para assinar o webhook com HMAC SHA256. Mínimo 16 caracteres."
                   InputProps={{
