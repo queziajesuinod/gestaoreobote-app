@@ -470,21 +470,21 @@ class InadimplenciaService {
 
       const cobrancasAtrasadas = await CobrancaMensal.count({
         where: {
-          mes_referencia: mesReferencia,
+          mesReferencia: mesReferencia,
           status: 'atrasado'
         }
       });
 
       const cobrancasPendentes = await CobrancaMensal.count({
         where: {
-          mes_referencia: mesReferencia,
+          mesReferencia: mesReferencia,
           status: 'pendente'
         }
       });
 
       const cobrancasPagas = await CobrancaMensal.count({
         where: {
-          mes_referencia: mesReferencia,
+          mesReferencia: mesReferencia,
           status: 'pago'
         }
       });
@@ -542,7 +542,7 @@ class InadimplenciaService {
     // Gráfico de taxa de recuperação (pizza)
     const totalCobrancas = await CobrancaMensal.count({
       where: {
-        mes_referencia: {
+        mesReferencia: {
           [Op.gte]: dataInicial
         }
       }
@@ -550,7 +550,7 @@ class InadimplenciaService {
 
     const cobrancasPagas = await CobrancaMensal.count({
       where: {
-        mes_referencia: {
+        mesReferencia: {
           [Op.gte]: dataInicial
         },
         status: 'pago'
@@ -559,7 +559,7 @@ class InadimplenciaService {
 
     const cobrancasAtrasadas = await CobrancaMensal.count({
       where: {
-        mes_referencia: {
+        mesReferencia: {
           [Op.gte]: dataInicial
         },
         status: 'atrasado'
@@ -568,7 +568,7 @@ class InadimplenciaService {
 
     const cobrancasPendentes = await CobrancaMensal.count({
       where: {
-        mes_referencia: {
+        mesReferencia: {
           [Op.gte]: dataInicial
         },
         status: 'pendente'
@@ -592,7 +592,7 @@ class InadimplenciaService {
 
       const cobrancasAtrasadas = await CobrancaMensal.findAll({
         where: {
-          mes_referencia: mesReferencia,
+          mesReferencia: mesReferencia,
           status: 'atrasado'
         }
       });
