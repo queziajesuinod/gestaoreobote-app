@@ -452,27 +452,29 @@ export default {
   
   // Inadimplência
   obterDashboard,
+  detectarInadimplencia,
   detectarManual,
+  listarNotificacoes,
   
   // Webhooks
   listarLogsWebhook,
-  buscarLogWebhook,
+  reenviarWebhook,
   obterEstatisticasWebhook,
   
   // Configurações Webhook
-  listarConfiguracoesWebhook,
-  buscarConfiguracaoWebhook,
-  criarConfiguracaoWebhook,
-  atualizarConfiguracaoWebhook,
-  excluirConfiguracaoWebhook,
-  ativarConfiguracaoWebhook,
-  desativarConfiguracaoWebhook,
-  obterConfiguracaoAtiva,
+  obterConfiguracaoWebhook,
+  salvarConfiguracaoWebhook,
   
   // Relatórios e Exportações
   gerarRelatorioPDF,
   gerarRelatorioInadimplenciaPDF,
   exportarProcessosExcel,
   exportarCobrancasAtrasadasExcel,
-  obterDadosGraficos
+  obterDadosGraficos,
+  
+  // Utilitários
+  formatarData,
+  formatarDataHora,
+  getStatusColor,
+  getStatusLabel
 };
