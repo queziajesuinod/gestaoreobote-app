@@ -125,3 +125,8 @@ export const InadimplenteDashboard = loadable(() =>
   import('./Pages/Inadimplentes/Dashboard'), {
     fallback: <Loading />,
   });
+
+export const InadimplentesCobrancas = loadable(() =>
+  import('./Pages/Inadimplentes/ListaCobrancas'), {
+    fallback: <Loading />,
+  });

@@ -132,6 +132,12 @@ export const buildMenu = (permissoes = []) => {
           icon: 'ion-ios-list-outline'
         },
         {
+          key: 'inadimplentes_cobrancas',
+          name: 'Cobranças',
+          link: '/app/inadimplentes/cobrancas',
+          icon: 'ion-ios-cash-outline'
+        },
+        {
           key: 'inadimplentes_webhook',
           name: 'Configurações Webhook',
           link: '/app/inadimplentes/webhook',

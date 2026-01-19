@@ -22,7 +22,8 @@ import {
   InadimplentesFormulario,
   InadimplentesDetalhes,
   InadimplentesWebhook,
-  InadimplenteDashboard
+  InadimplenteDashboard,
+  InadimplentesCobrancas
 } from '../pageListAsync';
 
 function Application({ isAuthenticated }) {
@@ -106,6 +107,10 @@ function Application({ isAuthenticated }) {
         <Route
           path="inadimplentes/webhook"
           element={<ProtectedRoute element={<InadimplentesWebhook />} isAuthenticated={isAuthenticated} />}
+        />
+        <Route
+          path="inadimplentes/cobrancas"
+          element={<ProtectedRoute element={<InadimplentesCobrancas />} isAuthenticated={isAuthenticated} />}
         />
 
       </Routes>
