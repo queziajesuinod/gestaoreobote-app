@@ -56,6 +56,7 @@ function FormularioProcesso() {
   const [clienteSelecionado, setClienteSelecionado] = useState(null);
   const [grupoSelecionado, setGrupoSelecionado] = useState('');
   const [loadingCotas, setLoadingCotas] = useState(false);
+  const [inputCotaValue, setInputCotaValue] = useState('');
 
   const [form, setForm] = useState({
     cotaId: '',
@@ -81,10 +82,20 @@ function FormularioProcesso() {
     severity: 'success'
   });
 
-  // Carregar cotas disponíveis
+  // Carregar clientes no início
   useEffect(() => {
-    carregarCotas();
+    carregarClientes();
   }, []);
+
+  // Carregar cotas quando usuário digita (debounce)
+  useEffect(() => {
+    if (inputCotaValue.length >= 2 || clienteSelecionado || grupoSelecionado) {
+      const timer = setTimeout(() => {
+        carregarCotas(inputCotaValue);
+      }, 500); // Aguarda 500ms após parar de digitar
+      return () => clearTimeout(timer);
+    }
+  }, [inputCotaValue, clienteSelecionado, grupoSelecionado]);
 
   // Carregar processo se for edição
   useEffect(() => {
@@ -121,10 +132,43 @@ function FormularioProcesso() {
     atualizarPreview();
   }, [form, importarHistorico, historico]);
 
-  const carregarCotas = async () => {
+  const carregarClientes = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/clientes?limit=100`, {
+        headers: {
+          Authorization: `Bearer ${getToken()}`
+        }
+      });
+
+      if (!response.ok) throw new Error('Erro ao carregar clientes');
+
+      const data = await response.json();
+      const clientesLista = data.dados || [];
+      
+      const clientesArray = clientesLista.map(c => ({
+        id: c.id,
+        nome: c.nome
+      }));
+      
+      console.log('[FormularioProcesso] Clientes carregados:', clientesArray.length);
+      setClientesDisponiveis(clientesArray);
+    } catch (error) {
+      console.error('Erro ao carregar clientes:', error);
+    }
+  };
+
+  const carregarCotas = async (busca = '') => {
     try {
       setLoadingCotas(true);
-      const response = await fetch(`${API_URL}/cotas`, {
+      
+      // Construir query params
+      const params = new URLSearchParams();
+      if (busca) params.append('busca', busca);
+      if (clienteSelecionado) params.append('clienteId', clienteSelecionado.id);
+      if (grupoSelecionado) params.append('grupo', grupoSelecionado);
+      params.append('limit', '50'); // Limitar resultados
+      
+      const response = await fetch(`${API_URL}/api/cotas?${params}`, {
         headers: {
           Authorization: `Bearer ${getToken()}`
         }
@@ -139,22 +183,6 @@ function FormularioProcesso() {
       console.log('[FormularioProcesso] Primeira cota:', cotasLista[0]);
       
       setCotas(cotasLista);
-      const clientesMap = new Map();
-      cotasLista.forEach((cota) => {
-        const cliente = cota.cliente || cota.Cliente;
-        if (cliente && cliente.id && !clientesMap.has(cliente.id)) {
-          clientesMap.set(cliente.id, {
-            id: cliente.id,
-            nome: cliente.nome
-          });
-        }
-      });
-      
-      const clientesArray = Array.from(clientesMap.values());
-      console.log('[FormularioProcesso] Clientes disponíveis:', clientesArray.length);
-      console.log('[FormularioProcesso] Clientes:', clientesArray);
-      
-      setClientesDisponiveis(clientesArray);
     } catch (error) {
       console.error('Erro ao carregar cotas:', error);
       mostrarSnackbar('Erro ao carregar cotas', 'error');
@@ -478,15 +506,19 @@ function FormularioProcesso() {
                       }}
                       value={cotaSelecionada}
                       onChange={handleChangeCota}
+                      onInputChange={(event, newInputValue) => {
+                        setInputCotaValue(newInputValue);
+                      }}
                       isOptionEqualToValue={(option, value) => option?.id === value?.id}
                       loading={loadingCotas}
                       disabled={isEdicao}
+                      noOptionsText={inputCotaValue.length < 2 ? 'Digite pelo menos 2 caracteres' : 'Nenhuma cota encontrada'}
                       renderInput={(params) => (
                         <TextField
                           {...params}
                           label="Cota *"
                           placeholder="Digite para buscar..."
-                          helperText={isEdicao ? 'Não é possível alterar a cota' : 'Selecione a cota para cobrança'}
+                          helperText={isEdicao ? 'Não é possível alterar a cota' : 'Digite o número da cota ou nome do cliente'}
                         />
                       )}
                     />
