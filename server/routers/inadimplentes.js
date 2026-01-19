@@ -146,6 +146,12 @@ router.get('/dashboard', inadimplenciaController.dashboard);
 router.post('/detectar', inadimplenciaController.detectarManual);
 
 /**
+ * POST /api/inadimplentes/notificar-manual
+ * Notificar manualmente todas as cobranças atrasadas (envia webhooks)
+ */
+router.post('/notificar-manual', inadimplenciaController.notificarManual);
+
+/**
  * GET /api/inadimplentes/inadimplentes
  * Listar inadimplentes
  * Query params: diasAtrasoMin, diasAtrasoMax

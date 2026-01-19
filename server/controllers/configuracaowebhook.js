@@ -331,8 +331,17 @@ module.exports = {
    */
   async testar(req, res) {
     try {
+      console.log('[Webhook Teste] Iniciando teste de webhook...');
+      
       const configuracao = await ConfiguracaoWebhook.findOne({
         where: { ativo: true }
+      });
+      
+      console.log('[Webhook Teste] Configuração encontrada:', {
+        id: configuracao?.id,
+        nome: configuracao?.nome,
+        url: configuracao?.url,
+        ativo: configuracao?.ativo
       });
 
       if (!configuracao) {
@@ -362,11 +371,17 @@ module.exports = {
       hmac.update(JSON.stringify(payloadTeste));
       const assinatura = 'sha256=' + hmac.digest('hex');
 
+      console.log('[Webhook Teste] Payload:', JSON.stringify(payloadTeste, null, 2));
+      console.log('[Webhook Teste] Assinatura:', assinatura);
+      console.log('[Webhook Teste] URL destino:', configuracao.url);
+      
       // Enviar webhook
       const axios = require('axios');
       const inicio = Date.now();
 
       try {
+        console.log('[Webhook Teste] Enviando requisição...');
+        
         const response = await axios({
           method: configuracao.metodo || 'POST',
           url: configuracao.url,
@@ -382,6 +397,12 @@ module.exports = {
         });
 
         const tempoResposta = Date.now() - inicio;
+        
+        console.log('[Webhook Teste] Resposta recebida:', {
+          status: response.status,
+          tempoResposta,
+          data: response.data
+        });
 
         // Registrar log
         const { WebhookLog } = require('../models');
@@ -409,6 +430,13 @@ module.exports = {
 
       } catch (erroEnvio) {
         const tempoResposta = Date.now() - inicio;
+        
+        console.error('[Webhook Teste] Erro ao enviar:', {
+          mensagem: erroEnvio.message,
+          code: erroEnvio.code,
+          status: erroEnvio.response?.status,
+          data: erroEnvio.response?.data
+        });
 
         // Registrar log de erro
         const { WebhookLog } = require('../models');

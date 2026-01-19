@@ -58,6 +58,7 @@ function Dashboard() {
   const [dashboard, setDashboard] = useState(null);
   const [cobrancasAtrasadas, setCobrancasAtrasadas] = useState([]);
   const [detectando, setDetectando] = useState(false);
+  const [notificando, setNotificando] = useState(false);
   const [atualizando, setAtualizando] = useState(false);
   const [exportando, setExportando] = useState(false);
   const [mostrarGraficos, setMostrarGraficos] = useState(true);
@@ -135,6 +136,33 @@ function Dashboard() {
       mostrarSnackbar('Erro ao detectar inadimplência', 'error');
     } finally {
       setDetectando(false);
+    }
+  };
+
+  const handleNotificarManual = async () => {
+    try {
+      setNotificando(true);
+      const response = await fetch('/api/inadimplentes/notificar-manual', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      const data = await response.json();
+      
+      if (data.sucesso) {
+        mostrarSnackbar(data.mensagem, 'success');
+        // Recarregar dados
+        await carregarDados();
+      } else {
+        mostrarSnackbar(data.mensagem || 'Erro ao enviar notificações', 'error');
+      }
+    } catch (error) {
+      console.error('Erro ao notificar manualmente:', error);
+      mostrarSnackbar('Erro ao enviar notificações', 'error');
+    } finally {
+      setNotificando(false);
     }
   };
 
@@ -232,6 +260,16 @@ function Dashboard() {
             disabled={detectando}
           >
             {detectando ? 'Detectando...' : 'Detectar Inadimplência'}
+          </Button>
+
+          <Button
+            variant="contained"
+            color="warning"
+            startIcon={notificando ? <CircularProgress size={20} /> : <WarningIcon />}
+            onClick={handleNotificarManual}
+            disabled={notificando}
+          >
+            {notificando ? 'Notificando...' : 'Notificar Manualmente'}
           </Button>
 
           <Button

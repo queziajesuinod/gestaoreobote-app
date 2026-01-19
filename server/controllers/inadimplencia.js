@@ -208,6 +208,34 @@ module.exports = {
   },
 
   /**
+   * POST /api/inadimplentes/notificar-manual
+   * Notificar manualmente todas as cobranças atrasadas
+   */
+  async notificarManual(req, res) {
+    try {
+      console.log('[Inadimplencia] Iniciando notificação manual...');
+      
+      const inadimplenciaService = require('../services/inadimplencia');
+      const resultado = await inadimplenciaService.detectarInadimplenciaAutomatico();
+      
+      console.log('[Inadimplencia] Notificação manual concluída:', resultado);
+      
+      return res.status(200).json({
+        sucesso: true,
+        mensagem: `${resultado.cobrancasVerificadas} cobrança(s) verificada(s), ${resultado.webhooksEnviados} notificação(ões) enviada(s)`,
+        dados: resultado
+      });
+    } catch (erro) {
+      console.error('[Inadimplencia] Erro na notificação manual:', erro);
+      return res.status(500).json({
+        sucesso: false,
+        mensagem: 'Erro ao enviar notificações',
+        erro: erro.message
+      });
+    }
+  },
+
+  /**
    * GET /api/inadimplencia/estatisticas/graficos
    * Obter dados para gráficos
    */
