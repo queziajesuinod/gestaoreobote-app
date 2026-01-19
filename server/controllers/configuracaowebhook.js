@@ -321,9 +321,7 @@ module.exports = {
         mensagem: 'Erro ao desativar configuração'
       });
     }
-  }
-};
-,
+  },
 
   /**
    * POST /api/inadimplentes/configuracoes/webhook/testar
