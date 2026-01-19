@@ -134,6 +134,10 @@ function FormularioProcesso() {
 
       const data = await response.json();
       const cotasLista = data.dados || [];
+      
+      console.log('[FormularioProcesso] Cotas carregadas:', cotasLista.length);
+      console.log('[FormularioProcesso] Primeira cota:', cotasLista[0]);
+      
       setCotas(cotasLista);
       const clientesMap = new Map();
       cotasLista.forEach((cota) => {
@@ -145,7 +149,12 @@ function FormularioProcesso() {
           });
         }
       });
-      setClientesDisponiveis(Array.from(clientesMap.values()));
+      
+      const clientesArray = Array.from(clientesMap.values());
+      console.log('[FormularioProcesso] Clientes disponíveis:', clientesArray.length);
+      console.log('[FormularioProcesso] Clientes:', clientesArray);
+      
+      setClientesDisponiveis(clientesArray);
     } catch (error) {
       console.error('Erro ao carregar cotas:', error);
       mostrarSnackbar('Erro ao carregar cotas', 'error');
@@ -248,16 +257,20 @@ function FormularioProcesso() {
       if (!cliente || cliente.id !== clienteSelecionado.id) return;
       if (cota.grupo) gruposSet.add(cota.grupo);
     });
-    return Array.from(gruposSet);
+    const grupos = Array.from(gruposSet);
+    console.log('[FormularioProcesso] Grupos disponíveis para cliente', clienteSelecionado?.nome, ':', grupos);
+    return grupos;
   }, [cotas, clienteSelecionado]);
 
   const cotasFiltradas = useMemo(() => {
-    return cotas.filter((cota) => {
+    const filtradas = cotas.filter((cota) => {
       const cliente = cota.cliente || cota.Cliente;
       if (clienteSelecionado && cliente?.id !== clienteSelecionado.id) return false;
       if (grupoSelecionado && String(cota.grupo) !== String(grupoSelecionado)) return false;
       return true;
     });
+    console.log('[FormularioProcesso] Cotas filtradas:', filtradas.length, '| Cliente:', clienteSelecionado?.nome, '| Grupo:', grupoSelecionado);
+    return filtradas;
   }, [cotas, clienteSelecionado, grupoSelecionado]);
 
   const handleSelectCliente = (event, novoCliente) => {
