@@ -134,7 +134,7 @@ function FormularioProcesso() {
 
   const carregarClientes = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/clientes?limit=100`, {
+      const response = await fetch(`${API_URL}/clientes?limit=100`, {
         headers: {
           Authorization: `Bearer ${getToken()}`
         }
@@ -168,7 +168,7 @@ function FormularioProcesso() {
       if (grupoSelecionado) params.append('grupo', grupoSelecionado);
       params.append('limit', '50'); // Limitar resultados
       
-      const response = await fetch(`${API_URL}/api/cotas?${params}`, {
+      const response = await fetch(`${API_URL}/cotas?${params}`, {
         headers: {
           Authorization: `Bearer ${getToken()}`
         }
