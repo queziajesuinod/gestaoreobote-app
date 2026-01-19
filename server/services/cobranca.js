@@ -291,7 +291,23 @@ class CobrancaService {
     // Buscar cobranças
     const cobrancas = await CobrancaMensal.findAll(options);
 
-    return cobrancas;
+    // Calcular dias de atraso para cada cobrança
+    const hoje = new Date();
+    const cobrancasComAtraso = cobrancas.map(cobranca => {
+      const cobrancaJSON = cobranca.toJSON();
+      
+      if (cobrancaJSON.status === 'atrasado' && cobrancaJSON.dataVencimento) {
+        const vencimento = new Date(cobrancaJSON.dataVencimento);
+        const diasAtraso = Math.max(0, Math.floor((hoje - vencimento) / (1000 * 60 * 60 * 24)));
+        cobrancaJSON.diasAtraso = diasAtraso;
+      } else {
+        cobrancaJSON.diasAtraso = 0;
+      }
+      
+      return cobrancaJSON;
+    });
+
+    return cobrancasComAtraso;
   }
 
   /**

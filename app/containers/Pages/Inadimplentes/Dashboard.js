@@ -277,7 +277,7 @@ function Dashboard() {
                   </Typography>
                 </Box>
                 <Typography variant="h4">
-                  {dashboard?.totalProcessos || 0}
+                  {dashboard?.processosAtivos || 0}
                 </Typography>
                 <Typography variant="caption" color="textSecondary">
                   processos de cobrança
@@ -417,18 +417,18 @@ function Dashboard() {
                       <TableRow key={cobranca.id}>
                         <TableCell>
                           <Typography variant="body2">
-                            {cobranca.ProcessoCobranca?.Cota?.numero || '-'}
+                            {cobranca.processoCobranca?.cota?.cota || '-'}
                           </Typography>
                           <Typography variant="caption" color="textSecondary">
-                            {cobranca.ProcessoCobranca?.Cota?.grupo || '-'}
+                            Grupo {cobranca.processoCobranca?.cota?.grupo || '-'}
                           </Typography>
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2">
-                            {cobranca.ProcessoCobranca?.Cota?.Cliente?.nome || '-'}
+                            {cobranca.processoCobranca?.cota?.cliente?.nome || '-'}
                           </Typography>
                           <Typography variant="caption" color="textSecondary">
-                            {cobranca.ProcessoCobranca?.Cota?.Cliente?.telefone || '-'}
+                            {cobranca.processoCobranca?.cota?.cliente?.telefone || '-'}
                           </Typography>
                         </TableCell>
                         <TableCell>
