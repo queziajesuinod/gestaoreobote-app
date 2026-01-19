@@ -168,7 +168,17 @@ function FormularioProcesso() {
       if (grupoSelecionado) params.append('grupo', grupoSelecionado);
       params.append('limit', '50'); // Limitar resultados
       
-      const response = await fetch(`${API_URL}/cotas?${params}`, {
+      const url = `${API_URL}/cotas?${params}`;
+      console.log('[FormularioProcesso] Buscando cotas...');
+      console.log('[FormularioProcesso] URL:', url);
+      console.log('[FormularioProcesso] Params:', {
+        busca,
+        clienteId: clienteSelecionado?.id,
+        clienteNome: clienteSelecionado?.nome,
+        grupo: grupoSelecionado
+      });
+      
+      const response = await fetch(url, {
         headers: {
           Authorization: `Bearer ${getToken()}`
         }
