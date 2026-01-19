@@ -142,22 +142,11 @@ function Dashboard() {
   const handleNotificarManual = async () => {
     try {
       setNotificando(true);
-      const response = await fetch('/api/inadimplentes/notificar-manual', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await inadimplentesApi.notificarManual();
       
-      const data = await response.json();
-      
-      if (data.sucesso) {
-        mostrarSnackbar(data.mensagem, 'success');
-        // Recarregar dados
-        await carregarDados();
-      } else {
-        mostrarSnackbar(data.mensagem || 'Erro ao enviar notificações', 'error');
-      }
+      mostrarSnackbar(response.mensagem, 'success');
+      // Recarregar dados
+      await carregarDados();
     } catch (error) {
       console.error('Erro ao notificar manualmente:', error);
       mostrarSnackbar('Erro ao enviar notificações', 'error');

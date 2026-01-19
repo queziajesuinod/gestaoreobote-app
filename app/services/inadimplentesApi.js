@@ -184,6 +184,16 @@ export const detectarInadimplencia = async () => {
   return response.json();
 };
 
+export const notificarManual = async () => {
+  const response = await fetch(`${API_URL}/api/inadimplentes/notificar-manual`, {
+    method: 'POST',
+    headers: getHeaders()
+  });
+  
+  if (!response.ok) throw new Error('Erro ao enviar notificações');
+  return response.json();
+};
+
 // ============================================================================
 // NOTIFICAÇÕES
 // ============================================================================
@@ -224,6 +234,16 @@ export const salvarConfiguracaoWebhook = async (dados) => {
   });
   
   if (!response.ok) throw new Error('Erro ao salvar configuração');
+  return response.json();
+};
+
+export const testarWebhook = async () => {
+  const response = await fetch(`${API_URL}/api/inadimplentes/configuracoes/webhook/testar`, {
+    method: 'POST',
+    headers: getHeaders()
+  });
+  
+  if (!response.ok) throw new Error('Erro ao testar webhook');
   return response.json();
 };
 
@@ -459,6 +479,7 @@ export default {
   // Inadimplência
   obterDashboard,
   detectarInadimplencia,
+  notificarManual,
   detectarManual,
   listarNotificacoes,
   
@@ -470,6 +491,7 @@ export default {
   // Configurações Webhook
   obterConfiguracaoWebhook,
   salvarConfiguracaoWebhook,
+  testarWebhook,
   
   // Relatórios e Exportações
   gerarRelatorioPDF,

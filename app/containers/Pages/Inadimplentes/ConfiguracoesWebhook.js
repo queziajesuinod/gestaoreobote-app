@@ -184,20 +184,9 @@ function ConfiguracoesWebhook() {
 
     try {
       setTestando(true);
-      const response = await fetch('/api/inadimplentes/configuracoes/webhook/testar', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await inadimplentesApi.testarWebhook();
       
-      const data = await response.json();
-      
-      if (data.sucesso) {
-        mostrarSnackbar('Webhook de teste enviado com sucesso! Verifique os logs abaixo.', 'success');
-      } else {
-        mostrarSnackbar(`Erro ao enviar webhook: ${data.erro || data.mensagem}`, 'error');
-      }
+      mostrarSnackbar('Webhook de teste enviado com sucesso! Verifique os logs abaixo.', 'success');
       
       await carregarLogs();
       
