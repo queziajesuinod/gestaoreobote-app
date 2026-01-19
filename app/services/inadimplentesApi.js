@@ -202,7 +202,7 @@ export const listarNotificacoes = async (cobrancaId) => {
 // ============================================================================
 
 export const obterConfiguracaoWebhook = async () => {
-  const response = await fetch(`${API_URL}/api/inadimplentes/webhook/configuracao`, {
+  const response = await fetch(`${API_URL}/api/inadimplentes/configuracoes/webhook/ativa`, {
     headers: getHeaders()
   });
   
@@ -211,8 +211,14 @@ export const obterConfiguracaoWebhook = async () => {
 };
 
 export const salvarConfiguracaoWebhook = async (dados) => {
-  const response = await fetch(`${API_URL}/api/inadimplentes/webhook/configuracao`, {
-    method: 'POST',
+  // Se tem ID, é atualização (PUT), senão é criação (POST)
+  const method = dados.id ? 'PUT' : 'POST';
+  const url = dados.id 
+    ? `${API_URL}/api/inadimplentes/configuracoes/webhook/${dados.id}`
+    : `${API_URL}/api/inadimplentes/configuracoes/webhook`;
+  
+  const response = await fetch(url, {
+    method,
     headers: getHeaders(),
     body: JSON.stringify(dados)
   });
@@ -226,7 +232,7 @@ export const listarLogsWebhook = async (filtros = {}) => {
   if (filtros.cobrancaId) params.append('cobrancaId', filtros.cobrancaId);
   if (filtros.sucesso !== undefined) params.append('sucesso', filtros.sucesso);
   
-  const response = await fetch(`${API_URL}/api/inadimplentes/webhook/logs?${params}`, {
+  const response = await fetch(`${API_URL}/api/inadimplentes/webhooks/logs?${params}`, {
     headers: getHeaders()
   });
   
