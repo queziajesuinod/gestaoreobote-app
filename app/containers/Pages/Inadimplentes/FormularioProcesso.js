@@ -143,7 +143,8 @@ function FormularioProcesso() {
       if (!response.ok) throw new Error('Erro ao carregar clientes');
 
       const data = await response.json();
-      const clientesLista = data.dados || [];
+      // A API pode retornar array diretamente ou { dados: [...] }
+      const clientesLista = Array.isArray(data) ? data : (data.dados || []);
       
       const clientesArray = clientesLista.map(c => ({
         id: c.id,
@@ -187,7 +188,10 @@ function FormularioProcesso() {
       if (!response.ok) throw new Error('Erro ao carregar cotas');
 
       const data = await response.json();
-      const cotasLista = data.dados || [];
+      console.log('[FormularioProcesso] Resposta da API:', data);
+      
+      // A API pode retornar array diretamente ou { dados: [...] }
+      const cotasLista = Array.isArray(data) ? data : (data.dados || []);
       
       console.log('[FormularioProcesso] Cotas carregadas:', cotasLista.length);
       console.log('[FormularioProcesso] Primeira cota:', cotasLista[0]);
