@@ -52,11 +52,9 @@ function GraficosInadimplencia({ meses = 6, filtros = {} }) {
   const [erro, setErro] = useState(null);
   const [dados, setDados] = useState(null);
 
-  const filtrosChave = JSON.stringify(filtros);
-
   useEffect(() => {
     carregarDados();
-  }, [meses, filtrosChave]);
+  }, [meses, filtros.consultorId, filtros.mes, filtros.ano]);
 
   const carregarDados = async () => {
     try {
@@ -382,7 +380,8 @@ function GraficosInadimplencia({ meses = 6, filtros = {} }) {
 }
 
 GraficosInadimplencia.propTypes = {
-  meses: PropTypes.number
+  meses: PropTypes.number,
+  filtros: PropTypes.object
 };
 
 export default GraficosInadimplencia;

@@ -741,7 +741,11 @@ function Dashboard() {
                   Ocultar Gráficos
                 </Button>
               </Box>
-              <GraficosInadimplencia meses={6} filtros={filtrosAplicados} />
+              <GraficosInadimplencia 
+                key={JSON.stringify(filtrosAplicados)} 
+                meses={6} 
+                filtros={filtrosAplicados} 
+              />
             </CardContent>
           </Card>
         )}
