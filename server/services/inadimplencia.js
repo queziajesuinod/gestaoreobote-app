@@ -890,9 +890,11 @@ class InadimplenciaService {
     return [
       {
         association: 'processoCobranca',
+        required: true,
         include: [
           {
             association: 'cota',
+            required: true,
             include: [
               {
                 association: 'consultor',
@@ -914,6 +916,7 @@ class InadimplenciaService {
     return [
       {
         association: 'cota',
+        required: true,
         include: [
           {
             association: 'consultor',
