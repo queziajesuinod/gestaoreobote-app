@@ -751,7 +751,7 @@ class InadimplenciaService {
     const totalCobrancas = await CobrancaMensal.count(
       montarOpcoesComConsultor({
         mesReferencia: {
-          [Op.gte]: dataInicial
+          [Op.gte]: baseInicial
         }
       })
     );
@@ -759,7 +759,7 @@ class InadimplenciaService {
     const cobrancasPagas = await CobrancaMensal.count(
       montarOpcoesComConsultor({
         mesReferencia: {
-          [Op.gte]: dataInicial
+          [Op.gte]: baseInicial
         },
         status: 'pago'
       })
@@ -768,7 +768,7 @@ class InadimplenciaService {
     const cobrancasAtrasadas = await CobrancaMensal.count(
       montarOpcoesComConsultor({
         mesReferencia: {
-          [Op.gte]: dataInicial
+          [Op.gte]: baseInicial
         },
         status: 'atrasado'
       })
@@ -777,7 +777,7 @@ class InadimplenciaService {
     const cobrancasPendentes = await CobrancaMensal.count(
       montarOpcoesComConsultor({
         mesReferencia: {
-          [Op.gte]: dataInicial
+          [Op.gte]: baseInicial
         },
         status: 'pendente'
       })
