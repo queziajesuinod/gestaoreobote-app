@@ -763,34 +763,27 @@ function Dashboard() {
 
 
         {/* Tabela de Cobranças Atrasadas */}
-        <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Cobranças Atrasadas (Últimas 10)
-            </Typography>
+        {cobrancasAtrasadas.length > 0 && (
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Cobranças Atrasadas (Últimas 10)
+              </Typography>
 
-            <TableContainer component={Paper} variant="outlined">
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Cota</TableCell>
-                    <TableCell>Cliente</TableCell>
-                    <TableCell>Mês</TableCell>
-                    <TableCell>Vencimento</TableCell>
-                    <TableCell>Dias Atraso</TableCell>
-                    <TableCell align="right">Ações</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {cobrancasAtrasadas.length === 0 ? (
+              <TableContainer component={Paper} variant="outlined">
+                <Table>
+                  <TableHead>
                     <TableRow>
-                      <TableCell colSpan={6} align="center">
-                        <Typography variant="body2" color="textSecondary">
-                          Nenhuma cobrança atrasada
-                        </Typography>
-                      </TableCell>
+                      <TableCell>Cota</TableCell>
+                      <TableCell>Cliente</TableCell>
+                      <TableCell>Mês</TableCell>
+                      <TableCell>Vencimento</TableCell>
+                      <TableCell>Dias Atraso</TableCell>
+                      <TableCell align="right">Ações</TableCell>
                     </TableRow>
-                  ) : (
+                  </TableHead>
+                  <TableBody>
+                    {
                     cobrancasAtrasadas.map((cobranca) => (
                       <TableRow key={cobranca.id}>
                         <TableCell>
@@ -844,12 +837,11 @@ function Dashboard() {
                         </TableCell>
                       </TableRow>
                     ))
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                  }
+                  </TableBody>
+                </Table>
+              </TableContainer>
 
-            {cobrancasAtrasadas.length > 0 && (
               <Box sx={{ mt: 2, textAlign: 'center' }}>
                 <Button
                   variant="text"
@@ -858,9 +850,9 @@ function Dashboard() {
                   Ver Todas as Cobranças Atrasadas
                 </Button>
               </Box>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
       </PapperBlock>
 
       {/* Dialog: Marcar como Pago */}
