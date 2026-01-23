@@ -239,6 +239,36 @@ export const notificarManual = async () => {
   return response.json();
 };
 
+export const verificarStatusInadimplente = async () => {
+  const response = await fetch(`${API_URL}/api/inadimplentes/verificar-status`, {
+    method: 'POST',
+    headers: getHeaders()
+  });
+
+  if (!response.ok) throw new Error('Erro ao verificar status de inadimplente');
+  return response.json();
+};
+
+export const obterConfiguracaoCobranca = async () => {
+  const response = await fetch(`${API_URL}/api/inadimplentes/configuracoes/cobranca`, {
+    headers: getHeaders()
+  });
+
+  if (!response.ok) throw new Error('Erro ao carregar configuração de cobrança');
+  return response.json();
+};
+
+export const atualizarConfiguracaoCobranca = async (dados) => {
+  const response = await fetch(`${API_URL}/api/inadimplentes/configuracoes/cobranca`, {
+    method: 'PUT',
+    headers: getHeaders(),
+    body: JSON.stringify(dados)
+  });
+
+  if (!response.ok) throw new Error('Erro ao salvar configuração de cobrança');
+  return response.json();
+};
+
 // ============================================================================
 // NOTIFICAÇÕES
 // ============================================================================
@@ -469,8 +499,14 @@ export const exportarCobrancasAtrasadasExcel = async () => {
 /**
  * Obter dados para gráficos
  */
-export const obterDadosGraficos = async (meses = 6) => {
-  const response = await fetch(`${API_URL}/api/inadimplentes/estatisticas/graficos?meses=${meses}`, {
+export const obterDadosGraficos = async (meses = 6, filtros = {}) => {
+  const params = new URLSearchParams();
+  params.append('meses', String(meses));
+  if (filtros.consultorId) params.append('consultorId', filtros.consultorId);
+  if (filtros.mes) params.append('mes', filtros.mes);
+  if (filtros.ano) params.append('ano', filtros.ano);
+
+  const response = await fetch(`${API_URL}/api/inadimplentes/estatisticas/graficos?${params.toString()}`, {
     headers: getHeaders()
   });
   
@@ -533,6 +569,9 @@ export default {
   obterDashboard,
   detectarInadimplencia,
   notificarManual,
+  verificarStatusInadimplente,
+  obterConfiguracaoCobranca,
+  atualizarConfiguracaoCobranca,
   detectarManual,
   listarNotificacoes,
   

@@ -47,21 +47,23 @@ ChartJS.register(
  * 3. Distribuição de Status (Pizza)
  * 4. Taxa de Inadimplência por Mês (Linha)
  */
-function GraficosInadimplencia({ meses = 6 }) {
+function GraficosInadimplencia({ meses = 6, filtros = {} }) {
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState(null);
   const [dados, setDados] = useState(null);
 
+  const filtrosChave = JSON.stringify(filtros);
+
   useEffect(() => {
     carregarDados();
-  }, [meses]);
+  }, [meses, filtrosChave]);
 
   const carregarDados = async () => {
     try {
       setLoading(true);
       setErro(null);
       
-      const response = await inadimplenciaApi.obterDadosGraficos(meses);
+      const response = await inadimplenciaApi.obterDadosGraficos(meses, filtros);
       
       if (response.sucesso) {
         setDados(response.dados);

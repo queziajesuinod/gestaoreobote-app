@@ -7,6 +7,7 @@ import {
   Button,
   Card,
   CardContent,
+  Checkbox,
   Chip,
   CircularProgress,
   Dialog,
@@ -16,6 +17,7 @@ import {
   DialogTitle,
   Grid,
   IconButton,
+  ListItemText,
   Paper,
   Snackbar,
   Table,
@@ -66,6 +68,22 @@ const MESES = [
   { value: '12', label: 'Dezembro' }
 ];
 
+const MODOS_COBRANCA = [
+  { value: 'diaria', label: 'Diária' },
+  { value: 'semanal', label: 'Semanal' },
+  { value: 'dia_sim_dia_nao', label: 'Dia sim, dia não' }
+];
+
+const DIAS_DA_SEMANA = [
+  { value: 0, label: 'Domingo' },
+  { value: 1, label: 'Segunda-feira' },
+  { value: 2, label: 'Terça-feira' },
+  { value: 3, label: 'Quarta-feira' },
+  { value: 4, label: 'Quinta-feira' },
+  { value: 5, label: 'Sexta-feira' },
+  { value: 6, label: 'Sábado' }
+];
+
 function Dashboard() {
   const navigate = useNavigate();
   const title = `${brand.name} - Dashboard de Inadimplência`;
@@ -76,7 +94,7 @@ function Dashboard() {
   const [dashboard, setDashboard] = useState(null);
   const [cobrancasAtrasadas, setCobrancasAtrasadas] = useState([]);
   const [detectando, setDetectando] = useState(false);
-  const [notificando, setNotificando] = useState(false);
+  const [verificando, setVerificando] = useState(false);
   const [atualizando, setAtualizando] = useState(false);
   const [exportando, setExportando] = useState(false);
   const [mostrarGraficos, setMostrarGraficos] = useState(true);
@@ -95,6 +113,14 @@ function Dashboard() {
     mes: '',
     ano: ''
   });
+  const [filtrosAplicados, setFiltrosAplicados] = useState(() => ({
+    consultorId: isConsultorPerfil ? consultorIdLogado : '',
+    mes: '',
+    ano: ''
+  }));
+  const [modoCobranca, setModoCobranca] = useState('diaria');
+  const [diasSemanaCobranca, setDiasSemanaCobranca] = useState([]);
+  const [modoSalvando, setModoSalvando] = useState(false);
 
   useEffect(() => {
     const handleUserUpdated = (event) => {
@@ -108,6 +134,7 @@ function Dashboard() {
   useEffect(() => {
     if (isConsultorPerfil) {
       setFiltrosDashboard(prev => ({ ...prev, consultorId: consultorIdLogado }));
+      setFiltrosAplicados(prev => ({ ...prev, consultorId: consultorIdLogado }));
     }
   }, [isConsultorPerfil, consultorIdLogado]);
 
@@ -139,6 +166,10 @@ function Dashboard() {
     carregarDados();
   }, []);
 
+  useEffect(() => {
+    carregarConfiguracaoCobranca();
+  }, []);
+
   const prepararFiltrosDashboard = (filtros = {}) => {
     const resultado = {};
     if (filtros.consultorId) resultado.consultorId = filtros.consultorId;
@@ -148,20 +179,20 @@ function Dashboard() {
   };
 
   const carregarDados = async (filtros = null) => {
-    const filtrosAplicados = prepararFiltrosDashboard(filtros || filtrosDashboard);
+    const filtrosParaAplicar = prepararFiltrosDashboard(filtros || filtrosAplicados);
 
     try {
       setLoading(true);
 
       // Carregar dashboard
-      const dashResponse = await inadimplentesApi.obterDashboard(filtrosAplicados);
+      const dashResponse = await inadimplentesApi.obterDashboard(filtrosParaAplicar);
       setDashboard(dashResponse.dados);
 
       // Carregar cobranças atrasadas
       const cobrancasResponse = await inadimplentesApi.listarCobrancas({
         status: 'atrasado',
         limite: 10,
-        ...filtrosAplicados
+        ...filtrosParaAplicar
       });
       setCobrancasAtrasadas(cobrancasResponse.dados || []);
     } catch (error) {
@@ -186,6 +217,54 @@ function Dashboard() {
     }
   };
 
+  const carregarConfiguracaoCobranca = async () => {
+    try {
+      const response = await inadimplentesApi.obterConfiguracaoCobranca();
+      const dados = response.dados || {};
+      setModoCobranca(dados.modo || 'diaria');
+
+      const dias = Array.isArray(dados.diasSemana)
+        ? dados.diasSemana
+          .map(Number)
+          .filter((dia) => Number.isFinite(dia) && dia >= 0 && dia <= 6)
+        : [];
+      setDiasSemanaCobranca(dias);
+    } catch (error) {
+      console.error('Erro ao carregar configuração de cobrança:', error);
+    }
+  };
+
+  const handleDiasSemanaChange = (event) => {
+    const value = event.target.value;
+    const selecionados = Array.isArray(value)
+      ? value
+      : typeof value === 'string'
+        ? value.split(',')
+        : [];
+
+    setDiasSemanaCobranca(
+      selecionados
+        .map(Number)
+        .filter((dia) => Number.isFinite(dia) && dia >= 0 && dia <= 6)
+    );
+  };
+
+  const handleSalvarConfiguracaoCobranca = async () => {
+    try {
+      setModoSalvando(true);
+      await inadimplentesApi.atualizarConfiguracaoCobranca({
+        modo: modoCobranca,
+        diasSemana: modoCobranca === 'semanal' ? diasSemanaCobranca : []
+      });
+      mostrarSnackbar('Configuração de cobrança salva');
+    } catch (error) {
+      console.error('Erro ao salvar configuração de cobrança:', error);
+      mostrarSnackbar('Erro ao salvar configuração de cobrança', 'error');
+    } finally {
+      setModoSalvando(false);
+    }
+  };
+
   const mostrarSnackbar = (message, severity = 'success') => {
     setSnackbar({ open: true, message, severity });
   };
@@ -202,13 +281,21 @@ function Dashboard() {
   };
 
   const handleAplicarFiltros = async () => {
-    await carregarDados(filtrosDashboard);
+    const filtrosAtualizados = prepararFiltrosDashboard(filtrosDashboard);
+    setFiltrosAplicados(filtrosAtualizados);
+    await carregarDados(filtrosAtualizados);
   };
 
   const handleLimparFiltros = async () => {
-    const filtrosLimpos = { consultorId: '', mes: '', ano: '' };
-    setFiltrosDashboard(filtrosLimpos);
-    await carregarDados(filtrosLimpos);
+    const padrao = {
+      consultorId: isConsultorPerfil ? consultorIdLogado : '',
+      mes: '',
+      ano: ''
+    };
+    setFiltrosDashboard(padrao);
+    const filtrosPadraoAplicados = prepararFiltrosDashboard(padrao);
+    setFiltrosAplicados(filtrosPadraoAplicados);
+    await carregarDados(filtrosPadraoAplicados);
   };
 
   const handleDetectarInadimplencia = async () => {
@@ -231,19 +318,19 @@ function Dashboard() {
     }
   };
 
-  const handleNotificarManual = async () => {
+  const handleVerificarStatus = async () => {
     try {
-      setNotificando(true);
-      const response = await inadimplentesApi.notificarManual();
+      setVerificando(true);
+      const response = await inadimplentesApi.verificarStatusInadimplente();
       
       mostrarSnackbar(response.mensagem, 'success');
       // Recarregar dados
       await carregarDados();
     } catch (error) {
-      console.error('Erro ao notificar manualmente:', error);
-      mostrarSnackbar('Erro ao enviar notificações', 'error');
+      console.error('Erro ao verificar status de inadimplente:', error);
+      mostrarSnackbar('Erro ao verificar status de inadimplência', 'error');
     } finally {
-      setNotificando(false);
+      setVerificando(false);
     }
   };
 
@@ -346,11 +433,11 @@ function Dashboard() {
           <Button
             variant="contained"
             color="warning"
-            startIcon={notificando ? <CircularProgress size={20} /> : <WarningIcon />}
-            onClick={handleNotificarManual}
-            disabled={notificando}
+            startIcon={verificando ? <CircularProgress size={20} /> : <WarningIcon />}
+            onClick={handleVerificarStatus}
+            disabled={verificando}
           >
-            {notificando ? 'Notificando...' : 'Notificar Manualmente'}
+            {verificando ? 'Verificando...' : 'Verificar status de inadimplente'}
           </Button>
 
           <Button
@@ -382,6 +469,81 @@ function Dashboard() {
             Exportar Excel
           </Button>
         </Box>
+
+        {/* Agenda de cobrança */}
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Agendamento de Cobrança
+            </Typography>
+            <Typography variant="body2" color="textSecondary" paragraph>
+              Defina a periodicidade em que a detecção automática de inadimplência deve rodar. Ajustes aqui afetam apenas o cron diário.
+            </Typography>
+            <Grid container spacing={2} alignItems="flex-end">
+              <Grid item xs={12} md={3}>
+                <TextField
+                  select
+                  fullWidth
+                  label="Modo"
+                  value={modoCobranca}
+                  onChange={(event) => setModoCobranca(event.target.value)}
+                  size="small"
+                >
+                  {MODOS_COBRANCA.map((modo) => (
+                    <MenuItem key={modo.value} value={modo.value}>
+                      {modo.label}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+
+              {modoCobranca === 'semanal' && (
+                <Grid item xs={12} md={4}>
+                  <TextField
+                    select
+                    fullWidth
+                    label="Dias da semana"
+                    size="small"
+                    value={diasSemanaCobranca}
+                    onChange={handleDiasSemanaChange}
+                    SelectProps={{
+                      multiple: true,
+                      renderValue: (selected) => {
+                        const nomes = Array.isArray(selected)
+                          ? selected
+                            .map((valor) => DIAS_DA_SEMANA.find((dia) => dia.value === valor)?.label)
+                            .filter(Boolean)
+                          : [];
+                        return nomes.length ? nomes.join(', ') : 'Nenhum dia selecionado';
+                      }
+                    }}
+                    helperText="Selecione os dias em que a detecção deve rodar"
+                  >
+                    {DIAS_DA_SEMANA.map((dia) => (
+                      <MenuItem key={dia.value} value={dia.value}>
+                        <Checkbox checked={diasSemanaCobranca.includes(dia.value)} />
+                        <ListItemText primary={dia.label} />
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                </Grid>
+              )}
+
+              <Grid item xs={12} md={3}>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  onClick={handleSalvarConfiguracaoCobranca}
+                  disabled={modoSalvando}
+                  fullWidth
+                  startIcon={modoSalvando ? <CircularProgress size={20} /> : undefined}
+                >
+                  {modoSalvando ? 'Salvando...' : 'Salvar agendamento'}
+                </Button>
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
 
         <Box sx={{ mb: 3 }}>
           <Grid container spacing={2} alignItems="flex-end">
@@ -579,7 +741,7 @@ function Dashboard() {
                   Ocultar Gráficos
                 </Button>
               </Box>
-              <GraficosInadimplencia meses={6} />
+              <GraficosInadimplencia meses={6} filtros={filtrosAplicados} />
             </CardContent>
           </Card>
         )}

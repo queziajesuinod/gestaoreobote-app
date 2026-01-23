@@ -1,6 +1,42 @@
 const { CobrancaMensal, ProcessoCobranca, NotificacaoCobranca, ConfiguracaoWebhook } = require('../models');
 const { Op } = require('sequelize');
 const webhookService = require('./webhook');
+const configuracaoCobrancaService = require('./configuracaocobranca');
+
+const calcularDiferencaMeses = (inicio, fim) => {
+  if (!(inicio instanceof Date) || !(fim instanceof Date)) return 1;
+  const anos = fim.getFullYear() - inicio.getFullYear();
+  const meses = fim.getMonth() - inicio.getMonth();
+  const total = anos * 12 + meses;
+  return total > 0 ? total : 1;
+};
+
+const montarMensagemResultadoWebhook = (resultado) => {
+  if (!resultado) {
+    return 'Webhook enviado com sucesso';
+  }
+
+  const resposta = resultado.resposta;
+  if (resposta !== undefined && resposta !== null) {
+    if (typeof resposta === 'string') {
+      return resposta;
+    }
+    if (typeof resposta === 'object' && resposta.message) {
+      return resposta.message;
+    }
+    try {
+      return JSON.stringify(resposta);
+    } catch (erro) {
+      return String(resposta);
+    }
+  }
+
+  if (resultado.erro) {
+    return resultado.erro;
+  }
+
+  return resultado.sucesso ? 'Webhook enviado com sucesso' : 'Erro ao enviar webhook';
+};
 
 class InadimplenciaService {
   /**
@@ -8,6 +44,17 @@ class InadimplenciaService {
    */
   async detectarInadimplenciaAutomatico() {
     console.log('[Inadimplência] Iniciando detecção automática...');
+
+    const configuracao = await configuracaoCobrancaService.obterOuCriar();
+    if (!configuracaoCobrancaService.deveExecutarHoje(configuracao)) {
+      console.log(`[Inadimplência] Detecção automática pulada (modo ${configuracao.modo})`);
+      return {
+        cobrancasVerificadas: 0,
+        statusAtualizados: 0,
+        webhooksEnviados: 0,
+        webhooksFalharam: 0
+      };
+    }
 
     const cobrancasAtrasadas = await this.buscarCobrancasAtrasadasParaNotificar();
 
@@ -17,6 +64,8 @@ class InadimplenciaService {
       cobrancasAtrasadas,
       { respeitarNotificacaoHoje: true }
     );
+
+    await configuracaoCobrancaService.registrarExecucao(configuracao);
 
     console.log('[Inadimplência] Detecção concluída:', {
       cobrancasVerificadas: cobrancasAtrasadas.length,
@@ -62,7 +111,7 @@ class InadimplenciaService {
     });
   }
 
-  async processarCobrancasAtrasadas(cobrancas, { respeitarNotificacaoHoje = true } = {}) {
+  async processarCobrancasAtrasadas(cobrancas, { respeitarNotificacaoHoje = true, evento = 'inadimplencia_detectada' } = {}) {
     let statusAtualizados = 0;
     let webhooksEnviados = 0;
     let webhooksFalharam = 0;
@@ -83,7 +132,7 @@ class InadimplenciaService {
           }
         }
 
-        const resultado = await this.dispararWebhookInadimplencia(cobranca);
+        const resultado = await this.dispararWebhookInadimplencia(cobranca, evento);
         if (resultado.sucesso) {
           webhooksEnviados++;
         } else {
@@ -107,10 +156,33 @@ class InadimplenciaService {
 
     const resultado = await this.processarCobrancasAtrasadas(
       cobrancasAtrasadas,
-      { respeitarNotificacaoHoje: false }
+      { respeitarNotificacaoHoje: true }
     );
 
     console.log('[Inadimplência] Notificação manual concluída:', {
+      cobrancasVerificadas: cobrancasAtrasadas.length,
+      ...resultado
+    });
+
+    return {
+      cobrancasVerificadas: cobrancasAtrasadas.length,
+      ...resultado
+    };
+  }
+
+  async verificarStatusInadimplencia() {
+    console.log('[Inadimplência] Iniciando verificação de status de inadimplência...');
+
+    const cobrancasAtrasadas = await this.buscarCobrancasAtrasadasParaNotificar();
+
+    console.log(`[Inadimplência] Encontradas ${cobrancasAtrasadas.length} cobranças para verificar o status`);
+
+    const resultado = await this.processarCobrancasAtrasadas(
+      cobrancasAtrasadas,
+      { respeitarNotificacaoHoje: true, evento: 'inadimplencia_validar' }
+    );
+
+    console.log('[Inadimplência] Verificação de status concluída:', {
       cobrancasVerificadas: cobrancasAtrasadas.length,
       ...resultado
     });
@@ -148,7 +220,7 @@ class InadimplenciaService {
   /**
    * Disparar webhook de inadimplência
    */
-  async dispararWebhookInadimplencia(cobranca) {
+  async dispararWebhookInadimplencia(cobranca, evento = 'inadimplencia_detectada') {
     try {
       // Buscar configuração ativa do webhook
       const configuracao = await ConfiguracaoWebhook.findOne({
@@ -174,7 +246,8 @@ class InadimplenciaService {
       }
 
       // Enviar webhook usando o WebhookService
-      const resultado = await webhookService.enviarWebhook(cobranca, configuracao);
+      const resultado = await webhookService.enviarWebhook(cobranca, configuracao, 1, evento);
+      const mensagemResposta = montarMensagemResultadoWebhook(resultado);
 
       // Registrar notificação
       await NotificacaoCobranca.create({
@@ -182,7 +255,7 @@ class InadimplenciaService {
         tipo: 'automatica',
         canal: 'webhook',
         status: resultado.sucesso ? 'enviada' : 'falha',
-        mensagem: resultado.erro || 'Webhook enviado com sucesso'
+        mensagem: mensagemResposta
       });
 
       // Atualizar cobrança
@@ -551,23 +624,46 @@ class InadimplenciaService {
    * Obter dados para gráficos (evolução de inadimplência)
    */
   async obterDadosGraficos(meses = 6, filtros = {}) {
-    const dataInicial = new Date();
-    dataInicial.setMonth(dataInicial.getMonth() - meses);
     const consultorFiltro = filtros.consultorId || null;
+    const periodo = this.montarRangeMesReferencia(filtros.mes, filtros.ano);
+    const periodoInicio = periodo?.inicio ? new Date(periodo.inicio) : null;
+    const periodoFim = periodo?.fim ? new Date(periodo.fim) : null;
+    const mesesParaLoop = periodoInicio && periodoFim
+      ? calcularDiferencaMeses(periodoInicio, periodoFim)
+      : meses;
     const includeConsultorParaCobrancas = consultorFiltro
       ? this.montarIncludeProcessoComConsultor(consultorFiltro)
       : undefined;
+    const baseInicial = periodoInicio
+      ? new Date(periodoInicio)
+      : (() => {
+        const inicio = new Date();
+        inicio.setHours(0, 0, 0, 0);
+        inicio.setDate(1);
+        inicio.setMonth(inicio.getMonth() - (mesesParaLoop - 1));
+        return inicio;
+      })();
+    baseInicial.setHours(0, 0, 0, 0);
+    baseInicial.setDate(1);
+    const wherePeriodo = periodoInicio && periodoFim
+      ? {
+        mesReferencia: {
+          [Op.gte]: periodo.inicio,
+          [Op.lt]: periodo.fim
+        }
+      }
+      : {};
 
-    const montarOpcoesComConsultor = (where) => ({
-      where,
+    const montarOpcoesComConsultor = (where = {}) => ({
+      where: { ...wherePeriodo, ...where },
       ...(includeConsultorParaCobrancas ? { include: includeConsultorParaCobrancas } : {})
     });
 
     // Gráfico de evolução de inadimplência (linha)
     const evolucaoInadimplencia = [];
-    for (let i = 0; i < meses; i++) {
-      const mesReferencia = new Date();
-      mesReferencia.setMonth(mesReferencia.getMonth() - (meses - i - 1));
+    for (let i = 0; i < mesesParaLoop; i++) {
+      const mesReferencia = new Date(baseInicial);
+      mesReferencia.setMonth(baseInicial.getMonth() + i);
       mesReferencia.setDate(1);
       mesReferencia.setHours(0, 0, 0, 0);
 
@@ -612,6 +708,7 @@ class InadimplenciaService {
     // Gráfico de inadimplência por consultor (barra)
     const inadimplenciaPorConsultor = await CobrancaMensal.findAll({
       where: {
+        ...wherePeriodo,
         status: 'atrasado'
       },
       include: [

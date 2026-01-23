@@ -26,12 +26,13 @@ class WebhookService {
   /**
    * Enviar webhook com retry automático
    */
-  async enviarWebhook(cobrancaMensal, configuracao, tentativa = 1) {
+  async enviarWebhook(cobrancaMensal, configuracao, tentativa = 1, evento = 'inadimplencia_detectada') {
     const inicio = Date.now();
+    let payload;
     
     try {
       // Montar payload
-      const payload = await this.montarPayload(cobrancaMensal);
+      payload = await this.montarPayload(cobrancaMensal, evento);
       
       // Adicionar assinatura se configurada
       const headers = { ...configuracao.headers };
@@ -79,7 +80,7 @@ class WebhookService {
         cobrancaMensalId: cobrancaMensal.id,
         tipo: 'saida',
         url: configuracao.url,
-        payload: await this.montarPayload(cobrancaMensal),
+        payload,
         statusCode: erro.response?.status,
         resposta: erro.response?.data,
         erro: erro.message,
@@ -96,13 +97,14 @@ class WebhookService {
         const delay = Math.min(1000 * Math.pow(2, tentativa - 1), 30000);
         await new Promise(resolve => setTimeout(resolve, delay));
         
-        return this.enviarWebhook(cobrancaMensal, configuracao, tentativa + 1);
+        return this.enviarWebhook(cobrancaMensal, configuracao, tentativa + 1, evento);
       }
 
       return {
         sucesso: false,
         erro: erro.message,
         statusCode: erro.response?.status,
+        resposta: erro.response?.data,
         tentativa
       };
     }
@@ -111,7 +113,7 @@ class WebhookService {
   /**
    * Montar payload do webhook
    */
-  async montarPayload(cobrancaMensal) {
+  async montarPayload(cobrancaMensal, evento = 'inadimplencia_detectada') {
     // Carregar dados relacionados
     const processoCobranca = await cobrancaMensal.getProcessoCobranca({
       include: [
@@ -136,7 +138,7 @@ class WebhookService {
 
     // Montar payload
     return {
-      evento: 'inadimplencia_detectada',
+      evento,
       timestamp: new Date().toISOString(),
       cota: {
         numero: `${cota.grupo}-${cota.cota}${cota.digito ? `-${cota.digito}` : ''}`,

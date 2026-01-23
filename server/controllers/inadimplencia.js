@@ -265,18 +265,43 @@ module.exports = {
     }
   },
 
+  async verificarStatus(req, res) {
+    try {
+      console.log('[Inadimplencia] Iniciando verificação de status de inadimplência...');
+      
+      const resultado = await inadimplenciaService.verificarStatusInadimplencia();
+      
+      console.log('[Inadimplencia] Verificação de status concluída:', resultado);
+      
+      return res.status(200).json({
+        sucesso: true,
+        mensagem: `${resultado.cobrancasVerificadas} cobrança(s) verificada(s), ${resultado.webhooksEnviados} webhook(s) enviados`,
+        dados: resultado
+      });
+    } catch (erro) {
+      console.error('[Inadimplencia] Erro ao verificar status:', erro);
+      return res.status(500).json({
+        sucesso: false,
+        mensagem: 'Erro ao verificar status de inadimplência',
+        erro: erro.message
+      });
+    }
+  },
+
   /**
    * GET /api/inadimplencia/estatisticas/graficos
    * Obter dados para gráficos
    */
   async obterDadosGraficos(req, res) {
     try {
-      const { meses = 6, consultorId } = req.query;
+      const { meses = 6, consultorId, mes, ano } = req.query;
       const mesesNumeros = Number.isFinite(Number(meses)) ? Number(meses) : 6;
       const consultorFiltro = obterConsultorFiltro(req, consultorId);
       
       const dados = await inadimplenciaService.obterDadosGraficos(mesesNumeros, {
-        consultorId: consultorFiltro
+        consultorId: consultorFiltro,
+        mes,
+        ano
       });
       
       return res.status(200).json({

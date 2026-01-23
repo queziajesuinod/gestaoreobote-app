@@ -7,6 +7,7 @@ const cobrancaMensalController = require('../controllers/cobrancamensal');
 const inadimplenciaController = require('../controllers/inadimplencia');
 const webhookController = require('../controllers/webhook');
 const configuracaoWebhookController = require('../controllers/configuracaowebhook');
+const configuracaoCobrancaController = require('../controllers/configuracaocobranca');
 
 // Middleware de autenticação
 const autenticado = require('../middlewares/autenticado');
@@ -156,6 +157,24 @@ router.post('/detectar', inadimplenciaController.detectarManual);
  * Notificar manualmente todas as cobranças atrasadas (envia webhooks)
  */
 router.post('/notificar-manual', inadimplenciaController.notificarManual);
+
+/**
+ * POST /api/inadimplentes/verificar-status
+ * Verificar status de inadimplente (envia webhook de validação)
+ */
+router.post('/verificar-status', inadimplenciaController.verificarStatus);
+
+/**
+ * GET /api/inadimplentes/configuracoes/cobranca
+ * Retornar configuração de cobrança
+ */
+router.get('/configuracoes/cobranca', configuracaoCobrancaController.obter);
+
+/**
+ * PUT /api/inadimplentes/configuracoes/cobranca
+ * Atualizar configuração de cobrança
+ */
+router.put('/configuracoes/cobranca', configuracaoCobrancaController.atualizar);
 
 /**
  * GET /api/inadimplentes/inadimplentes
