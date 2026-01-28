@@ -178,6 +178,67 @@ function Dashboard() {
     return resultado;
   };
 
+  const filtrosAtivos = useMemo(
+    () => prepararFiltrosDashboard(filtrosAplicados),
+    [filtrosAplicados]
+  );
+
+  const cobrancasFiltradas = useMemo(() => {
+    const cobrancasSemEncerradas = (cobrancasAtrasadas || []).filter((cobranca) => {
+      const cobrancaStatus = cobranca?.status?.toLowerCase?.();
+      const processoStatus = cobranca?.processoCobranca?.status?.toLowerCase?.();
+      return cobrancaStatus !== 'encerrado' && processoStatus !== 'encerrado';
+    });
+
+    if (!Object.keys(filtrosAtivos).length) {
+      return cobrancasSemEncerradas;
+    }
+
+    const formatarMes = (valor) => {
+      const numero = Number(valor);
+      if (!Number.isFinite(numero)) return '';
+      return String(numero).padStart(2, '0');
+    };
+
+    const formatarAno = (valor) => {
+      const numero = Number(valor);
+      return Number.isFinite(numero) ? String(numero) : '';
+    };
+
+    const mesFiltro = formatarMes(filtrosAtivos.mes);
+    const anoFiltro = formatarAno(filtrosAtivos.ano);
+
+    return cobrancasSemEncerradas.filter((cobranca) => {
+      if (filtrosAtivos.consultorId) {
+        const consultorIdCobranca = cobranca.processoCobranca?.cota?.consultor?.id;
+        if (!consultorIdCobranca) return false;
+        if (String(consultorIdCobranca) !== String(filtrosAtivos.consultorId)) {
+          return false;
+        }
+      }
+
+      if (mesFiltro || anoFiltro) {
+        const vencimento = cobranca.dataVencimento ? new Date(cobranca.dataVencimento) : null;
+        if (!vencimento || Number.isNaN(vencimento.getTime())) {
+          return false;
+        }
+
+        const mesAtual = String(vencimento.getMonth() + 1).padStart(2, '0');
+        const anoAtual = String(vencimento.getFullYear());
+
+        if (mesFiltro && mesAtual !== mesFiltro) {
+          return false;
+        }
+
+        if (anoFiltro && anoAtual !== anoFiltro) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [cobrancasAtrasadas, filtrosAtivos]);
+
   const carregarDados = async (filtros = null) => {
     const filtrosParaAplicar = prepararFiltrosDashboard(filtros || filtrosAplicados);
 
@@ -419,26 +480,30 @@ function Dashboard() {
         icon="ion-ios-analytics-outline"
       >
         {/* Ações */}
-        <Box sx={{ mb: 3, display: 'flex', gap: 2 }}>
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={detectando ? <CircularProgress size={20} /> : <PlayIcon />}
-            onClick={handleDetectarInadimplencia}
-            disabled={detectando}
-          >
-            {detectando ? 'Detectando...' : 'Detectar Inadimplência'}
-          </Button>
+        <Box sx={{ mb: 3, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+          {!isConsultorPerfil && (
+            <>
+              <Button
+                variant="contained"
+                color="primary"
+                startIcon={detectando ? <CircularProgress size={20} /> : <PlayIcon />}
+                onClick={handleDetectarInadimplencia}
+                disabled={detectando}
+              >
+                {detectando ? 'Detectando...' : 'Detectar Inadimplência'}
+              </Button>
 
-          <Button
-            variant="contained"
-            color="warning"
-            startIcon={verificando ? <CircularProgress size={20} /> : <WarningIcon />}
-            onClick={handleVerificarStatus}
-            disabled={verificando}
-          >
-            {verificando ? 'Verificando...' : 'Verificar status de inadimplente'}
-          </Button>
+              <Button
+                variant="contained"
+                color="warning"
+                startIcon={verificando ? <CircularProgress size={20} /> : <WarningIcon />}
+                onClick={handleVerificarStatus}
+                disabled={verificando}
+              >
+                {verificando ? 'Verificando...' : 'Verificar status de inadimplente'}
+              </Button>
+            </>
+          )}
 
           <Button
             variant="outlined"
@@ -471,11 +536,12 @@ function Dashboard() {
         </Box>
 
         {/* Agenda de cobrança */}
-        <Card sx={{ mb: 3 }}>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Agendamento de Cobrança
-            </Typography>
+        {!isConsultorPerfil && (
+          <Card sx={{ mb: 3 }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Agendamento de Cobrança
+              </Typography>
             <Typography variant="body2" color="textSecondary" paragraph>
               Defina a periodicidade em que a detecção automática de inadimplência deve rodar. Ajustes aqui afetam apenas o cron diário.
             </Typography>
@@ -544,6 +610,7 @@ function Dashboard() {
             </Grid>
           </CardContent>
         </Card>
+        )}
 
         <Box sx={{ mb: 3 }}>
           <Grid container spacing={2} alignItems="flex-end">
@@ -776,6 +843,7 @@ function Dashboard() {
                     <TableRow>
                       <TableCell>Cota</TableCell>
                       <TableCell>Cliente</TableCell>
+                      <TableCell>Consultor</TableCell>
                       <TableCell>Mês</TableCell>
                       <TableCell>Vencimento</TableCell>
                       <TableCell>Dias Atraso</TableCell>
@@ -783,61 +851,74 @@ function Dashboard() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {
-                    cobrancasAtrasadas.map((cobranca) => (
-                      <TableRow key={cobranca.id}>
-                        <TableCell>
-                          <Typography variant="body2">
-                            {cobranca.processoCobranca?.cota?.cota || '-'}
-                          </Typography>
-                          <Typography variant="caption" color="textSecondary">
-                            Grupo {cobranca.processoCobranca?.cota?.grupo || '-'}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2">
-                            {cobranca.processoCobranca?.cota?.cliente?.nome || '-'}
-                          </Typography>
-                          <Typography variant="caption" color="textSecondary">
-                            {cobranca.processoCobranca?.cota?.cliente?.telefone || '-'}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          {inadimplentesApi.formatarMes(cobranca.mesReferencia)}
-                        </TableCell>
-                        <TableCell>
-                          {inadimplentesApi.formatarData(cobranca.dataVencimento)}
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            label={`${cobranca.diasAtraso} dias`}
-                            color="error"
-                            size="small"
-                          />
-                        </TableCell>
-                        <TableCell align="right">
-                          <Tooltip title="Visualizar Processo">
-                            <IconButton
-                              size="small"
-                              onClick={() => handleVisualizarProcesso(cobranca.processoCobrancaId)}
-                            >
-                              <ViewIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-
-                          <Tooltip title="Marcar como Pago">
-                            <IconButton
-                              size="small"
-                              color="success"
-                              onClick={() => handleAbrirDialogPago(cobranca)}
-                            >
-                              <PaymentIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
+                    {cobrancasFiltradas.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7}>
+                          Nenhuma cobrança atrasada corresponde aos filtros aplicados.
                         </TableCell>
                       </TableRow>
-                    ))
-                  }
+                    ) : (
+                      cobrancasFiltradas.map((cobranca) => (
+                        <TableRow key={cobranca.id}>
+                          <TableCell>
+                            <Typography variant="body2">
+                              {cobranca.processoCobranca?.cota?.cota || '-'}
+                            </Typography>
+
+                            <Typography variant="caption" color="textSecondary">
+                              Grupo {cobranca.processoCobranca?.cota?.grupo || '-'}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">
+                              {cobranca.processoCobranca?.cota?.cliente?.nome || '-'}
+                            </Typography>
+                            <Typography variant="caption" color="textSecondary">
+                              {cobranca.processoCobranca?.cota?.cliente?.telefone || '-'}
+                            </Typography>
+                          </TableCell>
+
+                          <TableCell>
+                            {cobranca.processoCobranca?.cota?.consultor?.nome || '-'}
+                          </TableCell>
+                        <TableCell>
+                          {inadimplentesApi.formatarMes(cobranca.dataVencimento)}
+                        </TableCell>
+                          <TableCell>
+                            {inadimplentesApi.formatarData(cobranca.dataVencimento)}
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={`${cobranca.diasAtraso} dias`}
+                              color="error"
+                              size="small"
+                            />
+                          </TableCell>
+                          <TableCell align="right">
+                            <Tooltip title="Visualizar Processo">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleVisualizarProcesso(cobranca.processoCobrancaId)}
+                              >
+                                <ViewIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+
+                          {!isConsultorPerfil && (
+                            <Tooltip title="Marcar como Pago">
+                              <IconButton
+                                size="small"
+                                color="success"
+                                onClick={() => handleAbrirDialogPago(cobranca)}
+                              >
+                                <PaymentIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
                   </TableBody>
                 </Table>
               </TableContainer>
@@ -866,7 +947,7 @@ function Dashboard() {
             </strong>
             {' '}referente a{' '}
             <strong>
-              {dialogPago.cobranca && inadimplentesApi.formatarData(dialogPago.cobranca.mesReferencia)}
+              {dialogPago.cobranca && inadimplentesApi.formatarData(dialogPago.cobranca.dataVencimento)}
             </strong>
           </DialogContentText>
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Helmet } from 'react-helmet';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Alert,
   Autocomplete,
@@ -40,6 +40,7 @@ const getToken = () => localStorage.getItem('token');
 function FormularioProcesso() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const isEdicao = !!id;
 
   const title = `${brand.name} - ${isEdicao ? 'Editar' : 'Novo'} Processo de Cobrança`;
@@ -71,6 +72,7 @@ function FormularioProcesso() {
     quantidadeMeses: 1
   });
   const ultimoMesPadraoRef = useRef('');
+  const carregarCotasRef = useRef(null);
 
   // Preview de cobranças
   const [previewCobrancas, setPreviewCobrancas] = useState([]);
@@ -81,6 +83,16 @@ function FormularioProcesso() {
     message: '',
     severity: 'success'
   });
+  const prefillParams = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return {
+      clienteId: params.get('clienteId'),
+      grupo: params.get('grupo'),
+      cotaId: params.get('cotaId')
+    };
+  }, [location.search]);
+  const [prefillClienteAplicado, setPrefillClienteAplicado] = useState(false);
+  const [prefillCotaAplicado, setPrefillCotaAplicado] = useState(false);
 
   // Carregar clientes no início
   useEffect(() => {
@@ -120,6 +132,41 @@ function FormularioProcesso() {
       return { ...prev, primeiroMesPago: mesPadrao };
     });
   }, [importarHistorico, cotaSelecionada]);
+
+  useEffect(() => {
+    if (prefillClienteAplicado) return;
+    if (!prefillParams.clienteId || !clientesDisponiveis.length) return;
+    const cliente = clientesDisponiveis.find((item) => String(item.id) === String(prefillParams.clienteId));
+    if (!cliente) return;
+    setClienteSelecionado(cliente);
+    if (prefillParams.grupo) {
+      setGrupoSelecionado(prefillParams.grupo);
+    }
+    setPrefillClienteAplicado(true);
+    const timer = setTimeout(() => {
+      carregarCotasRef.current?.('');
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [clientesDisponiveis, prefillClienteAplicado, prefillParams.clienteId, prefillParams.grupo]);
+
+  useEffect(() => {
+    if (isEdicao || prefillCotaAplicado) return;
+    if (!prefillParams.cotaId || !cotas.length) return;
+    const cotaEscolhida = cotas.find((item) => String(item.id) === String(prefillParams.cotaId));
+    if (!cotaEscolhida) return;
+    setPrefillCotaAplicado(true);
+    setCotaSelecionada(cotaEscolhida);
+    setForm((prev) => ({
+      ...prev,
+      cotaId: cotaEscolhida.id,
+      dataInicioCobranca: formatarDataParaInput(
+        cotaEscolhida.dtaquisicao
+        || cotaEscolhida.dataAquisicao
+        || cotaEscolhida.DtAquisicao
+        || cotaEscolhida.dtaAquisicao
+      )
+    }));
+  }, [cotas, isEdicao, prefillCotaAplicado, prefillParams.cotaId]);
 
   useEffect(() => {
     if (!importarHistorico) {
@@ -204,6 +251,10 @@ function FormularioProcesso() {
       setLoadingCotas(false);
     }
   };
+
+  useEffect(() => {
+    carregarCotasRef.current = carregarCotas;
+  }, [carregarCotas]);
 
   const carregarProcesso = async () => {
     try {
@@ -435,7 +486,7 @@ function FormularioProcesso() {
       }
 
       setTimeout(() => {
-        navigate('/app/inadimplentes');
+        navigate('/app/inadimplentes/processos');
       }, 1500);
     } catch (error) {
       console.error('Erro ao salvar processo:', error);
@@ -446,7 +497,7 @@ function FormularioProcesso() {
   };
 
   const handleCancelar = () => {
-    navigate('/app/inadimplentes');
+    navigate('/app/inadimplentes/processos');
   };
 
   if (loading) {

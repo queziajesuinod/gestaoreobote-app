@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet';
 import {
   Alert,
@@ -66,6 +67,7 @@ const getToken = () => localStorage.getItem('token');
 function Clientes() {
   const title = `${brand.name} - Clientes`;
   const description = 'Gestão de clientes e suas cotas';
+  const navigate = useNavigate();
 
   const [loadingClientes, setLoadingClientes] = useState(false);
   const [clientes, setClientes] = useState([]);
@@ -741,6 +743,16 @@ const formatTipoContemplacao = (tipo) => {
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data?.erro || data?.message || 'Erro ao salvar cota');
+      }
+
+      if (!emEdicao && data?.id) {
+        const params = new URLSearchParams();
+        if (data.cliente?.id) params.set('clienteId', data.cliente.id);
+        if (data.grupo) params.set('grupo', data.grupo);
+        params.set('cotaId', data.id);
+        handleCloseCotaDialog();
+        navigate(`/app/inadimplentes/processos-novo?${params.toString()}`);
+        return;
       }
 
       await loadCotas(selectedCliente.id);

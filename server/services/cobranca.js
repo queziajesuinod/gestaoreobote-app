@@ -1,5 +1,6 @@
 const { ProcessoCobranca, CobrancaMensal, Cota, Cliente } = require('../models');
 const { Op } = require('sequelize');
+const inadimplenciaService = require('./inadimplencia');
 
 class CobrancaService {
   /**
@@ -479,7 +480,43 @@ class CobrancaService {
     await processo.update({ status: 'encerrado' });
     console.log(`[Cobrança] Processo ${processoId} encerrado`);
 
+    await this.criarAnotacaoCancelamento(processo);
     return processo;
+  }
+
+  async criarAnotacaoCancelamento(processo) {
+    const cobrancaVigente = await this.obterCobrancaVigente(processo.id);
+    if (!cobrancaVigente) {
+      return;
+    }
+
+    const dataCancelamento = new Date().toLocaleDateString('pt-BR');
+    const mensagem = `Processo de cobrança cancelado em ${dataCancelamento}`;
+
+    await inadimplenciaService.adicionarAnotacao(cobrancaVigente.id, {
+      tipo: 'manual',
+      canal: 'sistema',
+      mensagem
+    });
+  }
+
+  async obterCobrancaVigente(processoId) {
+    const cobrancaAtiva = await CobrancaMensal.findOne({
+      where: {
+        processoCobrancaId: processoId,
+        status: { [Op.notIn]: ['pago', 'cancelado'] }
+      },
+      order: [['dataVencimento', 'DESC']]
+    });
+
+    if (cobrancaAtiva) {
+      return cobrancaAtiva;
+    }
+
+    return CobrancaMensal.findOne({
+      where: { processoCobrancaId: processoId },
+      order: [['dataVencimento', 'DESC']]
+    });
   }
 
   montarRangeMesReferencia(mes, ano) {

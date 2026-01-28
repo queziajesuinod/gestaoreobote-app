@@ -122,7 +122,7 @@ export const InadimplentesWebhook = loadable(() =>
   });
 
 export const InadimplenteDashboard = loadable(() =>
-  import('./Pages/Inadimplentes/Dashboard'), {
+  import('./Pages/Inadimplentes/DashboardInadiplentes'), {
     fallback: <Loading />,
   });
 

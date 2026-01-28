@@ -48,19 +48,25 @@ import {
 import { PapperBlock } from 'dan-components';
 import brand from 'dan-api/dummy/brand';
 import * as inadimplentesApi from '../../../services/inadimplentesApi';
+import { getStoredUser } from '../../../utils/userStorage';
 
 function DetalhesProcesso() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const title = `${brand.name} - Detalhes do Processo`;
+  const defaultTitle = `${brand.name} - Detalhes do Processo`;
   const description = 'Visualização completa do processo de cobrança';
+  const tooltipRestrito = 'Consultores não podem alterar processos de cobrança.';
 
   // Estados
   const [loading, setLoading] = useState(true);
   const [processo, setProcesso] = useState(null);
   const [cobrancas, setCobrancas] = useState([]);
   const [expandedCobranca, setExpandedCobranca] = useState(null);
+  const [storedUser, setStoredUserState] = useState(() => getStoredUser());
+  const perfilUsuario = storedUser?.perfil?.toUpperCase() || '';
+  const isConsultorPerfil = perfilUsuario === 'CONSULTOR';
+  const podeGerenciarProcessos = !isConsultorPerfil;
 
   // Dialog de marcar como pago
   const [dialogPago, setDialogPago] = useState({
@@ -87,6 +93,15 @@ function DetalhesProcesso() {
   useEffect(() => {
     carregarDados();
   }, [id]);
+
+  useEffect(() => {
+    const handleUserUpdated = (event) => {
+      setStoredUserState(event?.detail || getStoredUser());
+    };
+
+    window.addEventListener('app:user-updated', handleUserUpdated);
+    return () => window.removeEventListener('app:user-updated', handleUserUpdated);
+  }, []);
 
   const carregarDados = async () => {
     try {
@@ -116,7 +131,7 @@ function DetalhesProcesso() {
   };
 
   const handleVoltar = () => {
-    navigate('/app/inadimplentes');
+    navigate('/app/inadimplentes/processos');
   };
 
   const handleEditar = () => {
@@ -154,7 +169,7 @@ function DetalhesProcesso() {
       await inadimplentesApi.encerrarProcesso(id);
       mostrarSnackbar('Processo encerrado com sucesso');
       setTimeout(() => {
-        navigate('/app/inadimplentes');
+        navigate('/app/inadimplentes/processos');
       }, 1500);
     } catch (error) {
       console.error('Erro ao encerrar processo:', error);
@@ -243,6 +258,10 @@ function DetalhesProcesso() {
     }
   };
 
+  const pageTitle = processo
+    ? `Cobrança - ${processo.cota?.cliente?.nome || 'Cliente'} - ${processo.cota?.grupo || 'Grupo'} - ${processo.cota?.cota || 'Cota'}`
+    : defaultTitle;
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
@@ -265,7 +284,7 @@ function DetalhesProcesso() {
   return (
     <div>
       <Helmet>
-        <title>{title}</title>
+        <title>{pageTitle}</title>
         <meta name="description" content={description} />
       </Helmet>
 
@@ -275,7 +294,7 @@ function DetalhesProcesso() {
         icon="ion-ios-document-outline"
       >
         {/* Botões de Ação */}
-        <Box sx={{ mb: 3, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+        <Box sx={{ mb: 3, display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
           <Button
             variant="outlined"
             startIcon={<BackIcon />}
@@ -284,47 +303,53 @@ function DetalhesProcesso() {
             Voltar
           </Button>
 
-          {processo.status !== 'encerrado' && (
-            <>
-              <Button
-                variant="contained"
-                startIcon={<EditIcon />}
-                onClick={handleEditar}
-              >
-                Editar
-              </Button>
+          {podeGerenciarProcessos ? (
+            processo.status !== 'encerrado' && (
+              <>
+                <Button
+                  variant="contained"
+                  startIcon={<EditIcon />}
+                  onClick={handleEditar}
+                >
+                  Editar
+                </Button>
 
-              {processo.status === 'ativo' && (
+                {processo.status === 'ativo' && (
+                  <Button
+                    variant="outlined"
+                    color="warning"
+                    startIcon={<PauseIcon />}
+                    onClick={handlePausar}
+                  >
+                    Pausar
+                  </Button>
+                )}
+
+                {processo.status === 'pausado' && (
+                  <Button
+                    variant="outlined"
+                    color="success"
+                    startIcon={<PlayIcon />}
+                    onClick={handleReativar}
+                  >
+                    Reativar
+                  </Button>
+                )}
+
                 <Button
                   variant="outlined"
-                  color="warning"
-                  startIcon={<PauseIcon />}
-                  onClick={handlePausar}
+                  color="error"
+                  startIcon={<StopIcon />}
+                  onClick={handleEncerrar}
                 >
-                  Pausar
+                  Encerrar
                 </Button>
-              )}
-
-              {processo.status === 'pausado' && (
-                <Button
-                  variant="outlined"
-                  color="success"
-                  startIcon={<PlayIcon />}
-                  onClick={handleReativar}
-                >
-                  Reativar
-                </Button>
-              )}
-
-              <Button
-                variant="outlined"
-                color="error"
-                startIcon={<StopIcon />}
-                onClick={handleEncerrar}
-              >
-                Encerrar
-              </Button>
-            </>
+              </>
+            )
+          ) : (
+            <Typography variant="body2" color="textSecondary">
+              {tooltipRestrito}
+            </Typography>
           )}
         </Box>
 
@@ -480,7 +505,7 @@ function DetalhesProcesso() {
                       <React.Fragment key={cobranca.id}>
                         <TableRow>
                           <TableCell>
-                            {inadimplentesApi.formatarMes(cobranca.mesReferencia)}
+                            {inadimplentesApi.formatarMes(cobranca.dataVencimento)}
                             {cobranca.historicoRetroativo && (
                               <Typography variant="caption" display="block" color="textSecondary">
                                 (Retroativo)
@@ -519,7 +544,10 @@ function DetalhesProcesso() {
                             )}
                           </TableCell>
                           <TableCell align="right">
-                            {cobranca.status !== 'pago' && !cobranca.historicoRetroativo && (
+                            {cobranca.status !== 'pago'
+                              && !cobranca.historicoRetroativo
+                              && podeGerenciarProcessos
+                              && processo?.status !== 'encerrado' && (
                               <>
                                 <Tooltip title="Marcar como Pago">
                                   <IconButton
@@ -584,7 +612,7 @@ function DetalhesProcesso() {
           <DialogContentText sx={{ mb: 2 }}>
             Confirme o pagamento da cobrança referente a{' '}
               <strong>
-                {dialogPago.cobranca && inadimplentesApi.formatarMes(dialogPago.cobranca.mesReferencia)}
+                {dialogPago.cobranca && inadimplentesApi.formatarMes(dialogPago.cobranca.dataVencimento)}
               </strong>
           </DialogContentText>
 
@@ -623,7 +651,7 @@ function DetalhesProcesso() {
           <DialogContentText sx={{ mb: 2 }}>
             Adicione uma anotação sobre a cobrança de{' '}
               <strong>
-                {dialogAnotacao.cobranca && inadimplentesApi.formatarMes(dialogAnotacao.cobranca.mesReferencia)}
+                {dialogAnotacao.cobranca && inadimplentesApi.formatarMes(dialogAnotacao.cobranca.dataVencimento)}
               </strong>
           </DialogContentText>
 

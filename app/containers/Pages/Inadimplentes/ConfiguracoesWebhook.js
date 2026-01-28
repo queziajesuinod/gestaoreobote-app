@@ -36,10 +36,15 @@ import {
 import { PapperBlock } from 'dan-components';
 import brand from 'dan-api/dummy/brand';
 import * as inadimplentesApi from '../../../services/inadimplentesApi';
+import { getStoredUser } from '../../../utils/userStorage';
 
 function ConfiguracoesWebhook() {
   const title = `${brand.name} - Configurações de Webhook`;
   const description = 'Gerenciamento de webhook para notificações de inadimplência';
+
+  const [storedUser, setStoredUserState] = useState(() => getStoredUser());
+  const perfilUsuario = storedUser?.perfil?.toUpperCase() || '';
+  const isAdministrador = perfilUsuario === 'WEBHOOK_CONFIG';
 
   // Estados
   const [loading, setLoading] = useState(true);
@@ -79,12 +84,43 @@ function ConfiguracoesWebhook() {
   });
 
   useEffect(() => {
-    carregarDados();
+    const handleUserUpdated = (event) => {
+      setStoredUserState(event?.detail || getStoredUser());
+    };
+
+    window.addEventListener('app:user-updated', handleUserUpdated);
+    return () => window.removeEventListener('app:user-updated', handleUserUpdated);
   }, []);
 
   useEffect(() => {
+    if (!isAdministrador) return;
+    carregarDados();
+  }, [isAdministrador]);
+
+  useEffect(() => {
+    if (!isAdministrador) return;
     carregarLogs();
-  }, [page, rowsPerPage]);
+  }, [page, rowsPerPage, isAdministrador]);
+
+  if (!isAdministrador) {
+    return (
+      <div>
+        <Helmet>
+          <title>{title}</title>
+          <meta name="description" content={description} />
+        </Helmet>
+        <PapperBlock
+          title="Configurações de Webhook"
+          desc="Gerenciamento de webhook para notificações de inadimplência"
+          icon="ion-ios-analytics-outline"
+        >
+          <Alert severity="warning">
+            Acesso restrito a administradores.
+          </Alert>
+        </PapperBlock>
+      </div>
+    );
+  }
 
   const carregarDados = async () => {
     try {

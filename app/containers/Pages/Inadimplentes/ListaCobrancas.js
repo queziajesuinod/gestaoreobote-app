@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Helmet } from 'react-helmet';
 import {
   Box,
@@ -103,6 +103,64 @@ function ListaCobrancas() {
     carregarClientes();
     carregarCotas();
   }, []);
+
+  const filtrosAtivos = useMemo(() => {
+    const ativo = { ...filtros };
+    if (isConsultorPerfil && consultorIdLogado) {
+      ativo.consultorId = consultorIdLogado;
+    }
+    Object.keys(ativo).forEach((key) => {
+      if (!ativo[key]) {
+        delete ativo[key];
+      }
+    });
+    return ativo;
+  }, [filtros, isConsultorPerfil, consultorIdLogado]);
+
+  const cobrancasVisiveis = useMemo(() => {
+    return (cobrancas || []).filter((cobranca) => {
+      const processoStatus = cobranca?.processoCobranca?.status?.toLowerCase?.();
+      return processoStatus !== 'encerrado';
+    });
+  }, [cobrancas]);
+
+  const cobrancasFiltradas = useMemo(() => {
+    if (!Object.keys(filtrosAtivos).length) {
+      return cobrancasVisiveis;
+    }
+
+    return cobrancasVisiveis.filter((cobranca) => {
+      if (filtrosAtivos.status && cobranca.status !== filtrosAtivos.status) {
+        return false;
+      }
+
+      if (filtrosAtivos.processoCobrancaId) {
+        if (String(cobranca.processoCobrancaId) !== String(filtrosAtivos.processoCobrancaId)) {
+          return false;
+        }
+      }
+
+      if (filtrosAtivos.cotaId) {
+        if (String(cobranca.processoCobranca?.cota?.id) !== String(filtrosAtivos.cotaId)) {
+          return false;
+        }
+      }
+
+      if (filtrosAtivos.clienteId) {
+        if (String(cobranca.processoCobranca?.cota?.cliente?.id) !== String(filtrosAtivos.clienteId)) {
+          return false;
+        }
+      }
+
+      if (filtrosAtivos.consultorId) {
+        if (String(cobranca.processoCobranca?.cota?.consultor?.id) !== String(filtrosAtivos.consultorId)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [cobrancasVisiveis, filtrosAtivos]);
 
   const carregarCobrancas = async () => {
     try {
@@ -276,20 +334,7 @@ function ListaCobrancas() {
       </Helmet>
 
       <Box sx={{ p: 3 }}>
-        {/* Cabeçalho */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h4">
-            Cobranças
-          </Typography>
-          <Button
-            variant="outlined"
-            startIcon={<RefreshIcon />}
-            onClick={carregarCobrancas}
-            disabled={loading}
-          >
-            Atualizar
-          </Button>
-        </Box>
+       
 
         {/* Filtros */}
         <Card sx={{ mb: 3 }}>
@@ -391,6 +436,16 @@ function ListaCobrancas() {
                   Total: {totalCobrancas} cobrança(s)
                 </Typography>
               </Grid>
+
+              <Grid item xs={12} sm={12} md={3} sx={{ textAlign: { xs: 'left', md: 'right' } }}>
+                <Tooltip title="Atualizar">
+                  <span>
+                    <IconButton onClick={carregarCobrancas} color="primary">
+                      <RefreshIcon />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+              </Grid>
             </Grid>
           </CardContent>
         </Card>
@@ -418,16 +473,16 @@ function ListaCobrancas() {
                       <CircularProgress />
                     </TableCell>
                   </TableRow>
-                ) : cobrancas.length === 0 ? (
+                ) : cobrancasFiltradas.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8} align="center">
                       <Typography variant="body2" color="textSecondary">
-                        Nenhuma cobrança encontrada
+                        Nenhuma cobrança corresponde aos filtros aplicados
                       </Typography>
                     </TableCell>
                   </TableRow>
                 ) : (
-                  cobrancas.map((cobranca) => (
+                  cobrancasFiltradas.map((cobranca) => (
                     <TableRow key={cobranca.id}>
                       <TableCell>
                         <Typography variant="body2">
@@ -446,7 +501,7 @@ function ListaCobrancas() {
                         </Typography>
                       </TableCell>
                         <TableCell>
-                          {inadimplentesApi.formatarMes(cobranca.mesReferencia)}
+                          {inadimplentesApi.formatarMes(cobranca.dataVencimento)}
                         </TableCell>
                       <TableCell>
                         {inadimplentesApi.formatarData(cobranca.dataVencimento)}

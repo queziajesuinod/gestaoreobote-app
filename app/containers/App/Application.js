@@ -85,7 +85,7 @@ function Application({ isAuthenticated }) {
 
         {/* Rotas do Módulo de Inadimplentes */}
         <Route
-          path="inadimplentes/dashboard"
+          path="inadimplentes/dashboard-inadiplentes"
           element={<ProtectedRoute element={<InadimplenteDashboard />} isAuthenticated={isAuthenticated} />}
         />
         <Route
@@ -93,7 +93,7 @@ function Application({ isAuthenticated }) {
           element={<ProtectedRoute element={<InadimplentesProcessos />} isAuthenticated={isAuthenticated} />}
         />
         <Route
-          path="inadimplentes/processos/novo"
+          path="inadimplentes/processos-novo"
           element={<ProtectedRoute element={<InadimplentesFormulario />} isAuthenticated={isAuthenticated} />}
         />
         <Route

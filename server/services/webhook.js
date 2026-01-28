@@ -26,13 +26,13 @@ class WebhookService {
   /**
    * Enviar webhook com retry automático
    */
-  async enviarWebhook(cobrancaMensal, configuracao, tentativa = 1, evento = 'inadimplencia_detectada') {
+  async enviarWebhook(cobrancaMensal, configuracao, tentativa = 1, evento = 'inadimplencia_detectada', extraPayload = {}) {
     const inicio = Date.now();
     let payload;
     
     try {
       // Montar payload
-      payload = await this.montarPayload(cobrancaMensal, evento);
+      payload = await this.montarPayload(cobrancaMensal, evento, extraPayload);
       
       // Adicionar assinatura se configurada
       const headers = { ...configuracao.headers };
@@ -113,7 +113,7 @@ class WebhookService {
   /**
    * Montar payload do webhook
    */
-  async montarPayload(cobrancaMensal, evento = 'inadimplencia_detectada') {
+  async montarPayload(cobrancaMensal, evento = 'inadimplencia_detectada', extraPayload = {}) {
     // Carregar dados relacionados
     const processoCobranca = await cobrancaMensal.getProcessoCobranca({
       include: [
@@ -137,7 +137,7 @@ class WebhookService {
     const diasAtraso = Math.max(0, Math.floor((hoje - vencimento) / (1000 * 60 * 60 * 24)));
 
     // Montar payload
-    return {
+    const payloadBase = {
       evento,
       timestamp: new Date().toISOString(),
       cota: {
@@ -167,6 +167,8 @@ class WebhookService {
       },
       callback_url: `${process.env.API_URL || 'http://localhost:3000'}/api/inadimplentes/webhook/callback`
     };
+
+    return { ...payloadBase, ...extraPayload };
   }
 
   /**
