@@ -62,7 +62,8 @@ function FormularioProcesso() {
   const [form, setForm] = useState({
     cotaId: '',
     diaVencimento: 10,
-    dataInicioCobranca: new Date().toISOString().split('T')[0]
+    dataInicioCobranca: new Date().toISOString().split('T')[0],
+    quantidadeMeses: 12
   });
 
   // Histórico retroativo
@@ -268,7 +269,8 @@ function FormularioProcesso() {
       setForm({
         cotaId: processo.cotaId,
         diaVencimento: processo.diaVencimento,
-        dataInicioCobranca: processo.dataInicioCobranca.split('T')[0]
+        dataInicioCobranca: processo.dataInicioCobranca.split('T')[0],
+        quantidadeMeses: processo.quantidadeMeses ?? ''
       });
 
       // Buscar cota selecionada
@@ -446,6 +448,14 @@ function FormularioProcesso() {
       return false;
     }
 
+    if (form.quantidadeMeses !== undefined && form.quantidadeMeses !== null && form.quantidadeMeses !== '') {
+      const meses = Number(form.quantidadeMeses);
+      if (!Number.isFinite(meses) || meses < 1) {
+        mostrarSnackbar('Informe uma quantidade de meses válida (>= 1)', 'error');
+        return false;
+      }
+    }
+
     if (importarHistorico) {
       if (!historico.primeiroMesPago) {
         mostrarSnackbar('Informe o primeiro mês pago', 'error');
@@ -467,7 +477,10 @@ function FormularioProcesso() {
     try {
       setSalvando(true);
 
-      const dados = { ...form };
+      const dados = {
+        ...form,
+        quantidadeMeses: form.quantidadeMeses === '' ? null : Number(form.quantidadeMeses)
+      };
 
       // Adicionar histórico se marcado
       if (importarHistorico) {
@@ -626,6 +639,18 @@ function FormularioProcesso() {
                       onChange={(e) => handleChangeForm('dataInicioCobranca', e.target.value)}
                       InputLabelProps={{ shrink: true }}
                       helperText="A partir de quando gerar cobranças"
+                    />
+                  </Grid>
+
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      type="number"
+                      label="Quantidade de Meses"
+                      value={form.quantidadeMeses}
+                      onChange={(e) => handleChangeForm('quantidadeMeses', e.target.value === '' ? '' : parseInt(e.target.value, 10))}
+                      inputProps={{ min: 1 }}
+                      helperText="Total de meses a cobrar (deixe em branco para ilimitado)"
                     />
                   </Grid>
 

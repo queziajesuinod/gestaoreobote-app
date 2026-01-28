@@ -4,7 +4,7 @@ const ExcelJS = require('exceljs');
 const normalizarPerfil = (perfil) => (perfil ? String(perfil).toUpperCase() : '');
 const usuarioEhAdminOuRh = (perfil) => {
   const normalizado = normalizarPerfil(perfil);
-  return normalizado === 'ADMIN' || normalizado === 'RH';
+  return normalizado === 'ADMIN' || normalizado === 'RH' || normalizado === 'MASTER';
 };
 const usuarioEhGestor = (perfil) => normalizarPerfil(perfil) === 'GESTOR';
 const usuarioEhConsultorRestrito = (perfil, consultorId) => Boolean(consultorId)

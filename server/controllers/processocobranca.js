@@ -19,7 +19,8 @@ module.exports = {
         diaVencimento,
         dataInicioCobranca,
         historicoRetroativo,
-        observacao
+        observacao,
+        quantidadeMeses
       } = req.body;
 
       // Validações
@@ -37,12 +38,25 @@ module.exports = {
         });
       }
 
+      let quantidadeMesesValidos = null;
+      if (quantidadeMeses !== undefined && quantidadeMeses !== null && quantidadeMeses !== '') {
+        const meses = Number(quantidadeMeses);
+        if (!Number.isFinite(meses) || meses < 1) {
+          return res.status(400).json({
+            sucesso: false,
+            mensagem: 'Quantidade de meses inválida'
+          });
+        }
+        quantidadeMesesValidos = Math.floor(meses);
+      }
+
       // Criar processo
       const processo = await cobrancaService.criarProcessoCobranca({
         cotaId,
         diaVencimento,
         dataInicioCobranca,
-        historicoRetroativo
+        historicoRetroativo,
+        quantidadeMeses: quantidadeMesesValidos
       });
 
       // Adicionar observação se fornecida
@@ -86,9 +100,10 @@ module.exports = {
     try {
       const { status, cotaId, clienteId, consultorId, diaVencimento } = req.query;
 
-      const perfilUsuario = (req.user?.perfil || '').toUpperCase();
+  const perfilUsuario = (req.user?.perfil || '').toUpperCase();
+      const ehAdminOuMaster = ['ADMIN', 'MASTER'].includes(perfilUsuario);
       const isConsultorPerfil = perfilUsuario === 'CONSULTOR';
-      const podeSelecionarConsultor = perfilUsuario === 'ADMIN' || perfilUsuario === 'GESTOR';
+      const podeSelecionarConsultor = ehAdminOuMaster || perfilUsuario === 'GESTOR';
       const consultorLogadoId = req.user?.consultorId || null;
       let filtroConsultor = null;
       if (isConsultorPerfil && consultorLogadoId) {
@@ -202,7 +217,7 @@ module.exports = {
   async atualizar(req, res) {
     try {
       const { id } = req.params;
-      const { diaVencimento, observacao } = req.body;
+      const { diaVencimento, observacao, quantidadeMeses } = req.body;
 
       const processo = await ProcessoCobranca.findByPk(id);
       if (!processo) {
@@ -224,6 +239,20 @@ module.exports = {
       const dadosAtualizacao = {};
       if (diaVencimento !== undefined) dadosAtualizacao.diaVencimento = diaVencimento;
       if (observacao !== undefined) dadosAtualizacao.observacao = observacao;
+      if (quantidadeMeses !== undefined) {
+        if (quantidadeMeses === null || quantidadeMeses === '') {
+          dadosAtualizacao.quantidadeMeses = null;
+        } else {
+          const meses = Number(quantidadeMeses);
+          if (!Number.isFinite(meses) || meses < 1) {
+            return res.status(400).json({
+              sucesso: false,
+              mensagem: 'Quantidade de meses inválida'
+            });
+          }
+          dadosAtualizacao.quantidadeMeses = Math.floor(meses);
+        }
+      }
 
       await processo.update(dadosAtualizacao);
 

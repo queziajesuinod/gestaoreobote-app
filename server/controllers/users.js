@@ -2,10 +2,15 @@ const {
   getTodosUsers, createUser, getUserById, updateUser, changeUserPassword
 } = require('../services/users');
 
+const ehAdminOuMaster = (perfilToken = '') => {
+  const perfilNormalizado = String(perfilToken || '').toUpperCase();
+  return perfilNormalizado === 'ADMIN' || perfilNormalizado === 'MASTER';
+};
+
 async function getUsers(req, res) {
   try {
     const perfilToken = req.user?.perfil ? req.user.perfil.toUpperCase() : '';
-    if (perfilToken !== 'ADMIN') {
+    if (!ehAdminOuMaster(perfilToken)) {
       return res.status(403).json({ message: 'Apenas administradores podem visualizar usuários.' });
     }
 
@@ -23,7 +28,7 @@ async function getUserDetalhe(req, res) {
     const requesterId = req.user?.userId;
     const { id } = req.params;
 
-    if (perfilToken !== 'ADMIN' && requesterId !== id) {
+    if (!ehAdminOuMaster(perfilToken) && requesterId !== id) {
       return res.status(403).json({ message: 'Acesso negado.' });
     }
 
@@ -44,7 +49,7 @@ async function putUser(req, res) {
     const perfilToken = req.user?.perfil ? req.user.perfil.toUpperCase() : '';
     const requesterId = req.user?.userId;
     const { id } = req.params;
-    const isAdmin = perfilToken === 'ADMIN';
+    const isAdmin = ehAdminOuMaster(perfilToken);
     const isSelf = requesterId === id;
 
     if (!isAdmin && !isSelf) {
@@ -87,7 +92,7 @@ async function putUser(req, res) {
 async function postUsers(req, res) {
   try {
     const { perfil: perfilToken } = req.user || {};
-    if (!perfilToken || perfilToken.toUpperCase() !== 'ADMIN') {
+    if (!perfilToken || !ehAdminOuMaster(perfilToken)) {
       return res.status(403).json({ message: 'Apenas administradores podem cadastrar usuários.' });
     }
 

@@ -68,7 +68,7 @@ class AuthService {
     let consultorId = usuario.consultorId || null;
     let consultorNome = usuario.consultor?.nome || null;
 
-    if (perfilDescricao === 'ADMIN') {
+    if (perfilDescricao === 'ADMIN' || perfilDescricao === 'MASTER') {
       ['GESTAO', 'CLIENTES_ALL', 'USERS_MANAGE'].forEach((permissao) => permissoesSet.add(permissao));
     }
 

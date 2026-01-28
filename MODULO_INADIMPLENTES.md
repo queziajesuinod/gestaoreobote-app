@@ -60,6 +60,7 @@ Armazena os processos de cobrança vinculados a cotas.
 | `valor` | DECIMAL(10,2) | Valor da cobrança mensal |
 | `dia_vencimento` | INTEGER | Dia do mês para vencimento (1-31) |
 | `data_inicio` | DATE | Data de início do processo |
+| `quantidadeMeses` | INTEGER | Quantidade de meses do processo (null = ilimitado) |
 | `status` | ENUM | `ativo`, `pausado`, `encerrado` |
 | `created_at` | TIMESTAMP | Data de criação |
 | `updated_at` | TIMESTAMP | Data de atualização |

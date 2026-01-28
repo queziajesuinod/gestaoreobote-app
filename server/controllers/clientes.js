@@ -2,7 +2,7 @@ const clienteService = require('../services/clientes');
 
 const usuarioPodeGerenciarClientes = (perfil) => {
   const perfilNormalizado = (perfil || '').toUpperCase();
-  return perfilNormalizado === 'ADMIN' || perfilNormalizado === 'RH';
+  return perfilNormalizado === 'ADMIN' || perfilNormalizado === 'RH' || perfilNormalizado === 'MASTER';
 };
 
 module.exports = {
@@ -11,7 +11,7 @@ module.exports = {
     try {
       const perfil = req.user?.perfil ? req.user.perfil.toUpperCase() : '';
       const consultorId = req.user?.consultorId ? Number(req.user.consultorId) : null;
-      const isConsultor = consultorId && perfil !== 'ADMIN' && perfil !== 'GESTOR' && perfil !== 'RH';
+      const isConsultor = consultorId && !['ADMIN', 'GESTOR', 'RH', 'MASTER'].includes(perfil);
 
       let clientes;
       if (isConsultor) {
@@ -43,7 +43,7 @@ module.exports = {
       const { id } = req.params;
       const perfil = req.user?.perfil ? req.user.perfil.toUpperCase() : '';
       const consultorId = req.user?.consultorId ? Number(req.user.consultorId) : null;
-      const isConsultor = consultorId && perfil !== 'ADMIN' && perfil !== 'GESTOR' && perfil !== 'RH';
+      const isConsultor = consultorId && !['ADMIN', 'GESTOR', 'RH', 'MASTER'].includes(perfil);
 
       const cliente = await clienteService.getClienteById(id);
       if (!cliente) {

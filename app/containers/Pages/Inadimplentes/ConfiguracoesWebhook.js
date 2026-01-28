@@ -44,7 +44,7 @@ function ConfiguracoesWebhook() {
 
   const [storedUser, setStoredUserState] = useState(() => getStoredUser());
   const perfilUsuario = storedUser?.perfil?.toUpperCase() || '';
-  const isAdministrador = perfilUsuario === 'WEBHOOK_CONFIG';
+  const isAdministrador = perfilUsuario === 'MASTER';
 
   // Estados
   const [loading, setLoading] = useState(true);

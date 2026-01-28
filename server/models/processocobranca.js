@@ -50,6 +50,14 @@ module.exports = (sequelize) => {
       allowNull: false,
       comment: 'Data a partir da qual começar a gerar cobranças'
     },
+    quantidadeMeses: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      validate: {
+        min: 1
+      },
+      comment: 'Quantidade de meses do processo (null = ilimitado)'
+    },
     status: {
       type: DataTypes.ENUM('ativo', 'pausado', 'encerrado'),
       allowNull: false,

@@ -33,7 +33,8 @@ class CobrancaService {
       cotaId,
       diaVencimento,
       dataInicioCobranca,
-      historicoRetroativo
+      historicoRetroativo,
+      quantidadeMeses: quantidadeMesesRaw
     } = dados;
 
     // Validar cota
@@ -58,11 +59,14 @@ class CobrancaService {
     const valorBase = !Number.isNaN(valorCota) ? valorCota : 0;
 
     // Criar processo de cobrança
+    const quantidadeMeses = this.normalizarQuantidadeMeses(quantidadeMesesRaw);
+
     const processo = await ProcessoCobranca.create({
       cotaId,
       diaVencimento,
       dataInicioCobranca,
-      status: 'ativo'
+      status: 'ativo',
+      quantidadeMeses
     });
 
     // Importar histórico retroativo se solicitado
@@ -121,6 +125,8 @@ class CobrancaService {
     await CobrancaMensal.bulkCreate(cobrancas);
 
     console.log(`[Cobrança] ${quantidadeMeses} cobranças retroativas criadas com sucesso`);
+
+    await this.tentarEncerrarProcesso(processoId);
 
     return cobrancas;
   }
@@ -195,12 +201,36 @@ class CobrancaService {
     };
 
     const mesReferencia = formatarData(1);
+    const mesReferenciaDate = new Date(mesReferencia);
+    if (Number.isNaN(mesReferenciaDate.getTime())) {
+      throw new Error('Mês de referência inválido');
+    }
 
-    // Verificar se já passou da data de início
     const dataInicio = new Date(processo.dataInicioCobranca);
-    if (mesReferencia < dataInicio) {
+    if (Number.isNaN(dataInicio.getTime())) {
+      throw new Error('Data de início do processo inválida');
+    }
+
+    const inicioMes = new Date(dataInicio.getFullYear(), dataInicio.getMonth(), 1);
+    if (mesReferenciaDate < inicioMes) {
       console.log(`[Cobrança] Processo ${processoId}: Ainda não chegou na data de início`);
       return { criada: false, motivo: 'antes_data_inicio' };
+    }
+
+    const quantidadeMeses = Number.isFinite(processo.quantidadeMeses)
+      ? processo.quantidadeMeses
+      : null;
+    if (quantidadeMeses) {
+      const totalCobrancasGeradas = await CobrancaMensal.count({
+        where: {
+          processoCobrancaId: processoId
+        }
+      });
+
+      if (totalCobrancasGeradas >= quantidadeMeses) {
+        console.log(`[Cobrança] Processo ${processoId}: Já atingiu o limite de ${quantidadeMeses} cobranças`);
+        return { criada: false, motivo: 'limite_quantidade_meses' };
+      }
     }
 
     // Verificar se já existe cobrança para este mês
@@ -269,6 +299,8 @@ class CobrancaService {
     });
 
     console.log(`[Cobrança] Cobrança ${cobrancaId} marcada como paga`);
+
+    await this.tentarEncerrarProcesso(cobranca.processoCobrancaId);
 
     return cobranca;
   }
@@ -565,6 +597,51 @@ class CobrancaService {
     }
     const inteiro = Number(valor);
     return Number.isFinite(inteiro) ? inteiro : fallback;
+  }
+
+  async tentarEncerrarProcesso(processoId) {
+    const processo = await ProcessoCobranca.findByPk(processoId);
+    if (!processo) {
+      return;
+    }
+
+    const quantidadeMeses = Number.isFinite(processo.quantidadeMeses)
+      ? processo.quantidadeMeses
+      : null;
+    if (!quantidadeMeses) {
+      return;
+    }
+
+    const totalCobrancas = await CobrancaMensal.count({
+      where: { processoCobrancaId: processoId }
+    });
+
+    if (totalCobrancas < quantidadeMeses) {
+      return;
+    }
+
+    const totalPagas = await CobrancaMensal.count({
+      where: {
+        processoCobrancaId: processoId,
+        status: 'pago'
+      }
+    });
+
+    if (totalPagas >= quantidadeMeses && processo.status !== 'encerrado') {
+      await processo.update({ status: 'encerrado' });
+      console.log(`[Cobrança] Processo ${processoId} encerrado após ${quantidadeMeses} cobranças pagas`);
+    }
+  }
+
+  normalizarQuantidadeMeses(valor) {
+    if (valor === undefined || valor === null || valor === '') {
+      return null;
+    }
+    const meses = Number(valor);
+    if (!Number.isFinite(meses) || meses < 1) {
+      throw new Error('Quantidade de meses do processo inválida');
+    }
+    return Math.floor(meses);
   }
 }
 
