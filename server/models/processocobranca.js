@@ -7,13 +7,27 @@ const SCHEMA = (process.env.DB_SCHEMA || 'dev').trim();
 module.exports = (sequelize) => {
   class ProcessoCobranca extends Model {
     static associate(models) {
-      // Relacionamento com Cota
+      // Relacionamento LEGADO com Cota (mantido para compatibilidade)
       this.belongsTo(models.Cota, {
         foreignKey: 'cotaId',
         as: 'cota'
       });
 
-      // Relacionamento com Cobranças Mensais
+      // Relacionamento com CotaProcessoCobranca (NOVO)
+      this.hasMany(models.CotaProcessoCobranca, {
+        foreignKey: 'processoCobrancaId',
+        as: 'cotasProcesso'
+      });
+
+      // Relacionamento N:N com Cotas através de CotaProcessoCobranca
+      this.belongsToMany(models.Cota, {
+        through: models.CotaProcessoCobranca,
+        foreignKey: 'processoCobrancaId',
+        otherKey: 'cotaId',
+        as: 'cotas'
+      });
+
+      // Relacionamento com Cobranças Mensais (mantido para compatibilidade)
       this.hasMany(models.CobrancaMensal, {
         foreignKey: 'processoCobrancaId',
         as: 'cobrancas'
@@ -30,25 +44,37 @@ module.exports = (sequelize) => {
     },
     cotaId: {
       type: DataTypes.UUID,
-      allowNull: false,
+      allowNull: true, // Alterado para permitir processos multi-cota
       references: {
         model: 'cotas',
         key: 'id'
-      }
+      },
+      comment: 'LEGADO: Usado apenas para processos de cota única (tipo=unico)'
+    },
+    nome: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+      comment: 'Nome descritivo do processo'
+    },
+    tipo: {
+      type: DataTypes.ENUM('unico', 'multiplo'),
+      allowNull: false,
+      defaultValue: 'unico',
+      comment: 'Tipo do processo (unico = 1 cota, multiplo = N cotas)'
     },
     diaVencimento: {
       type: DataTypes.INTEGER,
-      allowNull: false,
+      allowNull: true, // Agora opcional (movido para CotaProcessoCobranca)
       validate: {
         min: 1,
         max: 31
       },
-      comment: 'Dia do mês para vencimento (1-31)'
+      comment: 'LEGADO: Dia do mês para vencimento (usado apenas em tipo=unico)'
     },
     dataInicioCobranca: {
       type: DataTypes.DATEONLY,
-      allowNull: false,
-      comment: 'Data a partir da qual começar a gerar cobranças'
+      allowNull: true, // Agora opcional (movido para CotaProcessoCobranca)
+      comment: 'LEGADO: Data de início (usado apenas em tipo=unico)'
     },
     quantidadeMeses: {
       type: DataTypes.INTEGER,
@@ -56,7 +82,7 @@ module.exports = (sequelize) => {
       validate: {
         min: 1
       },
-      comment: 'Quantidade de meses do processo (null = ilimitado)'
+      comment: 'LEGADO: Quantidade de meses (usado apenas em tipo=unico)'
     },
     status: {
       type: DataTypes.ENUM('ativo', 'pausado', 'encerrado'),

@@ -8,6 +8,7 @@ const inadimplenciaController = require('../controllers/inadimplencia');
 const webhookController = require('../controllers/webhook');
 const configuracaoWebhookController = require('../controllers/configuracaowebhook');
 const configuracaoCobrancaController = require('../controllers/configuracaocobranca');
+const cotaProcessoController = require('../controllers/cotaprocesso');
 
 // Middleware de autenticação
 const autenticado = require('../middlewares/autenticado');
@@ -84,6 +85,61 @@ router.post('/processos/:id/reativar', processoCobrancaController.reativar);
  * Encerrar processo de cobrança
  */
 router.post('/processos/:id/encerrar', processoCobrancaController.encerrar);
+
+// ----------------------------------------------------------------------------
+// COTAS EM PROCESSOS (NOVO)
+// ----------------------------------------------------------------------------
+
+/**
+ * GET /api/inadimplentes/processos/:id/cotas
+ * Listar cotas de um processo
+ * Query params: status
+ */
+router.get('/processos/:id/cotas', cotaProcessoController.listarCotas);
+
+/**
+ * POST /api/inadimplentes/processos/:id/cotas
+ * Adicionar cota a um processo
+ * Body: { cotaId, valor, diaVencimento, quantidadeMeses, mesesPagosRetroativo, dataInicioCobranca, observacao }
+ */
+router.post('/processos/:id/cotas', cotaProcessoController.adicionarCota);
+
+/**
+ * DELETE /api/inadimplentes/processos/:id/cotas/:cotaId
+ * Remover cota de um processo
+ */
+router.delete('/processos/:id/cotas/:cotaId', cotaProcessoController.removerCota);
+
+/**
+ * GET /api/inadimplentes/cotas-processo/:id
+ * Obter detalhes de uma cota no processo
+ */
+router.get('/cotas-processo/:id', cotaProcessoController.obterDetalhes);
+
+/**
+ * PUT /api/inadimplentes/cotas-processo/:id
+ * Atualizar configuração de uma cota no processo
+ * Body: { valor, diaVencimento, quantidadeMeses, dataInicioCobranca, status, observacao }
+ */
+router.put('/cotas-processo/:id', cotaProcessoController.atualizarConfiguracao);
+
+/**
+ * POST /api/inadimplentes/cotas-processo/:id/pausar
+ * Pausar cota no processo
+ */
+router.post('/cotas-processo/:id/pausar', cotaProcessoController.pausar);
+
+/**
+ * POST /api/inadimplentes/cotas-processo/:id/reativar
+ * Reativar cota no processo
+ */
+router.post('/cotas-processo/:id/reativar', cotaProcessoController.reativar);
+
+/**
+ * POST /api/inadimplentes/cotas-processo/:id/encerrar
+ * Encerrar cota no processo
+ */
+router.post('/cotas-processo/:id/encerrar', cotaProcessoController.encerrar);
 
 // ----------------------------------------------------------------------------
 // COBRANÇAS MENSAIS

@@ -27,14 +27,110 @@ class CobrancaService {
   }
   /**
    * Criar processo de cobrança com histórico retroativo opcional
+   * Suporta tanto cota única quanto múltiplas cotas
    */
   async criarProcessoCobranca(dados) {
     const {
       cotaId,
+      cotas, // NOVO: array de cotas para processo múltiplo
+      nome,
       diaVencimento,
       dataInicioCobranca,
       historicoRetroativo,
       quantidadeMeses: quantidadeMesesRaw
+    } = dados;
+
+    // Verificar se é processo múltiplo ou único
+    const isProcessoMultiplo = cotas && Array.isArray(cotas) && cotas.length > 0;
+    
+    if (isProcessoMultiplo) {
+      // NOVO: Criar processo com múltiplas cotas
+      return await this.criarProcessoMultiploCotas({ nome, cotas });
+    } else {
+      // LEGADO: Criar processo de cota única
+      return await this.criarProcessoUnicaCota({
+        cotaId,
+        nome,
+        diaVencimento,
+        dataInicioCobranca,
+        historicoRetroativo,
+        quantidadeMeses: quantidadeMesesRaw
+      });
+    }
+  }
+
+  /**
+   * Criar processo com múltiplas cotas (NOVO)
+   */
+  async criarProcessoMultiploCotas(dados) {
+    const { nome, cotas } = dados;
+    const { CotaProcessoCobranca } = require('../models');
+
+    if (!cotas || cotas.length === 0) {
+      throw new Error('Nenhuma cota fornecida para o processo');
+    }
+
+    // Validar todas as cotas
+    for (const cotaConfig of cotas) {
+      const cota = await Cota.findByPk(cotaConfig.cotaId);
+      if (!cota) {
+        throw new Error(`Cota ${cotaConfig.cotaId} não encontrada`);
+      }
+    }
+
+    // Criar processo
+    const processo = await ProcessoCobranca.create({
+      nome: nome || 'Processo Múltiplas Cotas',
+      tipo: 'multiplo',
+      status: 'ativo'
+    });
+
+    console.log(`[Cobrança] Processo ${processo.id} criado com ${cotas.length} cotas`);
+
+    // Adicionar cada cota ao processo
+    for (const cotaConfig of cotas) {
+      const {
+        cotaId,
+        valor,
+        diaVencimento,
+        quantidadeMeses,
+        mesesPagosRetroativo,
+        dataInicioCobranca,
+        observacao
+      } = cotaConfig;
+
+      await CotaProcessoCobranca.create({
+        processoCobrancaId: processo.id,
+        cotaId,
+        valor,
+        diaVencimento,
+        quantidadeMeses: quantidadeMeses || null,
+        mesesPagosRetroativo: mesesPagosRetroativo || 0,
+        dataInicioCobranca,
+        status: 'ativo',
+        observacao
+      });
+
+      console.log(`[Cobrança] Cota ${cotaId} adicionada ao processo ${processo.id}`);
+    }
+
+    // Gerar cobranças retroativas e atuais
+    await this.gerarCobrancasProcesso(processo.id);
+
+    return processo;
+  }
+
+  /**
+   * Criar processo de cota única (LEGADO)
+   */
+  async criarProcessoUnicaCota(dados) {
+    const {
+      cotaId,
+      nome,
+      diaVencimento,
+      dataInicioCobranca,
+      historicoRetroativo,
+      quantidadeMeses
     } = dados;
 
     // Validar cota
@@ -59,14 +155,16 @@ class CobrancaService {
     const valorBase = !Number.isNaN(valorCota) ? valorCota : 0;
 
     // Criar processo de cobrança
-    const quantidadeMeses = this.normalizarQuantidadeMeses(quantidadeMesesRaw);
+    const quantidadeMesesNormalizado = this.normalizarQuantidadeMeses(quantidadeMeses);
 
     const processo = await ProcessoCobranca.create({
       cotaId,
+      nome: nome || `Processo - Cota ${cota.cota}`,
+      tipo: 'unico',
       diaVencimento,
       dataInicioCobranca,
       status: 'ativo',
-      quantidadeMeses
+      quantidadeMeses: quantidadeMesesNormalizado
     });
 
     // Importar histórico retroativo se solicitado
@@ -177,15 +275,24 @@ class CobrancaService {
 
   /**
    * Gerar cobrança para um processo específico
+   * Suporta tanto processos de cota única quanto processos com múltiplas cotas
    */
   async gerarCobrancasProcesso(processoId) {
+    const { CotaProcessoCobranca } = require('../models');
+    
     const processo = await ProcessoCobranca.findByPk(processoId, {
       include: [
         {
-          association: 'cota'
+          association: 'cota' // LEGADO: para processos tipo='unico'
+        },
+        {
+          association: 'cotasProcesso', // NOVO: para processos tipo='multiplo'
+          where: { status: 'ativo' },
+          required: false
         }
       ]
     });
+    
     if (!processo) {
       throw new Error('Processo de cobrança não encontrado');
     }
@@ -202,10 +309,111 @@ class CobrancaService {
 
     const mesReferencia = formatarData(1);
     const mesReferenciaDate = new Date(mesReferencia);
+    
     if (Number.isNaN(mesReferenciaDate.getTime())) {
       throw new Error('Mês de referência inválido');
     }
 
+    // Verificar tipo de processo
+    if (processo.tipo === 'multiplo' || (processo.cotasProcesso && processo.cotasProcesso.length > 0)) {
+      // NOVO: Processos com múltiplas cotas
+      return await this.gerarCobrancasProcessoMultiplo(processo, mesReferencia, mesReferenciaDate);
+    } else {
+      // LEGADO: Processos de cota única
+      return await this.gerarCobrancaProcessoUnico(processo, mesReferencia, mesReferenciaDate, formatarData);
+    }
+  }
+
+  /**
+   * Gerar cobranças para processo com múltiplas cotas (NOVO)
+   */
+  async gerarCobrancasProcessoMultiplo(processo, mesReferencia, mesReferenciaDate) {
+    const cotasProcesso = processo.cotasProcesso || [];
+    
+    if (cotasProcesso.length === 0) {
+      console.log(`[Cobrança] Processo ${processo.id}: Nenhuma cota ativa encontrada`);
+      return { criada: false, motivo: 'sem_cotas_ativas', cobrancasCriadas: 0 };
+    }
+
+    let cobrancasCriadas = 0;
+    let cobrancasIgnoradas = 0;
+    const cobrancas = [];
+
+    for (const cotaProcesso of cotasProcesso) {
+      try {
+        // Verificar data de início
+        const dataInicio = new Date(cotaProcesso.dataInicioCobranca);
+        const inicioMes = new Date(dataInicio.getFullYear(), dataInicio.getMonth(), 1);
+        
+        if (mesReferenciaDate < inicioMes) {
+          console.log(`[Cobrança] CotaProcesso ${cotaProcesso.id}: Ainda não chegou na data de início`);
+          cobrancasIgnoradas++;
+          continue;
+        }
+
+        // Verificar limite de quantidade de meses
+        if (cotaProcesso.quantidadeMeses) {
+          const totalCobrancas = await CobrancaMensal.count({
+            where: { cotaProcessoId: cotaProcesso.id }
+          });
+
+          if (totalCobrancas >= cotaProcesso.quantidadeMeses) {
+            console.log(`[Cobrança] CotaProcesso ${cotaProcesso.id}: Já atingiu limite de ${cotaProcesso.quantidadeMeses} meses`);
+            cobrancasIgnoradas++;
+            continue;
+          }
+        }
+
+        // Verificar se já existe cobrança para este mês
+        const cobrancaExistente = await CobrancaMensal.findOne({
+          where: {
+            cotaProcessoId: cotaProcesso.id,
+            mesReferencia
+          }
+        });
+
+        if (cobrancaExistente) {
+          console.log(`[Cobrança] CotaProcesso ${cotaProcesso.id}: Cobrança já existe para este mês`);
+          cobrancasIgnoradas++;
+          continue;
+        }
+
+        // Criar cobrança
+        const dataVencimento = `${mesReferencia.substring(0, 8)}${String(cotaProcesso.diaVencimento).padStart(2, '0')}`;
+        
+        const cobranca = await CobrancaMensal.create({
+          processoCobrancaId: processo.id,
+          cotaProcessoId: cotaProcesso.id,
+          mesReferencia,
+          valor: cotaProcesso.valor,
+          dataVencimento,
+          status: 'pendente'
+        });
+
+        cobrancas.push(cobranca);
+        cobrancasCriadas++;
+        console.log(`[Cobrança] CotaProcesso ${cotaProcesso.id}: Cobrança criada`);
+        
+      } catch (erro) {
+        console.error(`[Cobrança] Erro ao gerar cobrança para CotaProcesso ${cotaProcesso.id}:`, erro.message);
+        cobrancasIgnoradas++;
+      }
+    }
+
+    console.log(`[Cobrança] Processo ${processo.id}: ${cobrancasCriadas} criadas, ${cobrancasIgnoradas} ignoradas`);
+
+    return {
+      criada: cobrancasCriadas > 0,
+      cobrancasCriadas,
+      cobrancasIgnoradas,
+      cobrancas
+    };
+  }
+
+  /**
+   * Gerar cobrança para processo de cota única (LEGADO)
+   */
+  async gerarCobrancaProcessoUnico(processo, mesReferencia, mesReferenciaDate, formatarData) {
     const dataInicio = new Date(processo.dataInicioCobranca);
     if (Number.isNaN(dataInicio.getTime())) {
       throw new Error('Data de início do processo inválida');
@@ -213,7 +421,7 @@ class CobrancaService {
 
     const inicioMes = new Date(dataInicio.getFullYear(), dataInicio.getMonth(), 1);
     if (mesReferenciaDate < inicioMes) {
-      console.log(`[Cobrança] Processo ${processoId}: Ainda não chegou na data de início`);
+      console.log(`[Cobrança] Processo ${processo.id}: Ainda não chegou na data de início`);
       return { criada: false, motivo: 'antes_data_inicio' };
     }
 
@@ -223,12 +431,12 @@ class CobrancaService {
     if (quantidadeMeses) {
       const totalCobrancasGeradas = await CobrancaMensal.count({
         where: {
-          processoCobrancaId: processoId
+          processoCobrancaId: processo.id
         }
       });
 
       if (totalCobrancasGeradas >= quantidadeMeses) {
-        console.log(`[Cobrança] Processo ${processoId}: Já atingiu o limite de ${quantidadeMeses} cobranças`);
+        console.log(`[Cobrança] Processo ${processo.id}: Já atingiu o limite de ${quantidadeMeses} cobranças`);
         return { criada: false, motivo: 'limite_quantidade_meses' };
       }
     }
@@ -236,13 +444,14 @@ class CobrancaService {
     // Verificar se já existe cobrança para este mês
     const cobrancaExistente = await CobrancaMensal.findOne({
       where: {
-        processoCobrancaId: processoId,
+        processoCobrancaId: processo.id,
         mesReferencia
       }
     });
 
     if (cobrancaExistente) {
-      console.log(`[Cobrança] Processo ${processoId}: Cobrança do mês ${mesAtual + 1}/${anoAtual} já existe`);
+      const hoje = new Date();
+      console.log(`[Cobrança] Processo ${processo.id}: Cobrança do mês ${hoje.getMonth() + 1}/${hoje.getFullYear()} já existe`);
       return { criada: false, motivo: 'ja_existe' };
     }
 
@@ -254,14 +463,15 @@ class CobrancaService {
 
     // Criar cobrança
     const cobranca = await CobrancaMensal.create({
-      processoCobrancaId: processoId,
+      processoCobrancaId: processo.id,
       mesReferencia,
       valor: valorBase,
       dataVencimento,
       status: 'pendente'
     });
 
-    console.log(`[Cobrança] Processo ${processoId}: Cobrança criada para ${mesAtual + 1}/${anoAtual}`);
+    const hoje = new Date();
+    console.log(`[Cobrança] Processo ${processo.id}: Cobrança criada para ${hoje.getMonth() + 1}/${hoje.getFullYear()}`);
 
     return { criada: true, cobranca };
   }

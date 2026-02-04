@@ -7,10 +7,16 @@ const SCHEMA = (process.env.DB_SCHEMA || 'dev').trim();
 module.exports = (sequelize) => {
   class CobrancaMensal extends Model {
     static associate(models) {
-      // Relacionamento com ProcessoCobranca
+      // Relacionamento com ProcessoCobranca (mantido para compatibilidade)
       this.belongsTo(models.ProcessoCobranca, {
         foreignKey: 'processoCobrancaId',
         as: 'processoCobranca'
+      });
+
+      // Relacionamento com CotaProcessoCobranca (NOVO)
+      this.belongsTo(models.CotaProcessoCobranca, {
+        foreignKey: 'cotaProcessoId',
+        as: 'cotaProcesso'
       });
 
       // Relacionamento com Notificações
@@ -35,6 +41,15 @@ module.exports = (sequelize) => {
         model: 'processos_cobranca',
         key: 'id'
       }
+    },
+    cotaProcessoId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: {
+        model: 'cotas_processo_cobranca',
+        key: 'id'
+      },
+      comment: 'Referência para a cota específica que gerou esta cobrança'
     },
     mesReferencia: {
       type: DataTypes.DATEONLY,
