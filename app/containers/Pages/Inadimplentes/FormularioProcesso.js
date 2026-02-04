@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Helmet } from 'react-helmet';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   Alert,
   Autocomplete,
@@ -8,31 +8,26 @@ import {
   Button,
   Card,
   CardContent,
-  Checkbox,
   CircularProgress,
   Divider,
+  FormControl,
   FormControlLabel,
+  FormLabel,
   Grid,
-  MenuItem,
-  Paper,
+  Radio,
+  RadioGroup,
   Snackbar,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   TextField,
   Typography
 } from '@mui/material';
 import {
   Save as SaveIcon,
-  Cancel as CancelIcon,
-  Info as InfoIcon
+  Cancel as CancelIcon
 } from '@mui/icons-material';
 import { PapperBlock } from 'dan-components';
 import brand from 'dan-api/dummy/brand';
 import * as inadimplentesApi from '../../../services/inadimplentesApi';
+import GerenciadorCotasProcesso from './GerenciadorCotasProcesso';
 
 const API_URL = process.env.REACT_APP_API_URL?.replace(/\/$/, '') || 'http://localhost:3003';
 const getToken = () => localStorage.getItem('token');
@@ -40,7 +35,6 @@ const getToken = () => localStorage.getItem('token');
 function FormularioProcesso() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const location = useLocation();
   const isEdicao = !!id;
 
   const title = `${brand.name} - ${isEdicao ? 'Editar' : 'Novo'} Processo de Cobrança`;
@@ -48,35 +42,31 @@ function FormularioProcesso() {
     ? 'Editar processo de cobrança existente'
     : 'Criar novo processo de cobrança';
 
-  // Estados do formulário
+  // Estados principais
   const [loading, setLoading] = useState(false);
   const [salvando, setSalvando] = useState(false);
-  const [cotas, setCotas] = useState([]);
-  const [cotaSelecionada, setCotaSelecionada] = useState(null);
-  const [clientesDisponiveis, setClientesDisponiveis] = useState([]);
-  const [clienteSelecionado, setClienteSelecionado] = useState(null);
-  const [grupoSelecionado, setGrupoSelecionado] = useState('');
-  const [loadingCotas, setLoadingCotas] = useState(false);
-  const [inputCotaValue, setInputCotaValue] = useState('');
+  const [tipoProcesso, setTipoProcesso] = useState('unico'); // 'unico' ou 'multiplo'
+  const [processo, setProcesso] = useState(null);
 
-  const [form, setForm] = useState({
+  // Estados para processo de cota única (LEGADO)
+  const [cotasDisponiveis, setCotasDisponiveis] = useState([]);
+  const [cotaSelecionada, setCotaSelecionada] = useState(null);
+  const [loadingCotas, setLoadingCotas] = useState(false);
+  const [formUnico, setFormUnico] = useState({
     cotaId: '',
+    nome: '',
+    valor: '',
     diaVencimento: 10,
     dataInicioCobranca: new Date().toISOString().split('T')[0],
-    quantidadeMeses: 12
+    quantidadeMeses: '',
+    mesesPagosRetroativo: 0
   });
 
-  // Histórico retroativo
-  const [importarHistorico, setImportarHistorico] = useState(false);
-  const [historico, setHistorico] = useState({
-    primeiroMesPago: '',
-    quantidadeMeses: 1
+  // Estados para processo multi-cota (NOVO)
+  const [formMultiplo, setFormMultiplo] = useState({
+    nome: '',
+    cotas: []
   });
-  const ultimoMesPadraoRef = useRef('');
-  const carregarCotasRef = useRef(null);
-
-  // Preview de cobranças
-  const [previewCobrancas, setPreviewCobrancas] = useState([]);
 
   // Snackbar
   const [snackbar, setSnackbar] = useState({
@@ -84,31 +74,6 @@ function FormularioProcesso() {
     message: '',
     severity: 'success'
   });
-  const prefillParams = useMemo(() => {
-    const params = new URLSearchParams(location.search);
-    return {
-      clienteId: params.get('clienteId'),
-      grupo: params.get('grupo'),
-      cotaId: params.get('cotaId')
-    };
-  }, [location.search]);
-  const [prefillClienteAplicado, setPrefillClienteAplicado] = useState(false);
-  const [prefillCotaAplicado, setPrefillCotaAplicado] = useState(false);
-
-  // Carregar clientes no início
-  useEffect(() => {
-    carregarClientes();
-  }, []);
-
-  // Carregar cotas quando usuário digita (debounce)
-  useEffect(() => {
-    if (inputCotaValue.length >= 2 || clienteSelecionado || grupoSelecionado) {
-      const timer = setTimeout(() => {
-        carregarCotas(inputCotaValue);
-      }, 500); // Aguarda 500ms após parar de digitar
-      return () => clearTimeout(timer);
-    }
-  }, [inputCotaValue, clienteSelecionado, grupoSelecionado]);
 
   // Carregar processo se for edição
   useEffect(() => {
@@ -117,92 +82,88 @@ function FormularioProcesso() {
     }
   }, [id]);
 
+  // Carregar cotas disponíveis
   useEffect(() => {
-    if (!importarHistorico || !cotaSelecionada) return;
-    const dataAcquisicao = cotaSelecionada.dtaquisicao
-      || cotaSelecionada.dataAquisicao
-      || cotaSelecionada.DtAquisicao
-      || cotaSelecionada.dtaAquisicao;
-    const mesPadrao = formatarMesReferenciaParaInput(dataAcquisicao);
-    if (!mesPadrao) return;
-
-    setHistorico((prev) => {
-      const deveAtualizar = !prev.primeiroMesPago || prev.primeiroMesPago === ultimoMesPadraoRef.current;
-      if (!deveAtualizar) return prev;
-      ultimoMesPadraoRef.current = mesPadrao;
-      return { ...prev, primeiroMesPago: mesPadrao };
-    });
-  }, [importarHistorico, cotaSelecionada]);
-
-  useEffect(() => {
-    if (prefillClienteAplicado) return;
-    if (!prefillParams.clienteId || !clientesDisponiveis.length) return;
-    const cliente = clientesDisponiveis.find((item) => String(item.id) === String(prefillParams.clienteId));
-    if (!cliente) return;
-    setClienteSelecionado(cliente);
-    if (prefillParams.grupo) {
-      setGrupoSelecionado(prefillParams.grupo);
+    if (tipoProcesso === 'unico' || tipoProcesso === 'multiplo') {
+      carregarCotas();
     }
-    setPrefillClienteAplicado(true);
-    const timer = setTimeout(() => {
-      carregarCotasRef.current?.('');
-    }, 0);
-    return () => clearTimeout(timer);
-  }, [clientesDisponiveis, prefillClienteAplicado, prefillParams.clienteId, prefillParams.grupo]);
+  }, [tipoProcesso]);
 
-  useEffect(() => {
-    if (isEdicao || prefillCotaAplicado) return;
-    if (!prefillParams.cotaId || !cotas.length) return;
-    const cotaEscolhida = cotas.find((item) => String(item.id) === String(prefillParams.cotaId));
-    if (!cotaEscolhida) return;
-    setPrefillCotaAplicado(true);
-    setCotaSelecionada(cotaEscolhida);
-    setForm((prev) => ({
-      ...prev,
-      cotaId: cotaEscolhida.id,
-      dataInicioCobranca: formatarDataParaInput(
-        cotaEscolhida.dtaquisicao
-        || cotaEscolhida.dataAquisicao
-        || cotaEscolhida.DtAquisicao
-        || cotaEscolhida.dtaAquisicao
-      )
-    }));
-  }, [cotas, isEdicao, prefillCotaAplicado, prefillParams.cotaId]);
-
-  useEffect(() => {
-    if (!importarHistorico) {
-      ultimoMesPadraoRef.current = '';
-    }
-  }, [importarHistorico]);
-
-  // Atualizar preview quando form mudar
-  useEffect(() => {
-    atualizarPreview();
-  }, [form, importarHistorico, historico]);
-
-  const carregarClientes = async () => {
+  const carregarProcesso = async () => {
     try {
-      const response = await fetch(`${API_URL}/clientes?limit=100`, {
+      setLoading(true);
+      const response = await inadimplentesApi.buscarProcesso(id);
+      const proc = response.dados;
+      setProcesso(proc);
+
+      // Determinar tipo do processo
+      const tipo = proc.tipo || 'unico';
+      setTipoProcesso(tipo);
+
+      if (tipo === 'unico') {
+        // Carregar dados do processo de cota única
+        const cota = proc.cota || proc.Cota;
+        setFormUnico({
+          cotaId: proc.cotaId,
+          nome: proc.nome || '',
+          valor: cota?.valor || '',
+          diaVencimento: proc.diaVencimento || 10,
+          dataInicioCobranca: proc.dataInicioCobranca?.split('T')[0] || '',
+          quantidadeMeses: proc.quantidadeMeses || '',
+          mesesPagosRetroativo: 0
+        });
+        if (cota) {
+          setCotaSelecionada(cota);
+        }
+      } else {
+        // Carregar dados do processo multi-cota
+        setFormMultiplo({
+          nome: proc.nome || '',
+          cotas: [] // Será carregado via API separada
+        });
+        // Carregar cotas do processo
+        await carregarCotasDoProcesso(id);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar processo:', error);
+      mostrarSnackbar('Erro ao carregar processo', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const carregarCotasDoProcesso = async (processoId) => {
+    try {
+      const response = await fetch(`${API_URL}/inadimplentes/processos/${processoId}/cotas`, {
         headers: {
           Authorization: `Bearer ${getToken()}`
         }
       });
 
-      if (!response.ok) throw new Error('Erro ao carregar clientes');
+      if (!response.ok) throw new Error('Erro ao carregar cotas do processo');
 
       const data = await response.json();
-      // A API pode retornar array diretamente ou { dados: [...] }
-      const clientesLista = Array.isArray(data) ? data : (data.dados || []);
-      
-      const clientesArray = clientesLista.map(c => ({
-        id: c.id,
-        nome: c.nome
+      const cotasProcesso = data.dados || [];
+
+      // Transformar para formato do formulário
+      const cotasFormatadas = cotasProcesso.map(cp => ({
+        cotaId: cp.cotaId,
+        cotaSelecionada: cp.cota,
+        valor: parseFloat(cp.valor),
+        diaVencimento: cp.diaVencimento,
+        quantidadeMeses: cp.quantidadeMeses,
+        mesesPagosRetroativo: cp.mesesPagosRetroativo || 0,
+        dataInicioCobranca: cp.dataInicioCobranca,
+        observacao: cp.observacao || ''
       }));
-      
-      console.log('[FormularioProcesso] Clientes carregados:', clientesArray.length);
-      setClientesDisponiveis(clientesArray);
+
+      setFormMultiplo(prev => ({
+        ...prev,
+        cotas: cotasFormatadas
+      }));
     } catch (error) {
-      console.error('Erro ao carregar clientes:', error);
+      console.error('Erro ao carregar cotas do processo:', error);
+      mostrarSnackbar('Erro ao carregar cotas do processo', 'error');
     }
   };
 
@@ -210,23 +171,11 @@ function FormularioProcesso() {
     try {
       setLoadingCotas(true);
       
-      // Construir query params
       const params = new URLSearchParams();
       if (busca) params.append('busca', busca);
-      if (clienteSelecionado) params.append('clienteId', clienteSelecionado.id);
-      if (grupoSelecionado) params.append('grupo', grupoSelecionado);
-      params.append('limit', '50'); // Limitar resultados
+      params.append('limit', '100');
       
       const url = `${API_URL}/cotas?${params}`;
-      console.log('[FormularioProcesso] Buscando cotas...');
-      console.log('[FormularioProcesso] URL:', url);
-      console.log('[FormularioProcesso] Params:', {
-        busca,
-        clienteId: clienteSelecionado?.id,
-        clienteNome: clienteSelecionado?.nome,
-        grupo: grupoSelecionado
-      });
-      
       const response = await fetch(url, {
         headers: {
           Authorization: `Bearer ${getToken()}`
@@ -236,61 +185,14 @@ function FormularioProcesso() {
       if (!response.ok) throw new Error('Erro ao carregar cotas');
 
       const data = await response.json();
-      console.log('[FormularioProcesso] Resposta da API:', data);
-      
-      // A API pode retornar array diretamente ou { dados: [...] }
       const cotasLista = Array.isArray(data) ? data : (data.dados || []);
       
-      console.log('[FormularioProcesso] Cotas carregadas:', cotasLista.length);
-      console.log('[FormularioProcesso] Primeira cota:', cotasLista[0]);
-      
-      setCotas(cotasLista);
+      setCotasDisponiveis(cotasLista);
     } catch (error) {
       console.error('Erro ao carregar cotas:', error);
       mostrarSnackbar('Erro ao carregar cotas', 'error');
     } finally {
       setLoadingCotas(false);
-    }
-  };
-
-  useEffect(() => {
-    carregarCotasRef.current = carregarCotas;
-  }, [carregarCotas]);
-
-  const carregarProcesso = async () => {
-    try {
-      setLoading(true);
-      console.log('[FormularioProcesso] Carregando processo ID:', id);
-      const response = await inadimplentesApi.buscarProcesso(id);
-      console.log('[FormularioProcesso] Resposta da API:', response);
-      const processo = response.dados;
-      console.log('[FormularioProcesso] Dados do processo:', processo);
-
-      setForm({
-        cotaId: processo.cotaId,
-        diaVencimento: processo.diaVencimento,
-        dataInicioCobranca: processo.dataInicioCobranca.split('T')[0],
-        quantidadeMeses: processo.quantidadeMeses ?? ''
-      });
-
-      // Buscar cota selecionada
-      const cota = processo.Cota || processo.cota;
-      console.log('[FormularioProcesso] Cota encontrada:', cota);
-      if (cota) {
-        setCotaSelecionada(cota);
-        const cliente = cota.Cliente || cota.cliente;
-        console.log('[FormularioProcesso] Cliente encontrado:', cliente);
-        if (cliente) {
-          setClienteSelecionado({ id: cliente.id, nome: cliente.nome });
-        }
-        setGrupoSelecionado(cota.grupo || '');
-      }
-      console.log('[FormularioProcesso] Processo carregado com sucesso');
-    } catch (error) {
-      console.error('[FormularioProcesso] Erro ao carregar processo:', error);
-      mostrarSnackbar('Erro ao carregar processo', 'error');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -302,168 +204,75 @@ function FormularioProcesso() {
     setSnackbar({ ...snackbar, open: false });
   };
 
-  const formatarDataParaInput = (data) => {
-    if (!data) return '';
-    const parsed = new Date(data);
-    if (Number.isNaN(parsed.getTime())) return '';
-    return parsed.toISOString().split('T')[0];
+  const handleChangeTipoProcesso = (event) => {
+    setTipoProcesso(event.target.value);
   };
 
-  const formatarMesReferenciaParaInput = (data) => {
-    if (!data) return '';
-    const parsed = new Date(data);
-    if (Number.isNaN(parsed.getTime())) return '';
-    const mes = String(parsed.getMonth() + 1).padStart(2, '0');
-    return `${parsed.getFullYear()}-${mes}`;
-  };
-
-  const handleChangeCota = (event, novaCota) => {
+  const handleChangeCotaUnico = (event, novaCota) => {
     setCotaSelecionada(novaCota);
     if (novaCota) {
-      setForm({
-        ...form,
+      const valorCota = parseFloat(novaCota.valor) || 0;
+      setFormUnico({
+        ...formUnico,
         cotaId: novaCota.id,
-        dataInicioCobranca: formatarDataParaInput(
-          novaCota.dtaquisicao || novaCota.dataAquisicao || novaCota.DtAquisicao || novaCota.dtaAquisicao
-        )
+        valor: valorCota,
+        dataInicioCobranca: novaCota.dtaquisicao 
+          ? new Date(novaCota.dtaquisicao).toISOString().split('T')[0]
+          : formUnico.dataInicioCobranca
       });
     } else {
-      setForm({
-        ...form,
+      setFormUnico({
+        ...formUnico,
         cotaId: '',
-        dataInicioCobranca: ''
+        valor: ''
       });
     }
   };
 
-  const handleChangeForm = (campo, valor) => {
-    setForm({
-      ...form,
+  const handleChangeFormUnico = (campo, valor) => {
+    setFormUnico({
+      ...formUnico,
       [campo]: valor
     });
   };
 
-  const handleChangeHistorico = (campo, valor) => {
-    setHistorico({
-      ...historico,
+  const handleChangeFormMultiplo = (campo, valor) => {
+    setFormMultiplo({
+      ...formMultiplo,
       [campo]: valor
     });
-  };
-
-  const gruposDisponiveis = useMemo(() => {
-    if (!clienteSelecionado || cotas.length === 0) return [];
-    const gruposSet = new Set();
-    cotas.forEach((cota) => {
-      // A API já retorna cotas filtradas pelo cliente
-      if (cota.grupo) {
-        gruposSet.add(String(cota.grupo));
-      }
-    });
-    const grupos = Array.from(gruposSet).sort();
-    console.log('[FormularioProcesso] Grupos disponíveis para cliente', clienteSelecionado?.nome, ':', grupos);
-    console.log('[FormularioProcesso] Cotas para extração de grupos:', cotas);
-    return grupos;
-  }, [cotas, clienteSelecionado]);
-
-  // Não precisamos filtrar aqui, a API já retorna filtrado
-  // Apenas logamos para debug
-  useEffect(() => {
-    console.log('[FormularioProcesso] Cotas disponíveis:', cotas.length, '| Cliente:', clienteSelecionado?.nome, '| Grupo:', grupoSelecionado);
-  }, [cotas, clienteSelecionado, grupoSelecionado]);
-
-  const handleSelectCliente = (event, novoCliente) => {
-    setClienteSelecionado(novoCliente);
-    setGrupoSelecionado('');
-    setCotaSelecionada(null);
-    setForm((prev) => ({
-      ...prev,
-      cotaId: ''
-    }));
-    // Carregar cotas do cliente selecionado
-    if (novoCliente) {
-      carregarCotas('');
-    } else {
-      setCotas([]);
-    }
-  };
-
-  const handleSelectGrupo = (event) => {
-    const novoGrupo = event.target.value;
-    setGrupoSelecionado(novoGrupo);
-    setCotaSelecionada(null);
-    setForm((prev) => ({
-      ...prev,
-      cotaId: ''
-    }));
-    // Recarregar cotas com o novo filtro de grupo
-    if (novoGrupo || clienteSelecionado) {
-      carregarCotas('');
-    }
-  };
-
-  const atualizarPreview = () => {
-    const cobrancas = [];
-
-    // Cobranças retroativas
-    if (importarHistorico && historico.primeiroMesPago && historico.quantidadeMeses > 0) {
-      const [ano, mes] = historico.primeiroMesPago.split('-').map(Number);
-      
-      for (let i = 0; i < historico.quantidadeMeses; i++) {
-        const data = new Date(ano, mes - 1 + i, form.diaVencimento);
-        cobrancas.push({
-          mesReferencia: `${String(data.getMonth() + 1).padStart(2, '0')}/${data.getFullYear()}`,
-          dataVencimento: data.toLocaleDateString('pt-BR'),
-          status: 'pago',
-          tipo: 'retroativo'
-        });
-      }
-    }
-
-    // Cobrança do mês atual
-    const hoje = new Date();
-    const mesAtual = new Date(hoje.getFullYear(), hoje.getMonth(), form.diaVencimento);
-    cobrancas.push({
-      mesReferencia: `${String(mesAtual.getMonth() + 1).padStart(2, '0')}/${mesAtual.getFullYear()}`,
-      dataVencimento: mesAtual.toLocaleDateString('pt-BR'),
-      status: 'pendente',
-      tipo: 'atual'
-    });
-
-    setPreviewCobrancas(cobrancas);
   };
 
   const validarFormulario = () => {
-    if (!form.cotaId) {
-      mostrarSnackbar('Selecione uma cota', 'error');
-      return false;
-    }
-
-    if (!form.diaVencimento || form.diaVencimento < 1 || form.diaVencimento > 31) {
-      mostrarSnackbar('Dia de vencimento deve estar entre 1 e 31', 'error');
-      return false;
-    }
-
-    if (!form.dataInicioCobranca) {
-      mostrarSnackbar('Informe a data de início da cobrança', 'error');
-      return false;
-    }
-
-    if (form.quantidadeMeses !== undefined && form.quantidadeMeses !== null && form.quantidadeMeses !== '') {
-      const meses = Number(form.quantidadeMeses);
-      if (!Number.isFinite(meses) || meses < 1) {
-        mostrarSnackbar('Informe uma quantidade de meses válida (>= 1)', 'error');
-        return false;
-      }
-    }
-
-    if (importarHistorico) {
-      if (!historico.primeiroMesPago) {
-        mostrarSnackbar('Informe o primeiro mês pago', 'error');
+    if (tipoProcesso === 'unico') {
+      if (!formUnico.cotaId) {
+        mostrarSnackbar('Selecione uma cota', 'error');
         return false;
       }
 
-      if (!historico.quantidadeMeses || historico.quantidadeMeses < 1) {
-        mostrarSnackbar('Informe a quantidade de meses pagos', 'error');
+      if (!formUnico.valor || formUnico.valor <= 0) {
+        mostrarSnackbar('Informe um valor válido', 'error');
+        return false;
+      }
+
+      if (!formUnico.diaVencimento || formUnico.diaVencimento < 1 || formUnico.diaVencimento > 31) {
+        mostrarSnackbar('Dia de vencimento deve estar entre 1 e 31', 'error');
+        return false;
+      }
+
+      if (!formUnico.dataInicioCobranca) {
+        mostrarSnackbar('Informe a data de início da cobrança', 'error');
+        return false;
+      }
+    } else {
+      // Validação para processo multi-cota
+      if (!formMultiplo.nome || formMultiplo.nome.trim() === '') {
+        mostrarSnackbar('Informe um nome para o processo', 'error');
+        return false;
+      }
+
+      if (formMultiplo.cotas.length === 0) {
+        mostrarSnackbar('Adicione pelo menos uma cota ao processo', 'error');
         return false;
       }
     }
@@ -477,25 +286,57 @@ function FormularioProcesso() {
     try {
       setSalvando(true);
 
-      const dados = {
-        ...form,
-        quantidadeMeses: form.quantidadeMeses === '' ? null : Number(form.quantidadeMeses)
-      };
-
-      // Adicionar histórico se marcado
-      if (importarHistorico) {
-        dados.historicoRetroativo = {
-          primeiroMesPago: historico.primeiroMesPago,
-          quantidadeMeses: parseInt(historico.quantidadeMeses, 10)
+      if (tipoProcesso === 'unico') {
+        // Salvar processo de cota única
+        const dados = {
+          cotaId: formUnico.cotaId,
+          nome: formUnico.nome || `Processo - Cota ${cotaSelecionada?.cota}`,
+          diaVencimento: parseInt(formUnico.diaVencimento, 10),
+          dataInicioCobranca: formUnico.dataInicioCobranca,
+          quantidadeMeses: formUnico.quantidadeMeses === '' ? null : parseInt(formUnico.quantidadeMeses, 10)
         };
-      }
 
-      if (isEdicao) {
-        await inadimplentesApi.atualizarProcesso(id, dados);
-        mostrarSnackbar('Processo atualizado com sucesso');
+        // Adicionar histórico retroativo se houver
+        if (formUnico.mesesPagosRetroativo > 0) {
+          const dataInicio = new Date(formUnico.dataInicioCobranca);
+          const anoInicio = dataInicio.getFullYear();
+          const mesInicio = dataInicio.getMonth() + 1;
+          dados.historicoRetroativo = {
+            primeiroMesPago: `${anoInicio}-${String(mesInicio).padStart(2, '0')}`,
+            quantidadeMeses: parseInt(formUnico.mesesPagosRetroativo, 10)
+          };
+        }
+
+        if (isEdicao) {
+          await inadimplentesApi.atualizarProcesso(id, dados);
+          mostrarSnackbar('Processo atualizado com sucesso');
+        } else {
+          await inadimplentesApi.criarProcesso(dados);
+          mostrarSnackbar('Processo criado com sucesso');
+        }
       } else {
-        await inadimplentesApi.criarProcesso(dados);
-        mostrarSnackbar('Processo criado com sucesso');
+        // Salvar processo multi-cota
+        const dados = {
+          nome: formMultiplo.nome,
+          cotas: formMultiplo.cotas.map(cota => ({
+            cotaId: cota.cotaId,
+            valor: parseFloat(cota.valor),
+            diaVencimento: parseInt(cota.diaVencimento, 10),
+            quantidadeMeses: cota.quantidadeMeses === '' ? null : parseInt(cota.quantidadeMeses, 10),
+            mesesPagosRetroativo: parseInt(cota.mesesPagosRetroativo, 10) || 0,
+            dataInicioCobranca: cota.dataInicioCobranca,
+            observacao: cota.observacao || ''
+          }))
+        };
+
+        if (isEdicao) {
+          // Para edição de processo multi-cota, precisamos atualizar via API específica
+          mostrarSnackbar('Edição de processos multi-cota ainda não implementada', 'warning');
+          return;
+        } else {
+          await inadimplentesApi.criarProcesso(dados);
+          mostrarSnackbar('Processo criado com sucesso');
+        }
       }
 
       setTimeout(() => {
@@ -503,7 +344,7 @@ function FormularioProcesso() {
       }, 1500);
     } catch (error) {
       console.error('Erro ao salvar processo:', error);
-      mostrarSnackbar('Erro ao salvar processo', 'error');
+      mostrarSnackbar(error.message || 'Erro ao salvar processo', 'error');
     } finally {
       setSalvando(false);
     }
@@ -534,301 +375,218 @@ function FormularioProcesso() {
         icon="ion-ios-cash-outline"
       >
         <Grid container spacing={3}>
-          {/* Formulário Principal */}
-          <Grid item xs={12} md={7}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Dados do Processo
-                </Typography>
-
-                <Grid container spacing={2}>
-                  {/* Filtro por Cliente */}
-                  <Grid item xs={12} md={6}>
-                    <Autocomplete
-                      options={clientesDisponiveis}
-                      getOptionLabel={(option) => option?.nome || ''}
-                      value={clienteSelecionado}
-                      onChange={handleSelectCliente}
-                      isOptionEqualToValue={(option, value) => option?.id === value?.id}
-                      renderInput={(params) => (
-                        <TextField
-                          {...params}
-                          label="Cliente"
-                          placeholder="Selecione o cliente"
-                          helperText="Filtrar cotas pelo cliente"
-                        />
-                      )}
-                    />
-                  </Grid>
-
-                  {/* Filtro por Grupo */}
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      select
-                      fullWidth
-                      label="Grupo"
-                      value={grupoSelecionado}
-                      onChange={handleSelectGrupo}
-                      helperText="Selecione o grupo do cliente"
-                      disabled={!clienteSelecionado}
+          <Grid item xs={12}>
+            {/* Seleção do Tipo de Processo */}
+            {!isEdicao && (
+              <Card sx={{ mb: 3 }}>
+                <CardContent>
+                  <FormControl component="fieldset">
+                    <FormLabel component="legend">Tipo de Processo</FormLabel>
+                    <RadioGroup
+                      row
+                      value={tipoProcesso}
+                      onChange={handleChangeTipoProcesso}
                     >
-                      <MenuItem value="">
-                        <em>Todos os grupos</em>
-                      </MenuItem>
-                      {gruposDisponiveis.map((grupo) => (
-                        <MenuItem key={grupo} value={grupo}>
-                          {grupo}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                  </Grid>
+                      <FormControlLabel 
+                        value="unico" 
+                        control={<Radio />} 
+                        label="Cota Única (Tradicional)" 
+                      />
+                      <FormControlLabel 
+                        value="multiplo" 
+                        control={<Radio />} 
+                        label="Múltiplas Cotas (Novo)" 
+                      />
+                    </RadioGroup>
+                    <Typography variant="caption" color="textSecondary" sx={{ mt: 1 }}>
+                      {tipoProcesso === 'unico' 
+                        ? 'Processo vinculado a uma única cota com configurações padrão'
+                        : 'Processo que agrupa múltiplas cotas com configurações individuais (valor, vencimento, duração diferentes)'}
+                    </Typography>
+                  </FormControl>
+                </CardContent>
+              </Card>
+            )}
 
-                  {/* Seleção de Cota */}
-                  <Grid item xs={12}>
-                  <Autocomplete
-                      options={cotas}
-                      getOptionLabel={(option) => {
-                        if (!option) return '';
-                        const numeroCota = option.cota || option.numero || '';
-                        const digito = option.digito ? `-${option.digito}` : '';
-                        const clienteNome = option.cliente?.nome || option.Cliente?.nome || 'Sem cliente';
-                        const grupo = option.grupo ? `Grupo ${option.grupo}` : '';
-                        return `${numeroCota}${digito} – ${clienteNome}${grupo ? ` (${grupo})` : ''}`;
-                      }}
-                      value={cotaSelecionada}
-                      onChange={handleChangeCota}
-                      onInputChange={(event, newInputValue) => {
-                        setInputCotaValue(newInputValue);
-                      }}
-                      isOptionEqualToValue={(option, value) => option?.id === value?.id}
-                      loading={loadingCotas}
-                      disabled={isEdicao}
-                      noOptionsText={inputCotaValue.length < 2 ? 'Digite pelo menos 2 caracteres' : 'Nenhuma cota encontrada'}
-                      renderInput={(params) => (
+            {/* Formulário para Cota Única */}
+            {tipoProcesso === 'unico' && (
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Dados do Processo
+                  </Typography>
+
+                  <Grid container spacing={2}>
+                    {/* Nome do Processo */}
+                    <Grid item xs={12}>
+                      <TextField
+                        fullWidth
+                        label="Nome do Processo"
+                        value={formUnico.nome}
+                        onChange={(e) => handleChangeFormUnico('nome', e.target.value)}
+                        helperText="Nome descritivo (opcional)"
+                      />
+                    </Grid>
+
+                    {/* Seleção de Cota */}
+                    <Grid item xs={12}>
+                      <Autocomplete
+                        options={cotasDisponiveis}
+                        getOptionLabel={(option) => {
+                          if (!option) return '';
+                          const numeroCota = option.cota || '';
+                          const digito = option.digito ? `-${option.digito}` : '';
+                          const clienteNome = option.cliente?.nome || option.Cliente?.nome || 'Sem cliente';
+                          const grupo = option.grupo ? ` (Grupo ${option.grupo})` : '';
+                          return `${numeroCota}${digito} - ${clienteNome}${grupo}`;
+                        }}
+                        value={cotaSelecionada}
+                        onChange={handleChangeCotaUnico}
+                        loading={loadingCotas}
+                        disabled={isEdicao}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            label="Cota *"
+                            helperText={isEdicao ? 'Não é possível alterar a cota' : 'Selecione a cota'}
+                          />
+                        )}
+                      />
+                    </Grid>
+
+                    {/* Valor */}
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        type="number"
+                        label="Valor da Cobrança *"
+                        value={formUnico.valor}
+                        onChange={(e) => handleChangeFormUnico('valor', parseFloat(e.target.value))}
+                        inputProps={{ min: 0, step: 0.01 }}
+                        helperText="Valor mensal"
+                      />
+                    </Grid>
+
+                    {/* Dia de Vencimento */}
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        type="number"
+                        label="Dia de Vencimento *"
+                        value={formUnico.diaVencimento}
+                        onChange={(e) => handleChangeFormUnico('diaVencimento', parseInt(e.target.value, 10))}
+                        inputProps={{ min: 1, max: 31 }}
+                        helperText="Dia do mês (1-31)"
+                      />
+                    </Grid>
+
+                    {/* Data de Início */}
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        type="date"
+                        label="Data de Início *"
+                        value={formUnico.dataInicioCobranca}
+                        onChange={(e) => handleChangeFormUnico('dataInicioCobranca', e.target.value)}
+                        InputLabelProps={{ shrink: true }}
+                        helperText="Início das cobranças"
+                      />
+                    </Grid>
+
+                    {/* Quantidade de Meses */}
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        type="number"
+                        label="Quantidade de Meses"
+                        value={formUnico.quantidadeMeses}
+                        onChange={(e) => handleChangeFormUnico('quantidadeMeses', e.target.value === '' ? '' : parseInt(e.target.value, 10))}
+                        inputProps={{ min: 1 }}
+                        helperText="Deixe vazio para ilimitado"
+                      />
+                    </Grid>
+
+                    {/* Meses Pagos (Retroativo) */}
+                    {!isEdicao && (
+                      <Grid item xs={12} sm={6}>
                         <TextField
-                          {...params}
-                          label="Cota *"
-                          placeholder="Digite para buscar..."
-                          helperText={isEdicao ? 'Não é possível alterar a cota' : 'Digite o número da cota ou nome do cliente'}
+                          fullWidth
+                          type="number"
+                          label="Meses Já Pagos (Retroativo)"
+                          value={formUnico.mesesPagosRetroativo}
+                          onChange={(e) => handleChangeFormUnico('mesesPagosRetroativo', parseInt(e.target.value, 10) || 0)}
+                          inputProps={{ min: 0 }}
+                          helperText="Quantidade de meses já pagos"
                         />
-                      )}
-                    />
-                  </Grid>
-
-                  {/* Dia de Vencimento */}
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      type="number"
-                      label="Dia de Vencimento *"
-                      value={form.diaVencimento}
-                      onChange={(e) => handleChangeForm('diaVencimento', parseInt(e.target.value, 10))}
-                      inputProps={{ min: 1, max: 31 }}
-                      helperText="Dia do mês para vencimento (1-31)"
-                    />
-                  </Grid>
-
-                  {/* Data de Início */}
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      type="date"
-                      label="Data de Início da Cobrança *"
-                      value={form.dataInicioCobranca}
-                      onChange={(e) => handleChangeForm('dataInicioCobranca', e.target.value)}
-                      InputLabelProps={{ shrink: true }}
-                      helperText="A partir de quando gerar cobranças"
-                    />
-                  </Grid>
-
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      type="number"
-                      label="Quantidade de Meses"
-                      value={form.quantidadeMeses}
-                      onChange={(e) => handleChangeForm('quantidadeMeses', e.target.value === '' ? '' : parseInt(e.target.value, 10))}
-                      inputProps={{ min: 1 }}
-                      helperText="Total de meses a cobrar (deixe em branco para ilimitado)"
-                    />
-                  </Grid>
-
-                </Grid>
-
-                <Divider sx={{ my: 3 }} />
-
-                {/* Histórico Retroativo */}
-                {!isEdicao && (
-                  <>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={importarHistorico}
-                          onChange={(e) => setImportarHistorico(e.target.checked)}
-                        />
-                      }
-                      label="Importar histórico de cobranças já pagas"
-                    />
-
-                    {importarHistorico && (
-                      <Box sx={{ mt: 2, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
-                        <Typography variant="subtitle2" gutterBottom>
-                          <InfoIcon fontSize="small" sx={{ verticalAlign: 'middle', mr: 1 }} />
-                          Histórico Retroativo
-                        </Typography>
-                        <Typography variant="caption" color="textSecondary" paragraph>
-                          As cobranças retroativas serão criadas com status "pago" e servem apenas para histórico e relatórios.
-                          Não disparam webhooks de notificação.
-                        </Typography>
-
-                        <Grid container spacing={2}>
-                          <Grid item xs={12} sm={6}>
-                            <TextField
-                              fullWidth
-                              type="month"
-                              label="Primeiro Mês Pago *"
-                              value={historico.primeiroMesPago}
-                              onChange={(e) => handleChangeHistorico('primeiroMesPago', e.target.value)}
-                              InputLabelProps={{ shrink: true }}
-                              helperText="Ex: 01/2024"
-                            />
-                          </Grid>
-
-                          <Grid item xs={12} sm={6}>
-                            <TextField
-                              fullWidth
-                              type="number"
-                              label="Quantidade de Meses *"
-                              value={historico.quantidadeMeses}
-                              onChange={(e) => handleChangeHistorico('quantidadeMeses', parseInt(e.target.value, 10))}
-                              inputProps={{ min: 1, max: 120 }}
-                              helperText="Quantos meses foram pagos"
-                            />
-                          </Grid>
-                        </Grid>
-                      </Box>
+                      </Grid>
                     )}
-                  </>
-                )}
+                  </Grid>
+                </CardContent>
+              </Card>
+            )}
 
-                {/* Botões */}
-                <Box sx={{ mt: 3, display: 'flex', gap: 2 }}>
-                  <Button
-                    variant="contained"
-                    color="primary"
-                    startIcon={salvando ? <CircularProgress size={20} /> : <SaveIcon />}
-                    onClick={handleSalvar}
-                    disabled={salvando}
-                  >
-                    {salvando ? 'Salvando...' : 'Salvar'}
-                  </Button>
+            {/* Formulário para Múltiplas Cotas */}
+            {tipoProcesso === 'multiplo' && (
+              <Card>
+                <CardContent>
+                  <Grid container spacing={2}>
+                    {/* Nome do Processo */}
+                    <Grid item xs={12}>
+                      <TextField
+                        fullWidth
+                        label="Nome do Processo *"
+                        value={formMultiplo.nome}
+                        onChange={(e) => handleChangeFormMultiplo('nome', e.target.value)}
+                        helperText="Nome descritivo para identificar o processo"
+                      />
+                    </Grid>
 
-                  <Button
-                    variant="outlined"
-                    startIcon={<CancelIcon />}
-                    onClick={handleCancelar}
-                    disabled={salvando}
-                  >
-                    Cancelar
-                  </Button>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
+                    {/* Gerenciador de Cotas */}
+                    <Grid item xs={12}>
+                      <GerenciadorCotasProcesso
+                        cotas={formMultiplo.cotas}
+                        onChange={(novasCotas) => handleChangeFormMultiplo('cotas', novasCotas)}
+                        cotasDisponiveis={cotasDisponiveis}
+                        onBuscarCotas={carregarCotas}
+                        loadingCotas={loadingCotas}
+                      />
+                    </Grid>
+                  </Grid>
+                </CardContent>
+              </Card>
+            )}
 
-          {/* Preview de Cobranças */}
-          <Grid item xs={12} md={5}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Preview de Cobranças
-                </Typography>
-                <Typography variant="caption" color="textSecondary" paragraph>
-                  Cobranças que serão criadas ao salvar o processo
-                </Typography>
-
-                <TableContainer component={Paper} variant="outlined">
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Mês</TableCell>
-                        <TableCell>Vencimento</TableCell>
-                        <TableCell>Status</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {previewCobrancas.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={3} align="center">
-                            <Typography variant="caption" color="textSecondary">
-                              Preencha os dados para ver o preview
-                            </Typography>
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        previewCobrancas.map((cobranca, index) => (
-                          <TableRow
-                            key={index}
-                            sx={{
-                              bgcolor: cobranca.tipo === 'retroativo' ? 'action.hover' : 'inherit'
-                            }}
-                          >
-                            <TableCell>
-                              {cobranca.mesReferencia}
-                              {cobranca.tipo === 'retroativo' && (
-                                <Typography variant="caption" display="block" color="textSecondary">
-                                  (Retroativo)
-                                </Typography>
-                              )}
-                            </TableCell>
-                            <TableCell>{cobranca.dataVencimento}</TableCell>
-                            <TableCell>
-                              <Typography
-                                variant="caption"
-                                sx={{
-                                  color: cobranca.status === 'pago' ? 'success.main' : 'warning.main',
-                                  fontWeight: 'bold'
-                                }}
-                              >
-                                {cobranca.status.toUpperCase()}
-                              </Typography>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-
-                {previewCobrancas.length > 0 && (
-                  <Box sx={{ mt: 2, p: 2, bgcolor: 'info.lighter', borderRadius: 1 }}>
-                    <Typography variant="subtitle2" color="info.main">
-                      Total de cobranças: {previewCobrancas.length}
-                    </Typography>
-                    <Typography variant="caption" color="textSecondary">
-                      • Retroativas: {previewCobrancas.filter(c => c.tipo === 'retroativo').length}
-                    </Typography>
-                    <br />
-                    <Typography variant="caption" color="textSecondary">
-                      • Atuais: {previewCobrancas.filter(c => c.tipo === 'atual').length}
-                    </Typography>
-                  </Box>
-                )}
-              </CardContent>
-            </Card>
+            {/* Botões de Ação */}
+            <Box sx={{ mt: 3, display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
+              <Button
+                variant="outlined"
+                startIcon={<CancelIcon />}
+                onClick={handleCancelar}
+                disabled={salvando}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="contained"
+                startIcon={<SaveIcon />}
+                onClick={handleSalvar}
+                disabled={salvando}
+              >
+                {salvando ? 'Salvando...' : 'Salvar'}
+              </Button>
+            </Box>
           </Grid>
         </Grid>
       </PapperBlock>
 
-      {/* Snackbar */}
+      {/* Snackbar para mensagens */}
       <Snackbar
         open={snackbar.open}
         autoHideDuration={6000}
         onClose={fecharSnackbar}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
       >
-        <Alert onClose={fecharSnackbar} severity={snackbar.severity}>
+        <Alert onClose={fecharSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
           {snackbar.message}
         </Alert>
       </Snackbar>
