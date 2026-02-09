@@ -38,6 +38,39 @@ const montarMensagemResultadoWebhook = (resultado) => {
   return resultado.sucesso ? 'Webhook enviado com sucesso' : 'Erro ao enviar webhook';
 };
 
+const montarPayloadCobrancas = (cobrancas) => cobrancas.map((cobranca) => ({
+  id: cobranca.id,
+  mesReferencia: cobranca.mesReferencia,
+  valor: parseFloat(cobranca.valor) || 0,
+  dataVencimento: cobranca.dataVencimento,
+  diasAtraso: calcularDiasAtraso(cobranca.dataVencimento),
+  status: cobranca.status,
+  observacao: cobranca.observacao || ''
+}));
+const montarPayloadProcesso = (processo) => {
+  if (!processo) return null;
+  return {
+    id: processo.id,
+    nome: processo.nome,
+    tipo: processo.tipo,
+    status: processo.status,
+    diaVencimento: processo.diaVencimento,
+    dataInicioCobranca: processo.dataInicioCobranca,
+    quantidadeMeses: processo.quantidadeMeses,
+    observacao: processo.observacao || ''
+  };
+};
+
+const calcularDiasAtraso = (dataVencimento) => {
+  if (!dataVencimento) return 0;
+  const hoje = new Date();
+  const vencimento = new Date(dataVencimento);
+  vencimento.setHours(0, 0, 0, 0);
+  hoje.setHours(0, 0, 0, 0);
+  const dias = Math.floor((hoje - vencimento) / (1000 * 60 * 60 * 24));
+  return dias > 0 ? dias : 0;
+};
+
 class InadimplenciaService {
   /**
    * Detectar inadimplência e disparar webhooks (executado pelo cron)
@@ -115,36 +148,119 @@ class InadimplenciaService {
     let statusAtualizados = 0;
     let webhooksEnviados = 0;
     let webhooksFalharam = 0;
+    const processosMap = new Map();
 
     for (const cobranca of cobrancas) {
-      try {
-        if (cobranca.status === 'pendente') {
-          await cobranca.update({ status: 'atrasado' });
-          statusAtualizados++;
-          console.log(`[Inadimplência] Cobrança ${cobranca.id} marcada como atrasada`);
-        }
+      if (cobranca.status === 'pendente') {
+        await cobranca.update({ status: 'atrasado' });
+        statusAtualizados++;
+        console.log(`[Inadimplência] Cobrança ${cobranca.id} marcada como atrasada`);
+      }
 
+      const processId = cobranca.processoCobrancaId;
+      if (!processId) continue;
+
+      if (!processosMap.has(processId)) {
+        processosMap.set(processId, {
+          processo: cobranca.processoCobranca,
+          cobrancas: []
+        });
+      }
+      processosMap.get(processId).cobrancas.push(cobranca);
+    }
+
+    for (const { processo, cobrancas: grupoCobrancas } of processosMap.values()) {
+      try {
         if (respeitarNotificacaoHoje) {
-          const notificadoHoje = await this.verificarNotificacaoHoje(cobranca.id);
+          const notificadoHoje = await this.verificarNotificacaoHoje(grupoCobrancas[0].id);
           if (notificadoHoje) {
-            console.log(`[Inadimplência] Cobrança ${cobranca.id} já foi notificada hoje`);
+            console.log(`[Inadimplência] Processo ${processo?.id} já foi notificado hoje`);
             continue;
           }
         }
 
-        const resultado = await this.dispararWebhookInadimplencia(cobranca, evento);
+        const resultado = await this.dispararWebhookProcesso(processo, grupoCobrancas, evento);
         if (resultado.sucesso) {
           webhooksEnviados++;
         } else {
           webhooksFalharam++;
         }
       } catch (erro) {
-        console.error(`[Inadimplência] Erro ao processar cobrança ${cobranca.id}:`, erro.message);
+        console.error(`[Inadimplência] Erro ao processar processo ${processo?.id}:`, erro.message);
         webhooksFalharam++;
       }
     }
 
     return { statusAtualizados, webhooksEnviados, webhooksFalharam };
+  }
+
+  async dispararWebhookProcesso(processo, cobrancas, evento = 'inadimplencia_detectada') {
+    try {
+      const configuracao = await ConfiguracaoWebhook.findOne({
+        where: { ativo: true }
+      });
+
+      const registrarNotificacoes = async (mensagem, status) => {
+        const promessas = cobrancas.map((cobranca) => NotificacaoCobranca.create({
+          cobrancaMensalId: cobranca.id,
+          tipo: 'automatica',
+          canal: 'webhook',
+          status,
+          mensagem
+        }));
+        await Promise.all(promessas);
+      };
+
+      if (!configuracao) {
+        const mensagem = 'Nenhuma configuração de webhook ativa';
+        await registrarNotificacoes(mensagem, 'falha');
+        return {
+          sucesso: false,
+          erro: mensagem
+        };
+      }
+
+      const extraPayload = {
+        processo: montarPayloadProcesso(processo),
+        cobrancas: montarPayloadCobrancas(cobrancas)
+      };
+
+      const resultado = await webhookService.enviarWebhook(
+        cobrancas[0],
+        configuracao,
+        1,
+        evento,
+        extraPayload
+      );
+
+      const mensagemResposta = montarMensagemResultadoWebhook(resultado);
+      const statusNotificacao = resultado.sucesso ? 'enviada' : 'falha';
+      await registrarNotificacoes(mensagemResposta, statusNotificacao);
+
+      if (resultado.sucesso) {
+        const agora = new Date();
+        await Promise.all(cobrancas.map(cobranca => cobranca.update({
+          ultimaNotificacaoEm: agora,
+          totalNotificacoes: cobranca.totalNotificacoes + 1
+        })));
+      }
+
+      return resultado;
+    } catch (erro) {
+      const mensagem = erro.message;
+      const promessas = cobrancas.map((cobranca) => NotificacaoCobranca.create({
+        cobrancaMensalId: cobranca.id,
+        tipo: 'automatica',
+        canal: 'webhook',
+        status: 'falha',
+        mensagem
+      }));
+      await Promise.all(promessas);
+      return {
+        sucesso: false,
+        erro: mensagem
+      };
+    }
   }
 
   async notificarManualmente() {

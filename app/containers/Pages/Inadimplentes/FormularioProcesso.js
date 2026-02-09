@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Helmet } from 'react-helmet';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -14,6 +14,7 @@ import {
   FormControlLabel,
   FormLabel,
   Grid,
+  MenuItem,
   Radio,
   RadioGroup,
   Snackbar,
@@ -52,6 +53,11 @@ function FormularioProcesso() {
   const [cotasDisponiveis, setCotasDisponiveis] = useState([]);
   const [cotaSelecionada, setCotaSelecionada] = useState(null);
   const [loadingCotas, setLoadingCotas] = useState(false);
+  const [clientesPorConsultor, setClientesPorConsultor] = useState([]);
+  const [consultoresDisponiveis, setConsultoresDisponiveis] = useState([]);
+  const [selectedConsultorId, setSelectedConsultorId] = useState(null);
+  const [consultorInputValue, setConsultorInputValue] = useState('');
+  const [loadingConsultores, setLoadingConsultores] = useState(false);
   const [formUnico, setFormUnico] = useState({
     cotaId: '',
     nome: '',
@@ -61,6 +67,77 @@ function FormularioProcesso() {
     quantidadeMeses: '',
     mesesPagosRetroativo: 0
   });
+  const [selectedClienteIdUnico, setSelectedClienteIdUnico] = useState(null);
+  const [selectedGroupUnico, setSelectedGroupUnico] = useState('');
+  const [clienteInputValueUnico, setClienteInputValueUnico] = useState('');
+  const [cotaInputValueUnico, setCotaInputValueUnico] = useState('');
+  const lastClienteQueryUnico = useRef('');
+  const lastCotaQueryUnico = useRef('');
+
+  const normalizeId = (value) => {
+    if (value === null || value === undefined) return null;
+    return String(value);
+  };
+
+  const clientesDisponiveisUnico = useMemo(() => clientesPorConsultor, [clientesPorConsultor]);
+
+  const clienteSelecionadoUnico = useMemo(() => {
+    if (!selectedClienteIdUnico) return null;
+    return clientesDisponiveisUnico.find(cliente => cliente.id === selectedClienteIdUnico) || null;
+  }, [clientesDisponiveisUnico, selectedClienteIdUnico]);
+
+  const consultorSelecionado = useMemo(() => {
+    if (!selectedConsultorId) return null;
+    return consultoresDisponiveis.find(consultor => normalizeId(consultor.id) === selectedConsultorId) || null;
+  }, [consultoresDisponiveis, selectedConsultorId]);
+
+  const gruposDisponiveisUnico = useMemo(() => {
+    if (!selectedClienteIdUnico) return [];
+    const grupos = new Set();
+    cotasDisponiveis.forEach((cota) => {
+      const clienteId = normalizeId(cota.cliente?.id ?? cota.Cliente?.id ?? cota.clienteId);
+      if (clienteId === selectedClienteIdUnico && cota.grupo) {
+        grupos.add(cota.grupo);
+      }
+    });
+    return Array.from(grupos);
+  }, [cotasDisponiveis, selectedClienteIdUnico]);
+
+  const cotasFiltradasUnico = useMemo(() => {
+    return cotasDisponiveis.filter((cota) => {
+      const clienteId = normalizeId(cota.cliente?.id ?? cota.Cliente?.id ?? cota.clienteId);
+      if (selectedClienteIdUnico && clienteId !== selectedClienteIdUnico) {
+        return false;
+      }
+      if (selectedGroupUnico && cota.grupo !== selectedGroupUnico) {
+        return false;
+      }
+      return true;
+    });
+  }, [cotasDisponiveis, selectedClienteIdUnico, selectedGroupUnico]);
+
+  const formatClienteLabel = (cliente) => {
+    if (!cliente) return '';
+    const nome = cliente.nome || 'Cliente sem nome';
+    const cpf = cliente.cpf ? ` • ${cliente.cpf}` : '';
+    return `${nome}${cpf}`;
+  };
+
+  const formatConsultorLabel = (consultor) => {
+    if (!consultor) return '';
+    const nome = consultor.nome || 'Consultor';
+    const idagendor = consultor.id_agendor || consultor.idagendor;
+    return `${nome}${idagendor ? ` • ${idagendor}` : ''}`;
+  };
+
+  const formatCotaLabel = (cota) => {
+    if (!cota) return '';
+    const numeroCota = cota.cota || '';
+    const digito = cota.digito ? `-${cota.digito}` : '';
+    const clienteNome = cota.cliente?.nome || cota.Cliente?.nome || 'Sem cliente';
+    const grupo = cota.grupo ? ` (Grupo ${cota.grupo})` : '';
+    return `${numeroCota}${digito} - ${clienteNome}${grupo}`;
+  };
 
   // Estados para processo multi-cota (NOVO)
   const [formMultiplo, setFormMultiplo] = useState({
@@ -112,9 +189,11 @@ function FormularioProcesso() {
           quantidadeMeses: proc.quantidadeMeses || '',
           mesesPagosRetroativo: 0
         });
-        if (cota) {
-          setCotaSelecionada(cota);
-        }
+      if (cota) {
+        setCotaSelecionada(cota);
+        syncClienteGroupFromCota(cota);
+        syncConsultorFromCota(cota);
+      }
       } else {
         // Carregar dados do processo multi-cota
         setFormMultiplo({
@@ -167,32 +246,178 @@ function FormularioProcesso() {
     }
   };
 
-  const carregarCotas = async (busca = '') => {
+  const carregarCotas = async ({ busca = '', consultorId: overrideConsultorId, clienteId, grupo } = {}) => {
+    const consultorIdAtual = overrideConsultorId || selectedConsultorId;
+    if (!consultorIdAtual) {
+      setCotasDisponiveis([]);
+      return;
+    }
+
     try {
       setLoadingCotas(true);
-      
-      const params = new URLSearchParams();
-      if (busca) params.append('busca', busca);
-      params.append('limit', '100');
-      
-      const url = `${API_URL}/cotas?${params}`;
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${getToken()}`
-        }
-      });
+      const filtros = {
+        consultorId: consultorIdAtual,
+        limit: '100',
+        clienteId,
+        grupo
+      };
+      if (busca) {
+        filtros.busca = busca;
+      }
 
-      if (!response.ok) throw new Error('Erro ao carregar cotas');
-
-      const data = await response.json();
+      const data = await inadimplentesApi.listarCotas(filtros);
       const cotasLista = Array.isArray(data) ? data : (data.dados || []);
-      
       setCotasDisponiveis(cotasLista);
     } catch (error) {
       console.error('Erro ao carregar cotas:', error);
       mostrarSnackbar('Erro ao carregar cotas', 'error');
     } finally {
       setLoadingCotas(false);
+    }
+  };
+
+  const carregarClientesPorConsultor = async (consultorId) => {
+    if (!consultorId) {
+      setClientesPorConsultor([]);
+      return;
+    }
+
+    try {
+      const response = await inadimplentesApi.listarClientesPorConsultor(consultorId);
+      const clientes = Array.isArray(response) ? response : (response.dados || []);
+      setClientesPorConsultor(clientes);
+    } catch (error) {
+      console.error('Erro ao carregar clientes do consultor:', error);
+      mostrarSnackbar('Erro ao carregar clientes', 'error');
+    }
+  };
+
+  useEffect(() => {
+    if (selectedConsultorId) {
+      carregarClientesPorConsultor(selectedConsultorId);
+      carregarCotas({ consultorId: selectedConsultorId });
+    } else {
+      setClientesPorConsultor([]);
+      setCotasDisponiveis([]);
+      setSelectedClienteIdUnico(null);
+      setSelectedGroupUnico('');
+      setClienteInputValueUnico('');
+      setCotaSelecionada(null);
+      setCotaInputValueUnico('');
+      setFormMultiplo(prev => ({
+        ...prev,
+        cotas: []
+      }));
+    }
+  }, [selectedConsultorId]);
+
+  const carregarConsultores = async () => {
+    try {
+      setLoadingConsultores(true);
+      const response = await inadimplentesApi.listarConsultores();
+      const consultoresLista = Array.isArray(response) ? response : (response.dados || []);
+      setConsultoresDisponiveis(consultoresLista);
+    } catch (error) {
+      console.error('Erro ao carregar consultores:', error);
+      mostrarSnackbar('Erro ao carregar consultores', 'error');
+    } finally {
+      setLoadingConsultores(false);
+    }
+  };
+
+  useEffect(() => {
+    carregarConsultores();
+  }, []);
+
+  const triggerBuscaUnico = (query, queryRef) => {
+    const normalized = (query || '').trim();
+    if (!selectedConsultorId) return;
+    if (normalized === queryRef.current) return;
+    queryRef.current = normalized;
+    carregarCotas({
+      busca: normalized,
+      clienteId: selectedClienteIdUnico,
+      grupo: selectedGroupUnico
+    });
+  };
+
+  const handleClienteInputChangeUnico = (_event, newValue, reason) => {
+    setClienteInputValueUnico(newValue);
+    if (!isEdicao && reason === 'input' && selectedConsultorId) {
+      triggerBuscaUnico(newValue, lastClienteQueryUnico);
+    }
+  };
+
+  const handleCotaInputChangeUnico = (_event, newValue, reason) => {
+    setCotaInputValueUnico(newValue);
+    if (!isEdicao && reason === 'input' && selectedConsultorId) {
+      triggerBuscaUnico(newValue, lastCotaQueryUnico);
+    }
+  };
+
+  const handleSelectClienteUnico = (_event, cliente) => {
+    if (!cliente) {
+      setSelectedClienteIdUnico(null);
+      setSelectedGroupUnico('');
+      setClienteInputValueUnico('');
+      setCotaInputValueUnico('');
+      setCotaSelecionada(null);
+      setFormUnico({
+        ...formUnico,
+        cotaId: '',
+        valor: ''
+      });
+      return;
+    }
+    const clienteId = normalizeId(cliente?.id ?? cliente?.clienteId ?? null);
+    setSelectedClienteIdUnico(clienteId);
+    setSelectedGroupUnico('');
+    setCotaSelecionada(null);
+    setFormUnico({
+      ...formUnico,
+      cotaId: '',
+      valor: ''
+    });
+    setCotaInputValueUnico('');
+    setClienteInputValueUnico(formatClienteLabel(cliente));
+    if (selectedConsultorId) {
+      carregarCotas({ consultorId: selectedConsultorId, clienteId });
+    }
+  };
+
+  const handleSelectGroupUnico = (event) => {
+    setSelectedGroupUnico(event.target.value || '');
+    setCotaSelecionada(null);
+    setFormUnico({
+      ...formUnico,
+      cotaId: '',
+      valor: ''
+    });
+    setCotaInputValueUnico('');
+    if (selectedConsultorId && selectedClienteIdUnico) {
+      carregarCotas({
+        consultorId: selectedConsultorId,
+        clienteId: selectedClienteIdUnico,
+        grupo: event.target.value
+      });
+    }
+  };
+
+  const syncClienteGroupFromCota = (cota) => {
+    const cliente = cota?.cliente || cota?.Cliente || null;
+    const clienteId = normalizeId(cliente?.id ?? cliente?.clienteId ?? null);
+    setSelectedClienteIdUnico(clienteId);
+    setSelectedGroupUnico(cota?.grupo || '');
+    setClienteInputValueUnico(formatClienteLabel(cliente));
+    setCotaInputValueUnico(formatCotaLabel(cota));
+  };
+
+  const syncConsultorFromCota = (cota) => {
+    const consultor = cota?.consultor || cota?.Consultor || null;
+    const consultorId = normalizeId(consultor?.id ?? consultor?.consultorId ?? null);
+    if (consultorId) {
+      setSelectedConsultorId(consultorId);
+      setConsultorInputValue(formatConsultorLabel(consultor));
     }
   };
 
@@ -208,7 +433,7 @@ function FormularioProcesso() {
     setTipoProcesso(event.target.value);
   };
 
-  const handleChangeCotaUnico = (event, novaCota) => {
+  const handleChangeCotaUnico = (_event, novaCota) => {
     setCotaSelecionada(novaCota);
     if (novaCota) {
       const valorCota = parseFloat(novaCota.valor) || 0;
@@ -220,6 +445,7 @@ function FormularioProcesso() {
           ? new Date(novaCota.dtaquisicao).toISOString().split('T')[0]
           : formUnico.dataInicioCobranca
       });
+      syncClienteGroupFromCota(novaCota);
     } else {
       setFormUnico({
         ...formUnico,
@@ -242,6 +468,58 @@ function FormularioProcesso() {
       [campo]: valor
     });
   };
+
+  const handleSelectConsultor = (_event, consultor) => {
+    const consultorId = normalizeId(consultor?.id ?? null);
+    setSelectedConsultorId(consultorId);
+    setConsultorInputValue(consultor ? formatConsultorLabel(consultor) : '');
+    setSelectedClienteIdUnico(null);
+    setSelectedGroupUnico('');
+    setClienteInputValueUnico('');
+    setCotaInputValueUnico('');
+    setCotaSelecionada(null);
+    setFormUnico({
+      ...formUnico,
+      cotaId: '',
+      valor: ''
+    });
+  };
+
+  const handleConsultorInputChange = (_event, newValue, reason) => {
+    setConsultorInputValue(newValue);
+    if (reason === 'clear') {
+      setSelectedConsultorId(null);
+      setCotasDisponiveis([]);
+    }
+  };
+
+  const renderConsultorSelector = () => (
+    <Grid item xs={12}>
+      <Autocomplete
+        fullWidth
+        options={consultoresDisponiveis}
+        getOptionLabel={(option) => formatConsultorLabel(option)}
+        value={consultorSelecionado}
+        inputValue={consultorInputValue}
+        onInputChange={handleConsultorInputChange}
+        onChange={(event, consultor) => handleSelectConsultor(event, consultor)}
+        loading={loadingConsultores}
+        disabled={consultorBloqueado}
+        isOptionEqualToValue={(option, value) => normalizeId(option?.id) === normalizeId(value?.id)}
+        renderInput={(params) => (
+          <TextField
+            {...params}
+            label="Consultor *"
+            helperText={
+              consultorBloqueado
+                ? 'Consultor definido para este processo'
+                : 'Selecione o consultor e depois busque o cliente'
+            }
+          />
+        )}
+      />
+    </Grid>
+  );
 
   const validarFormulario = () => {
     if (tipoProcesso === 'unico') {
@@ -354,6 +632,11 @@ function FormularioProcesso() {
     navigate('/app/inadimplentes/processos');
   };
 
+  const hasCotasAdicionadas = tipoProcesso === 'unico'
+    ? !!formUnico.cotaId
+    : formMultiplo.cotas.length > 0;
+  const consultorBloqueado = isEdicao || hasCotasAdicionadas;
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
@@ -424,31 +707,105 @@ function FormularioProcesso() {
                         label="Nome do Processo"
                         value={formUnico.nome}
                         onChange={(e) => handleChangeFormUnico('nome', e.target.value)}
-                        helperText="Nome descritivo (opcional)"
+                      helperText="Nome descritivo (opcional)"
                       />
+                    </Grid>
+
+                    {renderConsultorSelector()}
+
+                    {/* Pesquisa de Cliente */}
+                    <Grid item xs={12}>
+                    <Autocomplete
+                        fullWidth
+                        options={clientesDisponiveisUnico}
+                        getOptionLabel={(option) => formatClienteLabel(option)}
+                        value={clienteSelecionadoUnico}
+                        inputValue={clienteInputValueUnico}
+                        onInputChange={handleClienteInputChangeUnico}
+                        onChange={(event, cliente) => handleSelectClienteUnico(event, cliente)}
+                        disabled={!selectedConsultorId || isEdicao}
+                        loading={loadingCotas}
+                        isOptionEqualToValue={(option, value) => option?.id === value?.id}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            label="Cliente *"
+                            helperText={
+                              !selectedConsultorId
+                                ? 'Selecione o consultor antes de buscar o cliente'
+                                : isEdicao
+                                  ? 'Não é possível alterar a cota'
+                                  : 'Pesquise e selecione o cliente'
+                            }
+                          />
+                        )}
+                      />
+                    </Grid>
+
+                    {/* Seleção de Grupo */}
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        select
+                        label="Grupo *"
+                        value={selectedGroupUnico}
+                        onChange={handleSelectGroupUnico}
+                        disabled={
+                          !selectedConsultorId ||
+                          !clienteSelecionadoUnico ||
+                          isEdicao ||
+                          gruposDisponiveisUnico.length === 0
+                        }
+                        helperText={
+                          !selectedConsultorId
+                            ? 'Selecione o consultor antes de escolher o grupo'
+                            : !clienteSelecionadoUnico
+                              ? 'Selecione o cliente antes de escolher o grupo'
+                              : gruposDisponiveisUnico.length === 0
+                                ? 'Nenhum grupo disponível para este cliente'
+                                : 'Escolha o grupo do cliente'
+                        }
+                      >
+                        <MenuItem value="">
+                          <em>Selecione</em>
+                        </MenuItem>
+                        {gruposDisponiveisUnico.map((grupo) => (
+                          <MenuItem key={grupo} value={grupo}>
+                            {grupo}
+                          </MenuItem>
+                        ))}
+                      </TextField>
                     </Grid>
 
                     {/* Seleção de Cota */}
                     <Grid item xs={12}>
                       <Autocomplete
-                        options={cotasDisponiveis}
-                        getOptionLabel={(option) => {
-                          if (!option) return '';
-                          const numeroCota = option.cota || '';
-                          const digito = option.digito ? `-${option.digito}` : '';
-                          const clienteNome = option.cliente?.nome || option.Cliente?.nome || 'Sem cliente';
-                          const grupo = option.grupo ? ` (Grupo ${option.grupo})` : '';
-                          return `${numeroCota}${digito} - ${clienteNome}${grupo}`;
-                        }}
+                        fullWidth
+                        options={selectedGroupUnico ? cotasFiltradasUnico : []}
+                        getOptionLabel={(option) => formatCotaLabel(option)}
                         value={cotaSelecionada}
+                        inputValue={cotaInputValueUnico}
+                        onInputChange={handleCotaInputChangeUnico}
                         onChange={handleChangeCotaUnico}
+                        disabled={
+                          !selectedConsultorId ||
+                          !clienteSelecionadoUnico ||
+                          !selectedGroupUnico ||
+                          isEdicao
+                        }
                         loading={loadingCotas}
-                        disabled={isEdicao}
+                        isOptionEqualToValue={(option, value) => option.id === value?.id}
                         renderInput={(params) => (
                           <TextField
                             {...params}
                             label="Cota *"
-                            helperText={isEdicao ? 'Não é possível alterar a cota' : 'Selecione a cota'}
+                            helperText={
+                              isEdicao
+                                ? 'Não é possível alterar a cota'
+                                : !selectedConsultorId
+                                  ? 'Selecione o consultor antes de escolher uma cota'
+                                  : 'Selecione a cota no grupo escolhido'
+                            }
                           />
                         )}
                       />
@@ -542,13 +899,16 @@ function FormularioProcesso() {
                     </Grid>
 
                     {/* Gerenciador de Cotas */}
+                    {renderConsultorSelector()}
                     <Grid item xs={12}>
                       <GerenciadorCotasProcesso
                         cotas={formMultiplo.cotas}
                         onChange={(novasCotas) => handleChangeFormMultiplo('cotas', novasCotas)}
                         cotasDisponiveis={cotasDisponiveis}
+                        clientesDisponiveis={clientesPorConsultor}
                         onBuscarCotas={carregarCotas}
                         loadingCotas={loadingCotas}
+                        consultorId={selectedConsultorId}
                       />
                     </Grid>
                   </Grid>

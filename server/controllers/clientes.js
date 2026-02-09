@@ -6,7 +6,6 @@ const usuarioPodeGerenciarClientes = (perfil) => {
 };
 
 module.exports = {
-  // 🔹 GET /clientes
   async listar(req, res) {
     try {
       const perfil = req.user?.perfil ? req.user.perfil.toUpperCase() : '';
@@ -30,6 +29,36 @@ module.exports = {
       return res.status(200).json({
         sucesso: true,
         mensagem: 'Lista de clientes obtida com sucesso.',
+        dados: clientes
+      });
+    } catch (error) {
+      return res.status(500).json({ sucesso: false, erro: error.message });
+    }
+  },
+
+  async listarPorConsultor(req, res) {
+    try {
+      const consultorId = Number(req.params.consultorId);
+      if (!consultorId) {
+        return res.status(400).json({
+          sucesso: false,
+          mensagem: 'ID do consultor é obrigatório',
+          dados: []
+        });
+      }
+
+      const busca = req.query.busca || '';
+      const limit = req.query.limit ? Number(req.query.limit) : 0;
+
+      const clientes = await clienteService.buscarClientesPorConsultor(
+        consultorId,
+        busca,
+        limit
+      );
+
+      return res.status(200).json({
+        sucesso: true,
+        mensagem: 'Clientes obtidos com sucesso',
         dados: clientes
       });
     } catch (error) {

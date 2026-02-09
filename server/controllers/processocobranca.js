@@ -20,58 +20,108 @@ module.exports = {
         dataInicioCobranca,
         historicoRetroativo,
         observacao,
-        quantidadeMeses
+        quantidadeMeses,
+        nome,
+        cotas
       } = req.body;
 
-      // Validações
-      if (!cotaId || !diaVencimento || !dataInicioCobranca) {
-        return res.status(400).json({
-          sucesso: false,
-          mensagem: 'Campos obrigatórios: cotaId, diaVencimento e dataInicioCobranca'
-        });
-      }
+      const temMultiplasCotas = Array.isArray(cotas) && cotas.length > 0;
 
-      if (diaVencimento < 1 || diaVencimento > 31) {
-        return res.status(400).json({
-          sucesso: false,
-          mensagem: 'Dia de vencimento deve estar entre 1 e 31'
-        });
-      }
-
-      let quantidadeMesesValidos = null;
-      if (quantidadeMeses !== undefined && quantidadeMeses !== null && quantidadeMeses !== '') {
-        const meses = Number(quantidadeMeses);
-        if (!Number.isFinite(meses) || meses < 1) {
+      if (!temMultiplasCotas) {
+        // Validações LEGADO (processo de cota única)
+        if (!cotaId || !diaVencimento || !dataInicioCobranca) {
           return res.status(400).json({
             sucesso: false,
-            mensagem: 'Quantidade de meses inválida'
+            mensagem: 'Campos obrigatórios: cotaId, diaVencimento e dataInicioCobranca'
           });
         }
-        quantidadeMesesValidos = Math.floor(meses);
+
+        if (diaVencimento < 1 || diaVencimento > 31) {
+          return res.status(400).json({
+            sucesso: false,
+            mensagem: 'Dia de vencimento deve estar entre 1 e 31'
+          });
+        }
+
+        let quantidadeMesesValidos = null;
+        if (quantidadeMeses !== undefined && quantidadeMeses !== null && quantidadeMeses !== '') {
+          const meses = Number(quantidadeMeses);
+          if (!Number.isFinite(meses) || meses < 1) {
+            return res.status(400).json({
+              sucesso: false,
+              mensagem: 'Quantidade de meses inválida'
+            });
+          }
+          quantidadeMesesValidos = Math.floor(meses);
+        }
+
+        // Criar processo
+        const processo = await cobrancaService.criarProcessoCobranca({
+          cotaId,
+          diaVencimento,
+          dataInicioCobranca,
+          historicoRetroativo,
+          quantidadeMeses: quantidadeMesesValidos
+        });
+
+        // Adicionar observação se fornecida
+        if (observacao) {
+          await processo.update({ observacao });
+        }
+
+        const processoCompleto = await ProcessoCobranca.findByPk(processo.id, {
+          include: [
+            {
+              association: 'cota',
+              include: [
+                { association: 'cliente' },
+                { association: 'consultor' }
+              ]
+            }
+          ]
+        });
+
+        return res.status(201).json({
+          sucesso: true,
+          mensagem: 'Processo de cobrança criado com sucesso',
+          dados: processoCompleto
+        });
       }
 
-      // Criar processo
-      const processo = await cobrancaService.criarProcessoCobranca({
-        cotaId,
-        diaVencimento,
-        dataInicioCobranca,
-        historicoRetroativo,
-        quantidadeMeses: quantidadeMesesValidos
+      // Processo multiplas cotas
+      const cotasValidadas = cotas.map((item, index) => {
+        if (!item.cotaId || !item.diaVencimento || !item.dataInicioCobranca) {
+          const campo = !item.cotaId ? 'cotaId' : !item.diaVencimento ? 'diaVencimento' : 'dataInicioCobranca';
+          throw new Error(`Cota #${index + 1} está sem o campo obrigatório ${campo}`);
+        }
+        return {
+          cotaId: item.cotaId,
+          valor: item.valor,
+          diaVencimento: item.diaVencimento,
+          quantidadeMeses: item.quantidadeMeses === '' ? null : item.quantidadeMeses,
+          mesesPagosRetroativo: Number(item.mesesPagosRetroativo) || 0,
+          dataInicioCobranca: item.dataInicioCobranca,
+          observacao: item.observacao || ''
+        };
       });
 
-      // Adicionar observação se fornecida
-      if (observacao) {
-        await processo.update({ observacao });
-      }
+      const processo = await cobrancaService.criarProcessoCobranca({
+        nome,
+        cotas: cotasValidadas
+      });
 
-      // Buscar processo completo com relacionamentos
       const processoCompleto = await ProcessoCobranca.findByPk(processo.id, {
         include: [
           {
-            association: 'cota',
+            association: 'cotasProcesso',
             include: [
-              { association: 'cliente' },
-              { association: 'consultor' }
+              {
+                association: 'cota',
+                include: [
+                  { association: 'cliente' },
+                  { association: 'consultor' }
+                ]
+              }
             ]
           }
         ]
@@ -82,6 +132,7 @@ module.exports = {
         mensagem: 'Processo de cobrança criado com sucesso',
         dados: processoCompleto
       });
+
 
     } catch (erro) {
       console.error('[ProcessoCobranca] Erro ao criar:', erro);

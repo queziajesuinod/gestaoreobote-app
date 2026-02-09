@@ -51,26 +51,41 @@ module.exports = {
     if (!Array.isArray(tipoColumn) || tipoColumn.length === 0) {
       console.log('[Migration] Adicionando coluna tipo em processos_cobranca...');
 
-      // Primeiro criar o ENUM type se não existir
+      const TYPE_NAME = 'enum_processos_cobranca_tipo';
+
+      const typeExists = await queryInterface.sequelize.query(
+        `
+        SELECT 1
+        FROM pg_type pt
+        JOIN pg_namespace pn ON pn.oid = pt.typnamespace
+        WHERE pn.nspname = :schema
+          AND pt.typname = :type
+        LIMIT 1
+        `,
+        {
+          replacements: { schema: SCHEMA, type: TYPE_NAME },
+          type: Sequelize.QueryTypes.SELECT,
+        }
+      );
+
+      if (!Array.isArray(typeExists) || typeExists.length === 0) {
+        await queryInterface.sequelize.query(
+          `CREATE TYPE "${SCHEMA}"."${TYPE_NAME}" AS ENUM ('unico', 'multiplo')`
+        );
+      }
+
       await queryInterface.sequelize.query(
         `
-        DO $$ BEGIN
-          CREATE TYPE "${SCHEMA}"."enum_processos_cobranca_tipo" AS ENUM ('unico', 'multiplo');
-        EXCEPTION
-          WHEN duplicate_object THEN null;
-        END $$;
+        ALTER TABLE "${SCHEMA}"."${TABLE_NAME}"
+        ADD COLUMN "tipo" "${SCHEMA}"."${TYPE_NAME}" NOT NULL DEFAULT 'unico';
         `
       );
 
-      await queryInterface.addColumn(
-        { tableName: TABLE_NAME, schema: SCHEMA },
-        'tipo',
-        {
-          type: Sequelize.ENUM('unico', 'multiplo'),
-          allowNull: false,
-          defaultValue: 'unico',
-          comment: 'Tipo do processo (unico = 1 cota, multiplo = N cotas)',
-        }
+      await queryInterface.sequelize.query(
+        `
+        COMMENT ON COLUMN "${SCHEMA}"."${TABLE_NAME}"."tipo"
+        IS 'Tipo do processo (unico = 1 cota, multiplo = N cotas)';
+        `
       );
 
       console.log('[Migration] Coluna tipo adicionada com sucesso!');

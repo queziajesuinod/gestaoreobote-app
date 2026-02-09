@@ -3,8 +3,9 @@ const inadimplenciaService = require('../services/inadimplencia');
 function obterConsultorFiltro(req, consultorIdParam) {
   const perfilUsuario = (req.user?.perfil || '').toUpperCase();
   const isConsultorPerfil = perfilUsuario === 'CONSULTOR';
-  const ehAdminOuMaster = ['ADMIN', 'MASTER'].includes(perfilUsuario);
-  const podeSelecionarConsultor = ehAdminOuMaster || perfilUsuario === 'GESTOR';
+  const isMasterPerfil = perfilUsuario === 'MASTER';
+  const isAdminPerfil = perfilUsuario === 'ADMIN';
+  const podeSelecionarConsultor = isAdminPerfil || isMasterPerfil || perfilUsuario === 'GESTOR';
   const consultorLogadoId = req.user?.consultorId || null;
 
   if (isConsultorPerfil && consultorLogadoId) {

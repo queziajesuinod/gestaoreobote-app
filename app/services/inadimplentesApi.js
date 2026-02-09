@@ -113,6 +113,25 @@ export const listarConsultores = async () => {
   return response.json();
 };
 
+export const listarClientesPorConsultor = async (consultorId, filtros = {}) => {
+  if (!consultorId) {
+    return [];
+  }
+
+  const params = new URLSearchParams();
+  if (filtros.busca) params.append('busca', filtros.busca);
+  if (filtros.limit) params.append('limit', filtros.limit);
+
+  const query = params.toString();
+  const url = `${API_URL}/clientes/consultor/${consultorId}${query ? `?${query}` : ''}`;
+  const response = await fetch(url, {
+    headers: getHeaders()
+  });
+
+  if (!response.ok) throw new Error('Erro ao listar clientes do consultor');
+  return response.json();
+};
+
 export const listarClientes = async () => {
   const response = await fetch(`${API_URL}/clientes`, {
     headers: getHeaders()
@@ -126,10 +145,12 @@ export const listarCotas = async (filtros = {}) => {
   const params = new URLSearchParams();
   if (filtros.clienteId) params.append('clienteId', filtros.clienteId);
   if (filtros.consultorId) params.append('consultorId', filtros.consultorId);
+  if (filtros.busca) params.append('busca', filtros.busca);
   if (filtros.grupo) params.append('grupo', filtros.grupo);
   if (filtros.limit) params.append('limit', filtros.limit);
 
-  const response = await fetch(`${API_URL}/cotas?${params}`, {
+  const query = params.toString();
+  const response = await fetch(`${API_URL}/cotas${query ? `?${query}` : ''}`, {
     headers: getHeaders()
   });
 

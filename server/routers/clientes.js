@@ -7,6 +7,7 @@ const autenticado = require('../middlewares/autenticado'); // se quiser proteger
 // router.use(autenticado); // descomente se quiser proteger todas as rotas
 
 router.get('/', clienteController.listar);
+router.get('/consultor/:consultorId', clienteController.listarPorConsultor);
 router.get('/:id', clienteController.buscarPorId);
 router.post('/', clienteController.criar);
 router.put('/:id', clienteController.atualizar);

@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
+  Autocomplete,
   Box,
   Button,
   Card,
@@ -11,6 +12,7 @@ import {
   DialogTitle,
   Grid,
   IconButton,
+  MenuItem,
   Paper,
   Table,
   TableBody,
@@ -33,12 +35,14 @@ import {
 /**
  * Componente para gerenciar múltiplas cotas em um processo
  */
-function GerenciadorCotasProcesso({ 
-  cotas = [], 
-  onChange, 
+function GerenciadorCotasProcesso({
+  cotas = [],
+  onChange,
   cotasDisponiveis = [],
+  clientesDisponiveis = [],
   onBuscarCotas,
-  loadingCotas = false
+  loadingCotas = false,
+  consultorId = null
 }) {
   const [dialogAberto, setDialogAberto] = useState(false);
   const [cotaEditando, setCotaEditando] = useState(null);
@@ -52,11 +56,141 @@ function GerenciadorCotasProcesso({
     dataInicioCobranca: new Date().toISOString().split('T')[0],
     observacao: ''
   });
+  const [selectedClienteId, setSelectedClienteId] = useState(null);
+  const [selectedGroup, setSelectedGroup] = useState('');
+  const [clienteInputValue, setClienteInputValue] = useState('');
+  const [cotaInputValue, setCotaInputValue] = useState('');
+  const lastClienteQuery = useRef('');
+  const lastCotaQuery = useRef('');
+  useEffect(() => {
+    setSelectedClienteId(null);
+    setSelectedGroup('');
+    setClienteInputValue('');
+    setCotaInputValue('');
+    setFormCota(prev => ({
+      ...prev,
+      cotaId: '',
+      cotaSelecionada: null
+    }));
+    setCotaEditando(null);
+    setDialogAberto(false);
+  }, [consultorId]);
+
+  const normalizeClienteId = (value) => {
+    if (value === null || value === undefined) return null;
+    return String(value);
+  };
+
+  const clientesUnicos = useMemo(() => {
+    const map = new Map();
+    clientesDisponiveis.forEach((cliente) => {
+      const clienteId = normalizeClienteId(cliente?.id ?? cliente?.clienteId);
+      if (clienteId && !map.has(clienteId)) {
+        map.set(clienteId, { ...cliente, id: clienteId });
+      }
+    });
+    return Array.from(map.values());
+  }, [clientesDisponiveis]);
+
+  const clienteSelecionado = useMemo(() => {
+    if (!selectedClienteId) return null;
+    return clientesUnicos.find(cliente => cliente.id === selectedClienteId) || null;
+  }, [clientesUnicos, selectedClienteId]);
+
+  const gruposDisponiveis = useMemo(() => {
+    if (!selectedClienteId) return [];
+    const grupos = new Set();
+    cotasDisponiveis.forEach((cota) => {
+      const rawId = cota.cliente?.id ?? cota.Cliente?.id ?? cota.clienteId;
+      const clienteId = rawId !== null && rawId !== undefined ? String(rawId) : null;
+      if (clienteId === selectedClienteId && cota.grupo) {
+        grupos.add(cota.grupo);
+      }
+    });
+    return Array.from(grupos);
+  }, [cotasDisponiveis, selectedClienteId]);
+
+  const cotasFiltradas = useMemo(() => {
+    return cotasDisponiveis.filter((cota) => {
+      const rawId = cota.cliente?.id ?? cota.Cliente?.id ?? cota.clienteId;
+      const clienteId = rawId !== null && rawId !== undefined ? String(rawId) : null;
+      if (selectedClienteId && clienteId !== selectedClienteId) {
+        return false;
+      }
+      if (selectedGroup && cota.grupo !== selectedGroup) {
+        return false;
+      }
+      return true;
+    });
+  }, [cotasDisponiveis, selectedClienteId, selectedGroup]);
+
+  const formatCotaLabel = (cota) => {
+    if (!cota) return '';
+    const numero = `${cota.cota || ''}${cota.digito ? `-${cota.digito}` : ''}`;
+    const nome = cota.cliente?.nome || cota.Cliente?.nome || 'Cliente sem nome';
+    return `${numero} - ${nome} (Grupo: ${cota.grupo})`;
+  };
+
+  const formatClienteLabel = (cliente) => {
+    if (!cliente) return '';
+    const nome = cliente.nome || 'Cliente sem nome';
+    const cpf = cliente.cpf ? ` • ${cliente.cpf}` : '';
+    return `${nome}${cpf}`;
+  };
+
+  const handleSelectCliente = (_event, cliente) => {
+    if (!cliente) {
+      setSelectedClienteId(null);
+      setSelectedGroup('');
+      setFormCota({
+        ...formCota,
+        cotaId: '',
+        cotaSelecionada: null
+      });
+      setCotaInputValue('');
+      setClienteInputValue('');
+      return;
+    }
+    const rawId = cliente?.id ?? cliente?.clienteId ?? null;
+    const clienteId = rawId !== null && rawId !== undefined ? String(rawId) : null;
+    setSelectedClienteId(clienteId);
+    setSelectedGroup('');
+    setFormCota({
+      ...formCota,
+      cotaId: '',
+      cotaSelecionada: null
+    });
+    setCotaInputValue('');
+    setClienteInputValue(formatClienteLabel(cliente));
+    if (consultorId && clienteId && onBuscarCotas) {
+      onBuscarCotas({ consultorId, clienteId });
+    }
+  };
+
+  const handleSelectGroup = (event) => {
+    setSelectedGroup(event.target.value);
+    setFormCota({
+      ...formCota,
+      cotaId: '',
+      cotaSelecionada: null
+    });
+    setCotaInputValue('');
+    if (consultorId && selectedClienteId && onBuscarCotas) {
+      onBuscarCotas({ consultorId, clienteId: selectedClienteId, grupo: event.target.value });
+    }
+  };
 
   const abrirDialog = (cota = null) => {
     if (cota) {
+      const clienteAtual = cota.cotaSelecionada
+        ? cota.cotaSelecionada.cliente || cota.cotaSelecionada.Cliente
+        : null;
       // Modo edição
       setCotaEditando(cota);
+      const clienteIdAtual = clienteAtual?.id ?? clienteAtual?.clienteId ?? null;
+      setSelectedClienteId(clienteIdAtual);
+      setSelectedGroup(cota.cotaSelecionada?.grupo || '');
+      setClienteInputValue(formatClienteLabel(clienteAtual));
       setFormCota({
         cotaId: cota.cotaId,
         cotaSelecionada: cota.cotaSelecionada,
@@ -67,9 +201,13 @@ function GerenciadorCotasProcesso({
         dataInicioCobranca: cota.dataInicioCobranca,
         observacao: cota.observacao || ''
       });
+      setCotaInputValue(formatCotaLabel(cota.cotaSelecionada));
     } else {
       // Modo criação
       setCotaEditando(null);
+      setSelectedClienteId(null);
+      setSelectedGroup('');
+      setClienteInputValue('');
       setFormCota({
         cotaId: '',
         cotaSelecionada: null,
@@ -80,6 +218,7 @@ function GerenciadorCotasProcesso({
         dataInicioCobranca: new Date().toISOString().split('T')[0],
         observacao: ''
       });
+      setCotaInputValue('');
     }
     setDialogAberto(true);
   };
@@ -87,11 +226,21 @@ function GerenciadorCotasProcesso({
   const fecharDialog = () => {
     setDialogAberto(false);
     setCotaEditando(null);
+    setSelectedClienteId(null);
+    setSelectedGroup('');
+    setClienteInputValue('');
+    setCotaInputValue('');
   };
 
-  const handleChangeCota = (event, novaCota) => {
+  const handleChangeCota = (_event, novaCota) => {
     if (novaCota) {
       const valorCota = parseFloat(novaCota.valor) || 0;
+      const cliente = novaCota.cliente || novaCota.Cliente || null;
+      const rawId = cliente?.id ?? cliente?.clienteId ?? null;
+      const clienteId = rawId !== null && rawId !== undefined ? String(rawId) : null;
+      setSelectedClienteId(clienteId);
+      setSelectedGroup(novaCota.grupo || '');
+      setClienteInputValue(formatClienteLabel(cliente));
       setFormCota({
         ...formCota,
         cotaId: novaCota.id,
@@ -101,12 +250,43 @@ function GerenciadorCotasProcesso({
           ? new Date(novaCota.dtaquisicao).toISOString().split('T')[0]
           : formCota.dataInicioCobranca
       });
+      setCotaInputValue(formatCotaLabel(novaCota));
     } else {
       setFormCota({
         ...formCota,
         cotaId: '',
         cotaSelecionada: null
       });
+      setCotaInputValue('');
+    }
+  };
+
+  const triggerBusca = (query, queryRef) => {
+    const normalized = (query || '').trim();
+    if (!consultorId) return;
+    if (normalized === queryRef.current) return;
+    queryRef.current = normalized;
+    if (onBuscarCotas) {
+      onBuscarCotas({
+        busca: normalized,
+        consultorId,
+        clienteId: selectedClienteId || undefined,
+        grupo: selectedGroup || undefined
+      });
+    }
+  };
+
+  const handleClienteInputChange = (_event, newValue, reason) => {
+    setClienteInputValue(newValue);
+    if (!cotaEditando && reason === 'input') {
+      triggerBusca(newValue, lastClienteQuery);
+    }
+  };
+
+  const handleCotaInputChange = (_event, newValue, reason) => {
+    setCotaInputValue(newValue);
+    if (!cotaEditando && reason === 'input') {
+      triggerBusca(newValue, lastCotaQuery);
     }
   };
 
@@ -186,6 +366,7 @@ function GerenciadorCotasProcesso({
           variant="contained"
           startIcon={<AddIcon />}
           onClick={() => abrirDialog()}
+          disabled={!consultorId}
         >
           Adicionar Cota
         </Button>
@@ -301,26 +482,92 @@ function GerenciadorCotasProcesso({
         </DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
-            {/* Seleção de Cota */}
+            {/* Pesquisa de Cliente */}
             <Grid item xs={12}>
+              <Autocomplete
+                fullWidth
+                options={clientesUnicos}
+                getOptionLabel={(option) => formatClienteLabel(option)}
+                value={clienteSelecionado}
+                inputValue={clienteInputValue}
+                onInputChange={handleClienteInputChange}
+                onChange={(event, cliente) => handleSelectCliente(event, cliente)}
+                disabled={!consultorId || !!cotaEditando}
+                loading={loadingCotas}
+                isOptionEqualToValue={(option, value) => option?.id === value?.id}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Cliente *"
+                    helperText={
+                      !consultorId
+                        ? 'Selecione o consultor antes de buscar um cliente'
+                        : cotaEditando
+                          ? 'Não é possível alterar a cota'
+                          : 'Pesquise e selecione o cliente'
+                    }
+                  />
+                )}
+              />
+            </Grid>
+
+            {/* Seleção de Grupo */}
+            <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
                 select
-                label="Cota *"
-                value={formCota.cotaId}
-                onChange={(e) => {
-                  const cota = cotasDisponiveis.find(c => c.id === e.target.value);
-                  handleChangeCota(null, cota);
-                }}
-                disabled={!!cotaEditando}
-                helperText={cotaEditando ? 'Não é possível alterar a cota' : 'Selecione a cota'}
+                label="Grupo *"
+                value={selectedGroup}
+                onChange={handleSelectGroup}
+                disabled={!consultorId || !clienteSelecionado || !!cotaEditando || gruposDisponiveis.length === 0}
+                helperText={
+                  !consultorId
+                    ? 'Selecione o consultor primeiro'
+                    : !clienteSelecionado
+                      ? 'Selecione o cliente antes de escolher o grupo'
+                      : gruposDisponiveis.length === 0
+                        ? 'Nenhum grupo disponível para este cliente'
+                        : 'Escolha o grupo do cliente'
+                }
               >
-                {cotasDisponiveis.map((cota) => (
-                  <option key={cota.id} value={cota.id}>
-                    {cota.cota}{cota.digito && `-${cota.digito}`} - {cota.cliente?.nome || cota.Cliente?.nome} (Grupo: {cota.grupo})
-                  </option>
+                <MenuItem value="">
+                  <em>Selecione</em>
+                </MenuItem>
+                {gruposDisponiveis.map((grupo) => (
+                  <MenuItem key={grupo} value={grupo}>
+                    {grupo}
+                  </MenuItem>
                 ))}
               </TextField>
+            </Grid>
+
+            {/* Seleção de Cota */}
+            <Grid item xs={12}>
+              <Autocomplete
+                fullWidth
+                options={selectedGroup ? cotasFiltradas : []}
+                getOptionLabel={(option) => formatCotaLabel(option)}
+                value={formCota.cotaSelecionada}
+                inputValue={cotaInputValue}
+                onInputChange={handleCotaInputChange}
+                onChange={(event, novaCota) => handleChangeCota(event, novaCota)}
+                disabled={!consultorId || !clienteSelecionado || !selectedGroup || !!cotaEditando}
+                loading={loadingCotas}
+                isOptionEqualToValue={(option, value) => option.id === value?.id}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Cota *"
+                    helperText={
+                      cotaEditando
+                        ? 'Não é possível alterar a cota'
+                        : !consultorId
+                          ? 'Escolha o consultor antes de selecionar uma cota'
+                          : 'Selecione a cota no grupo escolhido'
+                    }
+                  />
+                )}
+              />
             </Grid>
 
             {/* Valor */}

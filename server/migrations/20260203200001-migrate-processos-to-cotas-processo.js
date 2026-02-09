@@ -129,7 +129,39 @@ module.exports = {
       }
     }
 
-    // 5) Atualizar cobrancas_mensais com cotaProcessoId
+    const TABLE_NAME = 'cobrancas_mensais';
+
+    // 5) Garantir que a coluna cotaProcessoId exista antes de atualizar
+    const [columns] = await queryInterface.sequelize.query(
+      `
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = :schema
+        AND table_name = :table
+        AND column_name = 'cotaProcessoId'
+      `,
+      { replacements: { schema: SCHEMA, table: TABLE_NAME } }
+    );
+
+    if (!Array.isArray(columns) || columns.length === 0) {
+      console.log('[Migration] Criando coluna cotaProcessoId em cobrancas_mensais para a migração...');
+      await queryInterface.addColumn(
+        { tableName: TABLE_NAME, schema: SCHEMA },
+        'cotaProcessoId',
+        {
+          type: Sequelize.UUID,
+          allowNull: true,
+          references: {
+            model: { tableName: 'cotas_processo_cobranca', schema: SCHEMA },
+            key: 'id',
+          },
+          onUpdate: 'CASCADE',
+          onDelete: 'CASCADE',
+        }
+      );
+    }
+
+    // 6) Atualizar cobrancas_mensais com cotaProcessoId
     console.log('[Migration] Atualizando cobrancas_mensais com cotaProcessoId...');
 
     await queryInterface.sequelize.query(
