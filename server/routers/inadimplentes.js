@@ -36,6 +36,12 @@ router.use(autenticado);
 // ----------------------------------------------------------------------------
 
 /**
+ * GET /api/inadimplentes/administradoras
+ * Listar valores distintos de administradora das cotas
+ */
+router.get('/administradoras', processoCobrancaController.listarAdministradoras);
+
+/**
  * GET /api/inadimplentes/processos
  * Listar processos de cobrança
  * Query params: status, cotaId

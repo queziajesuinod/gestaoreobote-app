@@ -1,7 +1,9 @@
 const { CobrancaMensal, ProcessoCobranca, NotificacaoCobranca, ConfiguracaoWebhook } = require('../models');
-const { Op } = require('sequelize');
+const { Op, QueryTypes } = require('sequelize');
 const webhookService = require('./webhook');
 const configuracaoCobrancaService = require('./configuracaocobranca');
+
+const SCHEMA = (process.env.DB_SCHEMA || 'dev').trim();
 
 const calcularDiferencaMeses = (inicio, fim) => {
   if (!(inicio instanceof Date) || !(fim instanceof Date)) return 1;
@@ -620,70 +622,61 @@ class InadimplenciaService {
       ...(includeConsultor ? { include: includeConsultor } : {})
     });
 
-    const cobrancasAtrasadas = await CobrancaMensal.findAll({
-      where: whereAtrasadas,
-      ...(includeConsultor ? { include: includeConsultor } : {}),
-      attributes: ['id', 'valor', 'dataVencimento']
-    });
+    // Agregações via SQL — evita carregar todos os registros em memória
+    const periodoWhere = periodo
+      ? `AND cm."mesReferencia" >= :mesInicio AND cm."mesReferencia" < :mesFim`
+      : '';
 
-    const valorTotalAtraso = cobrancasAtrasadas.reduce(
-      (total, cobranca) => total + parseFloat(cobranca.valor || 0),
-      0
-    );
-
-    const hoje = new Date();
-    const faixas = {
-      ate7dias: 0,
-      de8a15dias: 0,
-      de16a30dias: 0,
-      acima30dias: 0
+    const baseReplacements = {
+      ...(consultorFiltro ? { consultorId: consultorFiltro } : {}),
+      ...(periodo ? { mesInicio: periodo.inicio, mesFim: periodo.fim } : {})
     };
 
-    cobrancasAtrasadas.forEach(cobranca => {
-      const vencimento = new Date(cobranca.dataVencimento);
-      const diasAtraso = Math.floor((hoje - vencimento) / (1000 * 60 * 60 * 24));
+    const consultorJoinAgr = consultorFiltro
+      ? `INNER JOIN "${SCHEMA}"."processos_cobranca" agr_pc ON agr_pc.id = cm."processoCobrancaId"
+         INNER JOIN "${SCHEMA}"."cotas" agr_c ON agr_c.id = agr_pc."cotaId" AND agr_c."consultorId" = :consultorId`
+      : '';
 
-      if (diasAtraso <= 7) {
-        faixas.ate7dias++;
-      } else if (diasAtraso <= 15) {
-        faixas.de8a15dias++;
-      } else if (diasAtraso <= 30) {
-        faixas.de16a30dias++;
-      } else {
-        faixas.acima30dias++;
-      }
-    });
+    const consultorJoinNtf = consultorFiltro
+      ? `INNER JOIN "${SCHEMA}"."processos_cobranca" ntf_pc ON ntf_pc.id = cm."processoCobrancaId"
+         INNER JOIN "${SCHEMA}"."cotas" ntf_c ON ntf_c.id = ntf_pc."cotaId" AND ntf_c."consultorId" = :consultorId`
+      : '';
 
-    let tempoMedioAtraso = 0;
-    if (cobrancasAtrasadas.length > 0) {
-      const somaAtrasos = cobrancasAtrasadas.reduce((total, cobranca) => {
-        const vencimento = new Date(cobranca.dataVencimento);
-        const diasAtraso = Math.floor((hoje - vencimento) / (1000 * 60 * 60 * 24));
-        return total + diasAtraso;
-      }, 0);
-      tempoMedioAtraso = Math.round(somaAtrasos / cobrancasAtrasadas.length);
-    }
+    const [agregados] = await CobrancaMensal.sequelize.query(
+      `SELECT
+        COALESCE(SUM(CAST(cm.valor AS NUMERIC)), 0) AS "valorTotal",
+        ROUND(AVG((CURRENT_DATE - cm."dataVencimento"::date)::numeric), 0) AS "tempoMedio",
+        COUNT(CASE WHEN (CURRENT_DATE - cm."dataVencimento"::date) <= 7 THEN 1 END) AS "ate7dias",
+        COUNT(CASE WHEN (CURRENT_DATE - cm."dataVencimento"::date) BETWEEN 8 AND 15 THEN 1 END) AS "de8a15dias",
+        COUNT(CASE WHEN (CURRENT_DATE - cm."dataVencimento"::date) BETWEEN 16 AND 30 THEN 1 END) AS "de16a30dias",
+        COUNT(CASE WHEN (CURRENT_DATE - cm."dataVencimento"::date) > 30 THEN 1 END) AS "acima30dias"
+       FROM "${SCHEMA}"."cobrancas_mensais" cm
+       ${consultorJoinAgr}
+       WHERE cm.status = 'atrasado' ${periodoWhere}`,
+      { replacements: baseReplacements, type: QueryTypes.SELECT }
+    );
 
-    const inicioHoje = new Date(hoje);
-    inicioHoje.setHours(0, 0, 0, 0);
-    
-    const fimHoje = new Date(hoje);
-    fimHoje.setHours(23, 59, 59, 999);
+    const valorTotalAtraso = parseFloat(agregados?.valorTotal || 0);
+    const tempoMedioAtraso = parseInt(agregados?.tempoMedio || 0, 10);
+    const faixas = {
+      ate7dias:    parseInt(agregados?.ate7dias || 0, 10),
+      de8a15dias:  parseInt(agregados?.de8a15dias || 0, 10),
+      de16a30dias: parseInt(agregados?.de16a30dias || 0, 10),
+      acima30dias: parseInt(agregados?.acima30dias || 0, 10)
+    };
 
-    const idsCobrancasAtrasadas = cobrancasAtrasadas.map(cobranca => cobranca.id);
-    const notificacoesHoje = idsCobrancasAtrasadas.length
-      ? await NotificacaoCobranca.count({
-          where: {
-            cobrancaMensalId: {
-              [Op.in]: idsCobrancasAtrasadas
-            },
-            tipo: 'automatica',
-            createdAt: {
-              [Op.between]: [inicioHoje, fimHoje]
-            }
-          }
-        })
-      : 0;
+    const [ntfRow] = await CobrancaMensal.sequelize.query(
+      `SELECT COUNT(*)::int AS "notificacoesHoje"
+       FROM "${SCHEMA}"."notificacoes_cobranca" nc
+       INNER JOIN "${SCHEMA}"."cobrancas_mensais" cm ON cm.id = nc."cobrancaMensalId"
+       ${consultorJoinNtf}
+       WHERE cm.status = 'atrasado'
+         AND nc.tipo = 'automatica'
+         AND nc."createdAt"::date = CURRENT_DATE
+         ${periodoWhere}`,
+      { replacements: baseReplacements, type: QueryTypes.SELECT }
+    );
+    const notificacoesHoje = ntfRow?.notificacoesHoje || 0;
 
     const processosAtivos = await ProcessoCobranca.count({
       where: { status: 'ativo' },
@@ -756,205 +749,123 @@ class InadimplenciaService {
   async obterDadosGraficos(meses = 6, filtros = {}) {
     const consultorFiltro = filtros.consultorId || null;
     const periodo = this.montarRangeMesReferencia(filtros.mes, filtros.ano);
-    const periodoInicio = periodo?.inicio ? new Date(periodo.inicio) : null;
-    const periodoFim = periodo?.fim ? new Date(periodo.fim) : null;
-    const mesesParaLoop = periodoInicio && periodoFim
-      ? calcularDiferencaMeses(periodoInicio, periodoFim)
-      : meses;
-    const includeConsultorParaCobrancas = consultorFiltro
-      ? this.montarIncludeProcessoComConsultor(consultorFiltro)
-      : undefined;
-    const baseInicial = periodoInicio
-      ? new Date(periodoInicio)
-      : (() => {
-        const inicio = new Date();
-        inicio.setHours(0, 0, 0, 0);
-        inicio.setDate(1);
-        inicio.setMonth(inicio.getMonth() - (mesesParaLoop - 1));
-        return inicio;
-      })();
-    baseInicial.setHours(0, 0, 0, 0);
-    baseInicial.setDate(1);
-    const wherePeriodo = periodoInicio && periodoFim
-      ? {
-        mesReferencia: {
-          [Op.gte]: periodo.inicio,
-          [Op.lt]: periodo.fim
-        }
-      }
-      : {};
 
-    const montarOpcoesComConsultor = (where = {}) => ({
-      where: { ...wherePeriodo, ...where },
-      ...(includeConsultorParaCobrancas ? { include: includeConsultorParaCobrancas } : {})
+    // Calcular janela: se não há período explícito, usar últimos N meses
+    const baseInicial = (() => {
+      if (periodo?.inicio) return new Date(periodo.inicio);
+      const d = new Date();
+      d.setDate(1);
+      d.setMonth(d.getMonth() - (meses - 1));
+      d.setHours(0, 0, 0, 0);
+      return d;
+    })();
+    const baseFinal = periodo?.fim ? new Date(periodo.fim) : (() => {
+      const d = new Date();
+      d.setDate(1);
+      d.setMonth(d.getMonth() + 1);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    })();
+
+    const baseInicialStr = this.formatarPrimeiroDia(baseInicial);
+    const baseFinalStr = this.formatarPrimeiroDia(baseFinal);
+
+    // JOIN de consultor (reutilizado nas 3 queries)
+    const consultorJoin = consultorFiltro
+      ? `INNER JOIN "${SCHEMA}"."processos_cobranca" gf_pc ON gf_pc.id = cm."processoCobrancaId"
+         INNER JOIN "${SCHEMA}"."cotas" gf_c ON gf_c.id = gf_pc."cotaId" AND gf_c."consultorId" = :consultorId`
+      : '';
+    const baseReplacements = {
+      baseInicial: baseInicialStr,
+      baseFinal: baseFinalStr,
+      ...(consultorFiltro ? { consultorId: consultorFiltro } : {})
+    };
+
+    // ── Query 1: evolução por mês e status (substitui N×3 COUNTs) ────────────
+    const rowsEvolucao = await CobrancaMensal.sequelize.query(
+      `SELECT cm."mesReferencia", cm.status, COUNT(cm.id)::int AS total
+       FROM "${SCHEMA}"."cobrancas_mensais" cm
+       ${consultorJoin}
+       WHERE cm."mesReferencia" >= :baseInicial
+         AND cm."mesReferencia" <  :baseFinal
+         AND cm.status IN ('atrasado', 'pendente', 'pago')
+       GROUP BY cm."mesReferencia", cm.status
+       ORDER BY cm."mesReferencia" ASC`,
+      { replacements: baseReplacements, type: QueryTypes.SELECT }
+    );
+
+    // Montar mapa mesReferencia → { atrasadas, pendentes, pagas }
+    const evolucaoMap = new Map();
+    rowsEvolucao.forEach(({ mesReferencia, status, total }) => {
+      const chave = mesReferencia.toString().substring(0, 7); // YYYY-MM
+      if (!evolucaoMap.has(chave)) evolucaoMap.set(chave, { atrasadas: 0, pendentes: 0, pagas: 0 });
+      const entry = evolucaoMap.get(chave);
+      if (status === 'atrasado') entry.atrasadas = total;
+      else if (status === 'pendente') entry.pendentes = total;
+      else if (status === 'pago') entry.pagas = total;
     });
 
-    // Gráfico de evolução de inadimplência (linha)
+    // Gerar todos os meses no intervalo (mesmo os sem dados)
+    const MESES_PT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
     const evolucaoInadimplencia = [];
-    for (let i = 0; i < mesesParaLoop; i++) {
-      const mesReferencia = new Date(baseInicial);
-      mesReferencia.setMonth(baseInicial.getMonth() + i);
-      mesReferencia.setDate(1);
-      mesReferencia.setHours(0, 0, 0, 0);
-
-      const cobrancasAtrasadas = await CobrancaMensal.count(
-        montarOpcoesComConsultor({
-          mesReferencia,
-          status: 'atrasado'
-        })
-      );
-
-      const cobrancasPendentes = await CobrancaMensal.count(
-        montarOpcoesComConsultor({
-          mesReferencia,
-          status: 'pendente'
-        })
-      );
-
-      const cobrancasPagas = await CobrancaMensal.count(
-        montarOpcoesComConsultor({
-          mesReferencia,
-          status: 'pago'
-        })
-      );
-
+    const cursor = new Date(baseInicial);
+    while (cursor < baseFinal) {
+      const chave = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`;
+      const entry = evolucaoMap.get(chave) || { atrasadas: 0, pendentes: 0, pagas: 0 };
       evolucaoInadimplencia.push({
-        mes: mesReferencia.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }),
-        atrasadas: cobrancasAtrasadas,
-        pendentes: cobrancasPendentes,
-        pagas: cobrancasPagas,
-        total: cobrancasAtrasadas + cobrancasPendentes + cobrancasPagas
+        mes: `${MESES_PT[cursor.getMonth()]}. ${String(cursor.getFullYear()).slice(-2)}`,
+        atrasadas: entry.atrasadas,
+        pendentes: entry.pendentes,
+        pagas: entry.pagas,
+        total: entry.atrasadas + entry.pendentes + entry.pagas
       });
+      cursor.setMonth(cursor.getMonth() + 1);
     }
 
-    const consultorInclude = {
-      association: 'consultor'
-    };
-    if (consultorFiltro) {
-      consultorInclude.where = { id: consultorFiltro };
-      consultorInclude.required = true;
-    }
+    // taxaInadimplenciaPorMes é derivada da mesma evolução
+    const taxaInadimplenciaPorMes = evolucaoInadimplencia.map(item => ({
+      mes: item.mes,
+      taxa: item.total > 0 ? parseFloat(((item.atrasadas / item.total) * 100).toFixed(2)) : 0,
+      atrasadas: item.atrasadas,
+      total: item.total
+    }));
 
-    // Gráfico de inadimplência por consultor (barra)
-    const inadimplenciaPorConsultor = await CobrancaMensal.findAll({
-      where: {
-        ...wherePeriodo,
-        status: 'atrasado'
-      },
-      include: [
-        {
-          association: 'processoCobranca',
-          include: [
-            {
-              association: 'cota',
-              include: [
-                consultorInclude
-              ]
-            }
-          ]
-        }
-      ]
+    // ── Query 2: distribuição de status no período inteiro (substitui 4 COUNTs) ─
+    const rowsStatus = await CobrancaMensal.sequelize.query(
+      `SELECT cm.status, COUNT(cm.id)::int AS total
+       FROM "${SCHEMA}"."cobrancas_mensais" cm
+       ${consultorJoin}
+       WHERE cm."mesReferencia" >= :baseInicial
+         AND cm."mesReferencia" <  :baseFinal
+       GROUP BY cm.status`,
+      { replacements: baseReplacements, type: QueryTypes.SELECT }
+    );
+
+    const distribuicaoStatus = { pagas: 0, atrasadas: 0, pendentes: 0, total: 0 };
+    rowsStatus.forEach(({ status, total }) => {
+      distribuicaoStatus.total += total;
+      if (status === 'pago') distribuicaoStatus.pagas = total;
+      else if (status === 'atrasado') distribuicaoStatus.atrasadas = total;
+      else if (status === 'pendente') distribuicaoStatus.pendentes = total;
     });
 
-    const consultoresMap = {};
-    inadimplenciaPorConsultor.forEach(cobranca => {
-      const consultor = cobranca.processoCobranca?.cota?.consultor;
-      if (consultor) {
-        const nome = consultor.nome;
-        if (!consultoresMap[nome]) {
-          consultoresMap[nome] = {
-            nome,
-            quantidade: 0,
-            valor: 0
-          };
-        }
-        consultoresMap[nome].quantidade++;
-        consultoresMap[nome].valor += parseFloat(cobranca.valor);
-      }
-    });
-
-    const inadimplenciaPorConsultorArray = Object.values(consultoresMap)
-      .sort((a, b) => b.quantidade - a.quantidade)
-      .slice(0, 10); // Top 10
-
-    // Gráfico de taxa de recuperação (pizza)
-    const totalCobrancas = await CobrancaMensal.count(
-      montarOpcoesComConsultor({
-        mesReferencia: {
-          [Op.gte]: baseInicial
-        }
-      })
+    // ── Query 3: inadimplência por consultor — top 10 (GROUP BY SQL) ──────────
+    const consultorFiltroWhere = consultorFiltro ? `AND co.id = :consultorId` : '';
+    const inadimplenciaPorConsultorArray = await CobrancaMensal.sequelize.query(
+      `SELECT co.nome, COUNT(cm.id)::int AS quantidade, COALESCE(SUM(CAST(cm.valor AS NUMERIC)), 0) AS valor
+       FROM "${SCHEMA}"."cobrancas_mensais" cm
+       INNER JOIN "${SCHEMA}"."processos_cobranca" pc ON pc.id = cm."processoCobrancaId"
+       INNER JOIN "${SCHEMA}"."cotas" c ON c.id = pc."cotaId"
+       INNER JOIN "${SCHEMA}"."consultores" co ON co.id = c."consultorId"
+       WHERE cm.status = 'atrasado'
+         AND cm."mesReferencia" >= :baseInicial
+         AND cm."mesReferencia" <  :baseFinal
+         ${consultorFiltroWhere}
+       GROUP BY co.id, co.nome
+       ORDER BY quantidade DESC
+       LIMIT 10`,
+      { replacements: baseReplacements, type: QueryTypes.SELECT }
     );
-
-    const cobrancasPagas = await CobrancaMensal.count(
-      montarOpcoesComConsultor({
-        mesReferencia: {
-          [Op.gte]: baseInicial
-        },
-        status: 'pago'
-      })
-    );
-
-    const cobrancasAtrasadas = await CobrancaMensal.count(
-      montarOpcoesComConsultor({
-        mesReferencia: {
-          [Op.gte]: baseInicial
-        },
-        status: 'atrasado'
-      })
-    );
-
-    const cobrancasPendentes = await CobrancaMensal.count(
-      montarOpcoesComConsultor({
-        mesReferencia: {
-          [Op.gte]: baseInicial
-        },
-        status: 'pendente'
-      })
-    );
-
-    const distribuicaoStatus = {
-      pagas: cobrancasPagas,
-      atrasadas: cobrancasAtrasadas,
-      pendentes: cobrancasPendentes,
-      total: totalCobrancas
-    };
-
-    // Gráfico de taxa de inadimplência por mês (linha)
-    const taxaInadimplenciaPorMes = [];
-    for (let i = 0; i < meses; i++) {
-      const mesReferencia = new Date();
-      mesReferencia.setMonth(mesReferencia.getMonth() - (meses - i - 1));
-      mesReferencia.setDate(1);
-      mesReferencia.setHours(0, 0, 0, 0);
-
-      // Total de cobranças do mês
-      const totalCobrancasMes = await CobrancaMensal.count(
-        montarOpcoesComConsultor({
-          mesReferencia
-        })
-      );
-
-      // Cobranças atrasadas do mês
-      const cobrancasAtrasadasMes = await CobrancaMensal.count(
-        montarOpcoesComConsultor({
-          mesReferencia,
-          status: 'atrasado'
-        })
-      );
-
-      // Calcular taxa de inadimplência (percentual)
-      const taxa = totalCobrancasMes > 0 
-        ? ((cobrancasAtrasadasMes / totalCobrancasMes) * 100).toFixed(2)
-        : 0;
-
-      taxaInadimplenciaPorMes.push({
-        mes: mesReferencia.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }),
-        taxa: parseFloat(taxa),
-        atrasadas: cobrancasAtrasadasMes,
-        total: totalCobrancasMes
-      });
-    }
 
     return {
       evolucaoInadimplencia,

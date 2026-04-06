@@ -25,6 +25,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   TextField,
   MenuItem,
@@ -108,16 +109,21 @@ function Dashboard() {
     || storedUser?.name
     || '';
   const [consultoresFiltro, setConsultoresFiltro] = useState([]);
+  const anoAtual = String(new Date().getFullYear());
   const [filtrosDashboard, setFiltrosDashboard] = useState({
     consultorId: isConsultorPerfil ? consultorIdLogado : '',
     mes: '',
-    ano: ''
+    ano: anoAtual
   });
   const [filtrosAplicados, setFiltrosAplicados] = useState(() => ({
     consultorId: isConsultorPerfil ? consultorIdLogado : '',
     mes: '',
-    ano: ''
+    ano: String(new Date().getFullYear())
   }));
+  const [janelaAtraso, setJanelaAtraso] = useState(30);
+  const [pageCobrancas, setPageCobrancas] = useState(0);
+  const [rowsPerPageCobrancas, setRowsPerPageCobrancas] = useState(10);
+  const [totalCobrancasAtrasadas, setTotalCobrancasAtrasadas] = useState(0);
   const [modoCobranca, setModoCobranca] = useState('diaria');
   const [diasSemanaCobranca, setDiasSemanaCobranca] = useState([]);
   const [modoSalvando, setModoSalvando] = useState(false);
@@ -239,23 +245,37 @@ function Dashboard() {
     });
   }, [cobrancasAtrasadas, filtrosAtivos]);
 
-  const carregarDados = async (filtros = null) => {
+  const carregarCobrancas = async (filtros, janela, pagina, linhasPorPagina) => {
+    const filtrosParaAplicar = prepararFiltrosDashboard(filtros || filtrosAplicados);
+    const filtrosCobrancas = {
+      status: 'atrasado',
+      limite: linhasPorPagina,
+      offset: pagina * linhasPorPagina,
+      ...filtrosParaAplicar
+    };
+    if (janela > 0) {
+      const hoje = new Date();
+      filtrosCobrancas.dataFim = hoje.toISOString().split('T')[0];
+      const dataInicio = new Date(hoje);
+      dataInicio.setDate(hoje.getDate() - janela);
+      filtrosCobrancas.dataInicio = dataInicio.toISOString().split('T')[0];
+    }
+    const cobrancasResponse = await inadimplentesApi.listarCobrancas(filtrosCobrancas);
+    setCobrancasAtrasadas(cobrancasResponse.dados || []);
+    setTotalCobrancasAtrasadas(cobrancasResponse.total || 0);
+  };
+
+  const carregarDados = async (filtros = null, janela = janelaAtraso, pagina = pageCobrancas, linhasPorPagina = rowsPerPageCobrancas) => {
     const filtrosParaAplicar = prepararFiltrosDashboard(filtros || filtrosAplicados);
 
     try {
       setLoading(true);
 
-      // Carregar dashboard
-      const dashResponse = await inadimplentesApi.obterDashboard(filtrosParaAplicar);
+      const [dashResponse] = await Promise.all([
+        inadimplentesApi.obterDashboard(filtrosParaAplicar),
+        carregarCobrancas(filtros, janela, pagina, linhasPorPagina)
+      ]);
       setDashboard(dashResponse.dados);
-
-      // Carregar cobranças atrasadas
-      const cobrancasResponse = await inadimplentesApi.listarCobrancas({
-        status: 'atrasado',
-        limite: 10,
-        ...filtrosParaAplicar
-      });
-      setCobrancasAtrasadas(cobrancasResponse.dados || []);
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
       mostrarSnackbar('Erro ao carregar dados do dashboard', 'error');
@@ -344,19 +364,40 @@ function Dashboard() {
   const handleAplicarFiltros = async () => {
     const filtrosAtualizados = prepararFiltrosDashboard(filtrosDashboard);
     setFiltrosAplicados(filtrosAtualizados);
-    await carregarDados(filtrosAtualizados);
+    setPageCobrancas(0);
+    await carregarDados(filtrosAtualizados, janelaAtraso, 0, rowsPerPageCobrancas);
+  };
+
+  const handleJanelaChange = async (novaJanela) => {
+    setJanelaAtraso(novaJanela);
+    setPageCobrancas(0);
+    await carregarDados(null, novaJanela, 0, rowsPerPageCobrancas);
+  };
+
+  const handlePageCobrancasChange = async (_e, novaPagina) => {
+    setPageCobrancas(novaPagina);
+    await carregarCobrancas(null, janelaAtraso, novaPagina, rowsPerPageCobrancas);
+  };
+
+  const handleRowsPerPageCobrancasChange = async (e) => {
+    const novasLinhas = parseInt(e.target.value, 10);
+    setRowsPerPageCobrancas(novasLinhas);
+    setPageCobrancas(0);
+    await carregarCobrancas(null, janelaAtraso, 0, novasLinhas);
   };
 
   const handleLimparFiltros = async () => {
     const padrao = {
       consultorId: isConsultorPerfil ? consultorIdLogado : '',
       mes: '',
-      ano: ''
+      ano: anoAtual
     };
     setFiltrosDashboard(padrao);
+    setJanelaAtraso(30);
+    setPageCobrancas(0);
     const filtrosPadraoAplicados = prepararFiltrosDashboard(padrao);
     setFiltrosAplicados(filtrosPadraoAplicados);
-    await carregarDados(filtrosPadraoAplicados);
+    await carregarDados(filtrosPadraoAplicados, 30, 0, rowsPerPageCobrancas);
   };
 
   const handleDetectarInadimplencia = async () => {
@@ -833,9 +874,32 @@ function Dashboard() {
         {cobrancasAtrasadas.length > 0 && (
           <Card>
             <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Cobranças Atrasadas (Últimas 10)
-              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, flexWrap: 'wrap', gap: 1 }}>
+                <Typography variant="h6">
+                  Cobranças Atrasadas
+                  {janelaAtraso > 0
+                    ? ` — últimos ${janelaAtraso} dias (${totalCobrancasAtrasadas})`
+                    : ` — todas (${totalCobrancasAtrasadas})`}
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                  {[
+                    { label: '30 dias', value: 30 },
+                    { label: '60 dias', value: 60 },
+                    { label: '90 dias', value: 90 },
+                    { label: 'Todos', value: 0 }
+                  ].map(({ label, value }) => (
+                    <Chip
+                      key={value}
+                      label={label}
+                      size="small"
+                      color={janelaAtraso === value ? 'primary' : 'default'}
+                      variant={janelaAtraso === value ? 'filled' : 'outlined'}
+                      onClick={() => handleJanelaChange(value)}
+                      clickable
+                    />
+                  ))}
+                </Box>
+              </Box>
 
               <TableContainer component={Paper} variant="outlined">
                 <Table>
@@ -923,7 +987,19 @@ function Dashboard() {
                 </Table>
               </TableContainer>
 
-              <Box sx={{ mt: 2, textAlign: 'center' }}>
+              <TablePagination
+                component="div"
+                count={totalCobrancasAtrasadas}
+                page={pageCobrancas}
+                onPageChange={handlePageCobrancasChange}
+                rowsPerPage={rowsPerPageCobrancas}
+                onRowsPerPageChange={handleRowsPerPageCobrancasChange}
+                rowsPerPageOptions={[10, 25, 50]}
+                labelRowsPerPage="Linhas:"
+                labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
+              />
+
+              <Box sx={{ mt: 1, textAlign: 'center' }}>
                 <Button
                   variant="text"
                   onClick={() => navigate('/app/inadimplentes/cobrancas?status=atrasado')}

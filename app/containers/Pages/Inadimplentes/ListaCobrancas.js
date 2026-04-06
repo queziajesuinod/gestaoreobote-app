@@ -17,6 +17,7 @@ import {
   Tooltip,
   TextField,
   MenuItem,
+  ListSubheader,
   Grid,
   Button,
   CircularProgress,
@@ -57,15 +58,22 @@ function ListaCobrancas() {
   const tooltipRestritoCobrancas = 'Somente administradores e gestores podem alterar cobranças.';
 
   // Filtros
+  const anoAtual = String(new Date().getFullYear());
   const [filtros, setFiltros] = useState({
     status: searchParams.get('status') || '',
     processoCobrancaId: searchParams.get('processoId') || '',
     cotaId: searchParams.get('cotaId') || '',
     clienteId: searchParams.get('clienteId') || '',
-    consultorId: searchParams.get('consultorId') || ''
+    consultorId: searchParams.get('consultorId') || '',
+    mes: searchParams.get('mes') || '',
+    ano: searchParams.get('ano') || anoAtual,
+    administradora: searchParams.get('administradora') || ''
   });
   const [clientesFiltro, setClientesFiltro] = useState([]);
   const [cotasFiltro, setCotasFiltro] = useState([]);
+  const [administradoras, setAdministradoras] = useState([]);
+  const [buscaCliente, setBuscaCliente] = useState('');
+  const [buscaConsultor, setBuscaConsultor] = useState('');
 
   // Dialog de pagamento
   const [dialogPago, setDialogPago] = useState({
@@ -102,21 +110,10 @@ function ListaCobrancas() {
   useEffect(() => {
     carregarClientes();
     carregarCotas();
+    carregarAdministradoras();
   }, []);
 
-  const filtrosAtivos = useMemo(() => {
-    const ativo = { ...filtros };
-    if (isConsultorPerfil && consultorIdLogado) {
-      ativo.consultorId = consultorIdLogado;
-    }
-    Object.keys(ativo).forEach((key) => {
-      if (!ativo[key]) {
-        delete ativo[key];
-      }
-    });
-    return ativo;
-  }, [filtros, isConsultorPerfil, consultorIdLogado]);
-
+  // Filtra localmente apenas processos encerrados — os demais filtros são server-side
   const cobrancasVisiveis = useMemo(() => {
     return (cobrancas || []).filter((cobranca) => {
       const processoStatus = cobranca?.processoCobranca?.status?.toLowerCase?.();
@@ -124,43 +121,18 @@ function ListaCobrancas() {
     });
   }, [cobrancas]);
 
-  const cobrancasFiltradas = useMemo(() => {
-    if (!Object.keys(filtrosAtivos).length) {
-      return cobrancasVisiveis;
-    }
+  const clientesFiltrados = useMemo(() => {
+    if (!buscaCliente.trim()) return clientesFiltro;
+    const termo = buscaCliente.toLowerCase();
+    return clientesFiltro.filter(c => c.nome?.toLowerCase().includes(termo));
+  }, [clientesFiltro, buscaCliente]);
 
-    return cobrancasVisiveis.filter((cobranca) => {
-      if (filtrosAtivos.status && cobranca.status !== filtrosAtivos.status) {
-        return false;
-      }
+  const consultoresFiltrados = useMemo(() => {
+    if (!buscaConsultor.trim()) return consultoresFiltro;
+    const termo = buscaConsultor.toLowerCase();
+    return consultoresFiltro.filter(c => c.nome?.toLowerCase().includes(termo));
+  }, [consultoresFiltro, buscaConsultor]);
 
-      if (filtrosAtivos.processoCobrancaId) {
-        if (String(cobranca.processoCobrancaId) !== String(filtrosAtivos.processoCobrancaId)) {
-          return false;
-        }
-      }
-
-      if (filtrosAtivos.cotaId) {
-        if (String(cobranca.processoCobranca?.cota?.id) !== String(filtrosAtivos.cotaId)) {
-          return false;
-        }
-      }
-
-      if (filtrosAtivos.clienteId) {
-        if (String(cobranca.processoCobranca?.cota?.cliente?.id) !== String(filtrosAtivos.clienteId)) {
-          return false;
-        }
-      }
-
-      if (filtrosAtivos.consultorId) {
-        if (String(cobranca.processoCobranca?.cota?.consultor?.id) !== String(filtrosAtivos.consultorId)) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-  }, [cobrancasVisiveis, filtrosAtivos]);
 
   const carregarCobrancas = async () => {
     try {
@@ -226,6 +198,15 @@ function ListaCobrancas() {
     }
   };
 
+  const carregarAdministradoras = async () => {
+    try {
+      const lista = await inadimplentesApi.listarAdministradoras();
+      setAdministradoras(lista);
+    } catch (error) {
+      console.error('Erro ao carregar administradoras:', error);
+    }
+  };
+
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
   };
@@ -250,7 +231,9 @@ function ListaCobrancas() {
   };
 
   const handleLimparFiltros = () => {
-    setFiltros({ status: '', processoCobrancaId: '', cotaId: '', clienteId: '', consultorId: '' });
+    setFiltros({ status: '', processoCobrancaId: '', cotaId: '', clienteId: '', consultorId: '', mes: '', ano: anoAtual, administradora: '' });
+    setBuscaCliente('');
+    setBuscaConsultor('');
     setSearchParams({});
     setPage(0);
   };
@@ -340,7 +323,7 @@ function ListaCobrancas() {
         <Card sx={{ mb: 3 }}>
           <CardContent>
             <Grid container spacing={2} alignItems="center">
-              <Grid item xs={12} sm={4} md={3}>
+              <Grid item xs={12} sm={4} md={2}>
                 <TextField
                   select
                   fullWidth
@@ -356,7 +339,44 @@ function ListaCobrancas() {
                 </TextField>
               </Grid>
 
-              <Grid item xs={12} sm={4} md={3}>
+              <Grid item xs={6} sm={3} md={2}>
+                <TextField
+                  select
+                  fullWidth
+                  label="Mês"
+                  value={filtros.mes}
+                  onChange={(e) => handleFiltroChange('mes', e.target.value)}
+                  size="small"
+                >
+                  <MenuItem value="">Todos</MenuItem>
+                  {[
+                    ['01', 'Janeiro'], ['02', 'Fevereiro'], ['03', 'Março'],
+                    ['04', 'Abril'], ['05', 'Maio'], ['06', 'Junho'],
+                    ['07', 'Julho'], ['08', 'Agosto'], ['09', 'Setembro'],
+                    ['10', 'Outubro'], ['11', 'Novembro'], ['12', 'Dezembro']
+                  ].map(([v, label]) => (
+                    <MenuItem key={v} value={v}>{label}</MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+
+              <Grid item xs={6} sm={3} md={2}>
+                <TextField
+                  select
+                  fullWidth
+                  label="Ano"
+                  value={filtros.ano}
+                  onChange={(e) => handleFiltroChange('ano', e.target.value)}
+                  size="small"
+                >
+                  <MenuItem value="">Todos</MenuItem>
+                  {Array.from({ length: 5 }, (_, i) => String(Number(anoAtual) - 2 + i)).map(ano => (
+                    <MenuItem key={ano} value={ano}>{ano}</MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+
+              <Grid item xs={12} sm={4} md={2}>
                 <TextField
                   select
                   fullWidth
@@ -374,7 +394,7 @@ function ListaCobrancas() {
                 </TextField>
               </Grid>
 
-              <Grid item xs={12} sm={4} md={3}>
+              <Grid item xs={12} sm={4} md={2}>
                 <TextField
                   select
                   fullWidth
@@ -382,9 +402,22 @@ function ListaCobrancas() {
                   value={filtros.clienteId}
                   onChange={(e) => handleFiltroChange('clienteId', e.target.value)}
                   size="small"
+                  SelectProps={{ MenuProps: { autoFocus: false } }}
                 >
+                  <ListSubheader sx={{ pt: 1, pb: 0.5, lineHeight: 'normal' }}>
+                    <TextField
+                      size="small"
+                      placeholder="Buscar cliente..."
+                      value={buscaCliente}
+                      onChange={(e) => setBuscaCliente(e.target.value)}
+                      onKeyDown={(e) => e.stopPropagation()}
+                      onClick={(e) => e.stopPropagation()}
+                      fullWidth
+                      autoFocus={false}
+                    />
+                  </ListSubheader>
                   <MenuItem value="">Todos</MenuItem>
-                  {clientesFiltro.map((cliente) => (
+                  {clientesFiltrados.map((cliente) => (
                     <MenuItem key={cliente.id} value={cliente.id}>
                       {cliente.nome}
                     </MenuItem>
@@ -393,7 +426,7 @@ function ListaCobrancas() {
               </Grid>
 
               {podeSelecionarConsultor ? (
-                <Grid item xs={12} sm={4} md={3}>
+                <Grid item xs={12} sm={4} md={2}>
                   <TextField
                     select
                     fullWidth
@@ -401,9 +434,22 @@ function ListaCobrancas() {
                     value={filtros.consultorId}
                     onChange={(e) => handleFiltroChange('consultorId', e.target.value)}
                     size="small"
+                    SelectProps={{ MenuProps: { autoFocus: false } }}
                   >
+                    <ListSubheader sx={{ pt: 1, pb: 0.5, lineHeight: 'normal' }}>
+                      <TextField
+                        size="small"
+                        placeholder="Buscar consultor..."
+                        value={buscaConsultor}
+                        onChange={(e) => setBuscaConsultor(e.target.value)}
+                        onKeyDown={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
+                        fullWidth
+                        autoFocus={false}
+                      />
+                    </ListSubheader>
                     <MenuItem value="">Todos</MenuItem>
-                    {consultoresFiltro.map((consultor) => (
+                    {consultoresFiltrados.map((consultor) => (
                       <MenuItem key={consultor.id} value={String(consultor.id)}>
                         {consultor.nome}
                       </MenuItem>
@@ -412,13 +458,29 @@ function ListaCobrancas() {
                 </Grid>
               ) : (
                 isConsultorPerfil && (
-                  <Grid item xs={12} sm={4} md={3}>
+                  <Grid item xs={12} sm={4} md={2}>
                     <Typography variant="body2" color="textSecondary">
                       Consultor logado: {storedUser?.consultor?.nome || storedUser?.consultorNome || storedUser?.name || '—'}
                     </Typography>
                   </Grid>
                 )
               )}
+
+              <Grid item xs={12} sm={4} md={2}>
+                <TextField
+                  select
+                  fullWidth
+                  label="Administradora"
+                  value={filtros.administradora}
+                  onChange={(e) => handleFiltroChange('administradora', e.target.value)}
+                  size="small"
+                >
+                  <MenuItem value="">Todas</MenuItem>
+                  {administradoras.map((adm) => (
+                    <MenuItem key={adm} value={adm}>{adm}</MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
 
               <Grid item xs={12} sm={6} md={3}>
                 <Button
@@ -458,6 +520,7 @@ function ListaCobrancas() {
                 <TableRow>
                   <TableCell>Cota</TableCell>
                   <TableCell>Cliente</TableCell>
+                  <TableCell>Administradora</TableCell>
                   <TableCell>Mês Referência</TableCell>
                   <TableCell>Vencimento</TableCell>
                   <TableCell>Valor</TableCell>
@@ -469,20 +532,20 @@ function ListaCobrancas() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={8} align="center">
+                    <TableCell colSpan={9} align="center">
                       <CircularProgress />
                     </TableCell>
                   </TableRow>
-                ) : cobrancasFiltradas.length === 0 ? (
+                ) : cobrancasVisiveis.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} align="center">
+                    <TableCell colSpan={9} align="center">
                       <Typography variant="body2" color="textSecondary">
                         Nenhuma cobrança corresponde aos filtros aplicados
                       </Typography>
                     </TableCell>
                   </TableRow>
                 ) : (
-                  cobrancasFiltradas.map((cobranca) => (
+                  cobrancasVisiveis.map((cobranca) => (
                     <TableRow key={cobranca.id}>
                       <TableCell>
                         <Typography variant="body2">
@@ -498,6 +561,11 @@ function ListaCobrancas() {
                         </Typography>
                         <Typography variant="caption" color="textSecondary">
                           {cobranca.processoCobranca?.cota?.cliente?.telefone || '-'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {cobranca.processoCobranca?.cota?.administradora || '-'}
                         </Typography>
                       </TableCell>
                         <TableCell>

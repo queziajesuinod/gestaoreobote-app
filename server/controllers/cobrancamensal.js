@@ -9,7 +9,7 @@ module.exports = {
    */
   async listar(req, res) {
     try {
-      const { status, dataInicio, dataFim, processoCobrancaId, limite, pagina, offset, consultorId, mes, ano, cotaId, clienteId } = req.query;
+      const { status, dataInicio, dataFim, processoCobrancaId, limite, pagina, offset, consultorId, mes, ano, cotaId, clienteId, administradora } = req.query;
 
       const perfilUsuario = (req.user?.perfil || '').toUpperCase();
       const isConsultorPerfil = perfilUsuario === 'CONSULTOR';
@@ -34,6 +34,7 @@ module.exports = {
       if (ano) filtros.ano = ano;
       if (cotaId) filtros.cotaId = cotaId;
       if (clienteId) filtros.clienteId = clienteId;
+      if (administradora) filtros.administradora = administradora;
 
       const resultado = await cobrancaService.listarCobrancas(filtros);
 

@@ -522,8 +522,9 @@ class CobrancaService {
     const where = {};
     const consultorFiltro = filtros.consultorId || null;
     const periodo = this.montarRangeMesReferencia(filtros.mes, filtros.ano);
-    const cotaFiltro = filtros.cotaId;
-    const clienteFiltro = filtros.clienteId;
+    const cotaFiltro = filtros.cotaId || null;
+    const clienteFiltro = filtros.clienteId || null;
+    const administradoraFiltro = filtros.administradora || null;
 
     // Filtro por status
     if (filtros.status) {
@@ -549,13 +550,11 @@ class CobrancaService {
       where.processoCobrancaId = filtros.processoCobrancaId;
     }
 
+    // IDs de cliente e cota são UUID (string) — não usar parseNumero
     const clienteInclude = { association: 'cliente' };
     if (clienteFiltro) {
-      const clienteId = this.parseNumero(clienteFiltro);
-      if (Number.isFinite(clienteId)) {
-        clienteInclude.where = { id: clienteId };
-        clienteInclude.required = true;
-      }
+      clienteInclude.where = { id: clienteFiltro };
+      clienteInclude.required = true;
     }
 
     const consultorInclude = { association: 'consultor' };
@@ -564,18 +563,20 @@ class CobrancaService {
       consultorInclude.required = true;
     }
 
+    const cotaFiltroAtivo = !!(clienteFiltro || consultorFiltro || cotaFiltro || administradoraFiltro);
+
     const cotaInclude = {
       association: 'cota',
-      include: [
-        clienteInclude,
-        consultorInclude
-      ]
+      include: [clienteInclude, consultorInclude],
+      required: cotaFiltroAtivo
     };
 
-    const cotaIdFiltro = this.parseNumero(cotaFiltro);
-    if (Number.isFinite(cotaIdFiltro)) {
-      cotaInclude.where = { id: cotaIdFiltro };
-      cotaInclude.required = true;
+    if (cotaFiltro) {
+      cotaInclude.where = { id: cotaFiltro };
+    }
+
+    if (administradoraFiltro) {
+      cotaInclude.where = { ...(cotaInclude.where || {}), administradora: administradoraFiltro };
     }
 
     const limite = filtros.limite ? parseInt(filtros.limite, 10) : 50;
@@ -588,13 +589,15 @@ class CobrancaService {
       include: [
         {
           association: 'processoCobranca',
-          include: [cotaInclude]
+          include: [cotaInclude],
+          required: cotaFiltroAtivo  // INNER JOIN quando há filtro aninhado
         }
       ],
       order: [['dataVencimento', 'DESC']],
       limit: limite,
       offset,
-      distinct: true
+      distinct: true,
+      subQuery: false
     };
 
     // Buscar cobranças com total

@@ -1,4 +1,5 @@
 const cobrancaService = require('../services/cobranca');
+const { QueryTypes } = require('sequelize');
 const {
   ProcessoCobranca,
   Cota,
@@ -6,6 +7,7 @@ const {
   CobrancaMensal,
   NotificacaoCobranca
 } = require('../models');
+const SCHEMA = (process.env.DB_SCHEMA || 'dev').trim();
 
 module.exports = {
   /**
@@ -147,9 +149,28 @@ module.exports = {
    * GET /api/inadimplentes/processos
    * Listar processos de cobrança
    */
+  async listarAdministradoras(req, res) {
+    try {
+      const sequelize = Cota.sequelize;
+      const rows = await sequelize.query(
+        `SELECT DISTINCT administradora FROM "${SCHEMA}"."cotas"
+         WHERE administradora IS NOT NULL AND administradora <> ''
+         ORDER BY administradora ASC`,
+        { type: QueryTypes.SELECT }
+      );
+      return res.status(200).json({
+        sucesso: true,
+        dados: rows.map(r => r.administradora)
+      });
+    } catch (erro) {
+      console.error('[ProcessoCobranca] Erro ao listar administradoras:', erro);
+      return res.status(500).json({ sucesso: false, mensagem: 'Erro ao listar administradoras' });
+    }
+  },
+
   async listar(req, res) {
     try {
-      const { status, cotaId, clienteId, consultorId, diaVencimento, limite, offset } = req.query;
+      const { status, cotaId, clienteId, consultorId, diaVencimento, administradora, limite, offset } = req.query;
 
       const perfilUsuario = (req.user?.perfil || '').toUpperCase();
       const ehAdminOuMaster = ['ADMIN', 'MASTER'].includes(perfilUsuario);
@@ -173,6 +194,8 @@ module.exports = {
         }
       }
 
+      const filtragemAtiva = !!(clienteId || filtroConsultor || administradora);
+
       const includeCliente = { association: 'cliente' };
       if (clienteId) {
         includeCliente.where = { id: clienteId };
@@ -185,24 +208,41 @@ module.exports = {
         includeConsultor.required = true;
       }
 
+      // Include direto para processos tipo 'unico'
+      const cotaUnicoInclude = {
+        association: 'cota',
+        include: [includeCliente, includeConsultor],
+        required: filtragemAtiva
+      };
+
+      if (administradora) {
+        cotaUnicoInclude.where = { ...(cotaUnicoInclude.where || {}), administradora };
+      }
+
+      // Include para processos tipo 'multiplo' (apenas para exibição de dados)
+      const cotasProcessoInclude = {
+        association: 'cotasProcesso',
+        required: false,
+        include: [{
+          association: 'cota',
+          include: [
+            { association: 'cliente' },
+            { association: 'consultor' }
+          ]
+        }]
+      };
+
       const limiteNum = limite ? parseInt(limite, 10) : 50;
       const offsetNum = offset ? parseInt(offset, 10) : 0;
 
       const { count: total, rows: processos } = await ProcessoCobranca.findAndCountAll({
         where,
-        include: [
-          {
-            association: 'cota',
-            include: [
-              includeCliente,
-              includeConsultor
-            ]
-          }
-        ],
+        include: [cotaUnicoInclude, cotasProcessoInclude],
         order: [['createdAt', 'DESC']],
         limit: limiteNum,
         offset: offsetNum,
-        distinct: true
+        distinct: true,
+        subQuery: false
       });
 
       return res.status(200).json({

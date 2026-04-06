@@ -14,6 +14,7 @@ import {
   FormControl,
   IconButton,
   InputLabel,
+  ListSubheader,
   MenuItem,
   Paper,
   Select,
@@ -239,6 +240,10 @@ function ListaProcessos() {
   const [filtroStatus, setFiltroStatus] = useState('');
   const [clientesFiltro, setClientesFiltro] = useState([]);
   const [consultoresFiltro, setConsultoresFiltro] = useState([]);
+  const [buscaCliente, setBuscaCliente] = useState('');
+  const [buscaConsultor, setBuscaConsultor] = useState('');
+  const [administradoras, setAdministradoras] = useState([]);
+  const [filtroAdministradora, setFiltroAdministradora] = useState('');
   const [filtroCliente, setFiltroCliente] = useState('');
   const [filtroConsultor, setFiltroConsultor] = useState(() => {
     const u = getStoredUser();
@@ -248,6 +253,8 @@ function ListaProcessos() {
   const [importandoArquivo, setImportandoArquivo] = useState(false);
   const [progressoImportacao, setProgressoImportacao] = useState(criarEstadoInicialImportacao);
   const inputImportacaoRef = useRef(null);
+  const [qtdMesesLocal, setQtdMesesLocal] = useState({});
+  const debounceQtdRef = useRef({});
   const [storedUser, setStoredUserState] = useState(() => getStoredUser());
   const perfilUsuario = storedUser?.perfil?.toUpperCase() || '';
   const isConsultorPerfil = perfilUsuario === 'CONSULTOR';
@@ -255,6 +262,12 @@ function ListaProcessos() {
   const consultorIdLogado = storedUser?.consultorId ? String(storedUser.consultorId) : '';
   const consultorNomeLogado = storedUser?.consultor?.nome || storedUser?.consultorNome || storedUser?.name || '';
   const podeGerenciarProcessos = !isConsultorPerfil;
+  const clientesFiltrados = buscaCliente.trim()
+    ? clientesFiltro.filter(c => c.nome?.toLowerCase().includes(buscaCliente.toLowerCase()))
+    : clientesFiltro;
+  const consultoresFiltrados = buscaConsultor.trim()
+    ? consultoresFiltro.filter(c => c.nome?.toLowerCase().includes(buscaConsultor.toLowerCase()))
+    : consultoresFiltro;
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [totalProcessos, setTotalProcessos] = useState(0);
@@ -287,12 +300,16 @@ function ListaProcessos() {
   // Carregar processos
   useEffect(() => {
     carregarProcessos();
-  }, [filtroStatus, filtroCliente, filtroConsultor, filtroDiaVencimento, page, rowsPerPage]);
+  }, [filtroStatus, filtroCliente, filtroConsultor, filtroAdministradora, filtroDiaVencimento, page, rowsPerPage]);
 
   useEffect(() => {
     carregarConsultores();
     carregarClientes();
   }, [podeSelecionarConsultor]);
+
+  useEffect(() => {
+    carregarAdministradoras();
+  }, []);
 
   const carregarProcessos = async () => {
     try {
@@ -303,6 +320,7 @@ function ListaProcessos() {
       };
       if (filtroStatus) filtros.status = filtroStatus;
       if (filtroCliente) filtros.clienteId = filtroCliente;
+      if (filtroAdministradora) filtros.administradora = filtroAdministradora;
       if (isConsultorPerfil && consultorIdLogado) {
         filtros.consultorId = consultorIdLogado;
       } else if (filtroConsultor) {
@@ -329,6 +347,26 @@ function ListaProcessos() {
     setSnackbar({ ...snackbar, open: false });
   };
 
+  const handleQtdMesesChange = (processoId, valor) => {
+    setQtdMesesLocal(prev => ({ ...prev, [processoId]: valor }));
+
+    if (debounceQtdRef.current[processoId]) {
+      clearTimeout(debounceQtdRef.current[processoId]);
+    }
+
+    debounceQtdRef.current[processoId] = setTimeout(async () => {
+      try {
+        const num = valor === '' ? null : parseInt(valor, 10);
+        if (valor !== '' && (Number.isNaN(num) || num < 1)) return;
+        await inadimplentesApi.atualizarProcesso(processoId, { quantidadeMeses: num });
+        setProcessos(prev => prev.map(p => p.id === processoId ? { ...p, quantidadeMeses: num } : p));
+      } catch (err) {
+        console.error('Erro ao atualizar quantidade de meses:', err);
+        mostrarSnackbar('Erro ao atualizar quantidade de meses', 'error');
+      }
+    }, 700);
+  };
+
   const carregarConsultores = async () => {
     if (!podeSelecionarConsultor) {
       setConsultoresFiltro([]);
@@ -350,6 +388,15 @@ function ListaProcessos() {
       setClientesFiltro(Array.isArray(lista) ? lista : []);
     } catch (error) {
       console.error('Erro ao carregar clientes:', error);
+    }
+  };
+
+  const carregarAdministradoras = async () => {
+    try {
+      const lista = await inadimplentesApi.listarAdministradoras();
+      setAdministradoras(lista);
+    } catch (error) {
+      console.error('Erro ao carregar administradoras:', error);
     }
   };
 
@@ -897,9 +944,21 @@ function ListaProcessos() {
               value={filtroCliente}
               label="Filtrar por Cliente"
               onChange={(event) => { setPage(0); setFiltroCliente(event.target.value); }}
+              MenuProps={{ autoFocus: false }}
             >
+              <ListSubheader sx={{ pt: 1, pb: 0.5, lineHeight: 'normal' }}>
+                <TextField
+                  size="small"
+                  placeholder="Buscar cliente..."
+                  value={buscaCliente}
+                  onChange={(e) => setBuscaCliente(e.target.value)}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
+                  fullWidth
+                />
+              </ListSubheader>
               <MenuItem value="">Todos</MenuItem>
-              {clientesFiltro.map((cliente) => (
+              {clientesFiltrados.map((cliente) => (
                 <MenuItem key={cliente.id} value={cliente.id}>
                   {cliente.nome}
                 </MenuItem>
@@ -914,9 +973,21 @@ function ListaProcessos() {
                 value={filtroConsultor}
                 label="Filtrar por Consultor"
                 onChange={(event) => { setPage(0); setFiltroConsultor(event.target.value); }}
+                MenuProps={{ autoFocus: false }}
               >
+                <ListSubheader sx={{ pt: 1, pb: 0.5, lineHeight: 'normal' }}>
+                  <TextField
+                    size="small"
+                    placeholder="Buscar consultor..."
+                    value={buscaConsultor}
+                    onChange={(e) => setBuscaConsultor(e.target.value)}
+                    onKeyDown={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                    fullWidth
+                  />
+                </ListSubheader>
                 <MenuItem value="">Todos</MenuItem>
-                {consultoresFiltro.map((consultor) => (
+                {consultoresFiltrados.map((consultor) => (
                   <MenuItem key={consultor.id} value={String(consultor.id)}>
                     {consultor.nome}
                   </MenuItem>
@@ -941,6 +1012,20 @@ function ListaProcessos() {
             inputProps={{ min: 1, max: 31 }}
           />
 
+          <FormControl sx={{ minWidth: 200 }}>
+            <InputLabel>Administradora</InputLabel>
+            <Select
+              value={filtroAdministradora}
+              label="Administradora"
+              onChange={(event) => { setPage(0); setFiltroAdministradora(event.target.value); }}
+            >
+              <MenuItem value="">Todas</MenuItem>
+              {administradoras.map((adm) => (
+                <MenuItem key={adm} value={adm}>{adm}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
           <Box sx={{ flexGrow: 1 }} />
 
           <Tooltip title="Atualizar">
@@ -963,8 +1048,10 @@ function ListaProcessos() {
                   <TableRow>
                     <TableCell>Cota</TableCell>
                     <TableCell>Cliente</TableCell>
+                    <TableCell>Administradora</TableCell>
                     <TableCell>Consultor</TableCell>
                     <TableCell>Dia Vencimento</TableCell>
+                    <TableCell>Qtd Meses</TableCell>
                     <TableCell>Status</TableCell>
                     <TableCell align="right">Ações</TableCell>
                   </TableRow>
@@ -972,38 +1059,67 @@ function ListaProcessos() {
                 <TableBody>
                   {processos.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} align="center">
+                      <TableCell colSpan={8} align="center">
                         <Typography variant="body2" color="textSecondary">
                           Nenhum processo encontrado
                         </Typography>
                       </TableCell>
                     </TableRow>
                   ) : (
-                    processos.map((processo) => (
+                    processos.map((processo) => {
+                      // Para processos 'multiplo', os dados de cota/cliente/consultor
+                      // ficam em cotasProcesso[]. Usamos a primeira cota como referência.
+                      const cotaRef = processo.cota || processo.cotasProcesso?.[0]?.cota || null;
+                      const diaVencRef = processo.diaVencimento ?? processo.cotasProcesso?.[0]?.diaVencimento;
+                      return (
                       <TableRow key={processo.id} hover>
                         <TableCell>
                           <Typography variant="body2" fontWeight="bold">
-                            {processo.cota?.cota || '-'}
+                            {processo.tipo === 'multiplo'
+                              ? `${processo.cotasProcesso?.length || 0} cotas`
+                              : (cotaRef?.cota || '-')}
                           </Typography>
                           <Typography variant="caption" color="textSecondary">
-                            Grupo: {processo.cota?.grupo || '-'}
+                            {processo.tipo === 'multiplo'
+                              ? processo.nome || 'Processo múltiplo'
+                              : `Grupo: ${cotaRef?.grupo || '-'}`}
                           </Typography>
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2">
-                            {processo.cota?.cliente?.nome || '-'}
+                            {cotaRef?.cliente?.nome || '-'}
                           </Typography>
                           <Typography variant="caption" color="textSecondary">
-                            {processo.cota?.cliente?.telefone || '-'}
+                            {cotaRef?.cliente?.telefone || '-'}
                           </Typography>
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2">
-                            {processo.cota?.consultor?.nome || '-'}
+                            {cotaRef?.administradora || '-'}
                           </Typography>
                         </TableCell>
                         <TableCell>
-                          Dia {processo.diaVencimento}
+                          <Typography variant="body2">
+                            {cotaRef?.consultor?.nome || '-'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          {diaVencRef ? `Dia ${diaVencRef}` : '-'}
+                        </TableCell>
+                        <TableCell sx={{ minWidth: 90 }}>
+                          {processo.tipo === 'multiplo' ? (
+                            <Typography variant="caption" color="textSecondary">—</Typography>
+                          ) : (
+                            <TextField
+                              size="small"
+                              type="number"
+                              value={qtdMesesLocal[processo.id] ?? (processo.quantidadeMeses ?? '')}
+                              onChange={(e) => handleQtdMesesChange(processo.id, e.target.value)}
+                              inputProps={{ min: 1, style: { width: 52 } }}
+                              sx={{ width: 72 }}
+                              disabled={!podeGerenciarProcessos}
+                            />
+                          )}
                         </TableCell>
                         <TableCell>
                           <Chip
@@ -1100,7 +1216,8 @@ function ListaProcessos() {
                           )}
                         </TableCell>
                       </TableRow>
-                    ))
+                      );
+                    })
                   )}
                 </TableBody>
               </Table>

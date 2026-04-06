@@ -33,6 +33,7 @@ export const listarProcessos = async (filtros = {}) => {
   if (filtros.clienteId) params.append('clienteId', filtros.clienteId);
   if (filtros.consultorId) params.append('consultorId', filtros.consultorId);
   if (filtros.diaVencimento) params.append('diaVencimento', filtros.diaVencimento);
+  if (filtros.administradora) params.append('administradora', filtros.administradora);
   if (filtros.limite) params.append('limite', filtros.limite);
   if (filtros.offset !== undefined) params.append('offset', filtros.offset);
 
@@ -115,6 +116,15 @@ export const encerrarProcesso = async (id) => {
   return response.json();
 };
 
+export const listarAdministradoras = async () => {
+  const response = await fetch(`${API_URL}/api/inadimplentes/administradoras`, {
+    headers: getHeaders()
+  });
+  if (!response.ok) throw new Error('Erro ao listar administradoras');
+  const data = await response.json();
+  return Array.isArray(data?.dados) ? data.dados : [];
+};
+
 export const listarConsultores = async () => {
   const response = await fetch(`${API_URL}/consultor`, {
     headers: getHeaders()
@@ -177,9 +187,13 @@ export const listarCobrancas = async (filtros = {}) => {
   const params = new URLSearchParams();
   if (filtros.status) params.append('status', filtros.status);
   if (filtros.processoId) params.append('processoId', filtros.processoId);
+  if (filtros.processoCobrancaId) params.append('processoCobrancaId', filtros.processoCobrancaId);
+  if (filtros.clienteId) params.append('clienteId', filtros.clienteId);
+  if (filtros.cotaId) params.append('cotaId', filtros.cotaId);
+  if (filtros.consultorId) params.append('consultorId', filtros.consultorId);
+  if (filtros.administradora) params.append('administradora', filtros.administradora);
   if (filtros.dataInicio) params.append('dataInicio', filtros.dataInicio);
   if (filtros.dataFim) params.append('dataFim', filtros.dataFim);
-  if (filtros.consultorId) params.append('consultorId', filtros.consultorId);
   if (filtros.mes) params.append('mes', filtros.mes);
   if (filtros.ano) params.append('ano', filtros.ano);
   if (filtros.pagina) params.append('pagina', filtros.pagina);
@@ -588,6 +602,7 @@ export default {
   pausarProcesso,
   reativarProcesso,
   encerrarProcesso,
+  listarAdministradoras,
   listarConsultores,
   listarClientes,
   listarCotas,
