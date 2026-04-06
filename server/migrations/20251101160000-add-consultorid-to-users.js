@@ -1,27 +1,34 @@
-const SCHEMA = process.env.DB_SCHEMA || 'dev';
+const SCHEMA = (process.env.DB_SCHEMA || 'dev').trim();
 
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.addColumn(
-      { schema: SCHEMA, tableName: 'Users' },
-      'consultorId',
-      {
-        type: Sequelize.INTEGER,
-        allowNull: true,
-        references: {
-          model: { schema: SCHEMA, tableName: 'consultores' },
-          key: 'id'
-        },
-        onUpdate: 'SET NULL',
-        onDelete: 'SET NULL'
-      }
-    );
+    const table = { schema: SCHEMA, tableName: 'Users' };
+
+    const desc = await queryInterface.describeTable(table);
+
+    // se já existe, segue para a próxima migration
+    if (desc.consultorId) return;
+
+    await queryInterface.addColumn(table, 'consultorId', {
+      type: Sequelize.INTEGER,
+      allowNull: true,
+      references: {
+        model: { schema: SCHEMA, tableName: 'consultores' },
+        key: 'id',
+      },
+      onUpdate: 'SET NULL',
+      onDelete: 'SET NULL',
+    });
   },
 
   async down(queryInterface) {
-    await queryInterface.removeColumn(
-      { schema: SCHEMA, tableName: 'Users' },
-      'consultorId'
-    );
-  }
+    const table = { schema: SCHEMA, tableName: 'Users' };
+
+    const desc = await queryInterface.describeTable(table);
+
+    // só remove se existir
+    if (!desc.consultorId) return;
+
+    await queryInterface.removeColumn(table, 'consultorId');
+  },
 };

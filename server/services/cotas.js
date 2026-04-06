@@ -7,7 +7,7 @@ const {
   CotaConsultor
 } = require('../models');
 
-const TIPOS_CONTEMPLACAO = ['LANCE_FIXO', 'LANCE_LIVRE', 'SORTEIO'];
+const TIPOS_CONTEMPLACAO = ['LANCE_FIXO', 'LANCE_LIVRE', 'SORTEIO','PONTUAL'];
 
 const contemplacaoInclude = {
   model: Contemplacao,
@@ -185,14 +185,29 @@ async function criarCota(data = {}) {
 }
 
 // 🔹 Listar todas as cotas
-async function listarCotas(consultorId = null) {
+async function listarCotas(consultorId = null, filtros = {}) {
+  const { clienteId, grupo, busca, limit } = filtros;
+  
   const consultoresInclude = buildConsultoresInclude(
     consultorId
       ? { required: true, where: { id: consultorId } }
       : {}
   );
 
-  const registros = await Cota.findAll({
+  // Construir where clause
+  const where = {};
+  if (clienteId) where.clienteId = clienteId;
+  if (grupo) where.grupo = grupo;
+  if (busca) {
+    const { Op } = require('sequelize');
+    where[Op.or] = [
+      { cota: { [Op.like]: `%${busca}%` } },
+      { digito: { [Op.like]: `%${busca}%` } }
+    ];
+  }
+
+  const options = {
+    where,
     include: [
       consultoresInclude,
       consultorSingularInclude,
@@ -204,7 +219,11 @@ async function listarCotas(consultorId = null) {
       contemplacaoInclude
     ],
     distinct: true
-  });
+  };
+  
+  if (limit) options.limit = parseInt(limit, 10);
+
+  const registros = await Cota.findAll(options);
 
   return mapearCotasParaResposta(registros);
 }

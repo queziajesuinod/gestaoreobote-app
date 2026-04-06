@@ -7,10 +7,15 @@ const {
   getPermissoesDisponiveis
 } = require('../services/perfil');
 
+const ehAdminOuMaster = (perfilToken = '') => {
+  const perfilNormalizado = String(perfilToken || '').toUpperCase();
+  return perfilNormalizado === 'ADMIN' || perfilNormalizado === 'MASTER';
+};
+
 async function getPerfils(req, res) {
   try {
     const perfilToken = req.user?.perfil ? req.user.perfil.toUpperCase() : '';
-    if (perfilToken !== 'ADMIN') {
+    if (!ehAdminOuMaster(perfilToken)) {
       return res.status(403).json({ message: 'Apenas administradores podem visualizar perfis.' });
     }
 
@@ -25,7 +30,7 @@ async function getPerfils(req, res) {
 async function getPerfilDetalhe(req, res) {
   try {
     const perfilToken = req.user?.perfil ? req.user.perfil.toUpperCase() : '';
-    if (perfilToken !== 'ADMIN') {
+    if (!ehAdminOuMaster(perfilToken)) {
       return res.status(403).json({ message: 'Apenas administradores podem visualizar perfis.' });
     }
 
@@ -40,7 +45,7 @@ async function getPerfilDetalhe(req, res) {
 async function postPerfil(req, res) {
   try {
     const perfilToken = req.user?.perfil ? req.user.perfil.toUpperCase() : '';
-    if (perfilToken !== 'ADMIN') {
+    if (!ehAdminOuMaster(perfilToken)) {
       return res.status(403).json({ message: 'Apenas administradores podem criar perfis.' });
     }
 
@@ -55,7 +60,7 @@ async function postPerfil(req, res) {
 async function getPermissoes(req, res) {
   try {
     const perfilToken = req.user?.perfil ? req.user.perfil.toUpperCase() : '';
-    if (perfilToken !== 'ADMIN') {
+    if (!ehAdminOuMaster(perfilToken)) {
       return res.status(403).json({ message: 'Apenas administradores podem visualizar permissões.' });
     }
 
@@ -70,7 +75,7 @@ async function getPermissoes(req, res) {
 async function updatePermissoes(req, res) {
   try {
     const perfilToken = req.user?.perfil ? req.user.perfil.toUpperCase() : '';
-    if (perfilToken !== 'ADMIN') {
+    if (!ehAdminOuMaster(perfilToken)) {
       return res.status(403).json({ message: 'Apenas administradores podem alterar permissões.' });
     }
 
@@ -86,7 +91,7 @@ async function updatePermissoes(req, res) {
 async function getPermissoesCatalogo(req, res) {
   try {
     const perfilToken = req.user?.perfil ? req.user.perfil.toUpperCase() : '';
-    if (perfilToken !== 'ADMIN') {
+    if (!ehAdminOuMaster(perfilToken)) {
       return res.status(403).json({ message: 'Apenas administradores podem visualizar permissões.' });
     }
 

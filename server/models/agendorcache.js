@@ -1,5 +1,7 @@
 'use strict';
 const { Model } = require('sequelize');
+const resolveSchema = require('../config/schema');
+const SCHEMA = resolveSchema('dev');
 
 module.exports = (sequelize, DataTypes) => {
   class AgendorCache extends Model {}
@@ -50,7 +52,7 @@ module.exports = (sequelize, DataTypes) => {
       sequelize,
       modelName: 'AgendorCache',
       tableName: 'agendor_cache',
-      schema: process.env.DB_SCHEMA || 'dev'
+      schema: SCHEMA
     }
   );
 

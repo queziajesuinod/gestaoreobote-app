@@ -112,6 +112,46 @@ export const buildMenu = (permissoes = []) => {
     });
   }
 
+  // Módulo de Inadimplentes
+  if (hasPermissao('GESTAO') || hasPermissao('CLIENTES_ALL') || hasPermissao('ADMIN')) {
+    const inadimplentesChild = [
+      {
+        key: 'inadimplentes_dashboard',
+        name: 'Dashboard',
+        link: '/app/inadimplentes/dashboard-inadiplentes',
+        icon: 'ion-ios-pie-outline'
+      },
+      {
+        key: 'inadimplentes_processos',
+        name: 'Processos',
+        link: '/app/inadimplentes/processos',
+        icon: 'ion-ios-list-outline'
+      },
+      {
+        key: 'inadimplentes_cobrancas',
+        name: 'Cobranças',
+        link: '/app/inadimplentes/cobrancas',
+        icon: 'ion-ios-cash-outline'
+      }
+    ];
+
+    if (hasPermissao('WEBHOOK_CONFIG')) {
+      inadimplentesChild.push({
+        key: 'inadimplentes_webhook',
+        name: 'Configurações Webhook',
+        link: '/app/inadimplentes/webhook',
+        icon: 'ion-ios-gear-outline'
+      });
+    }
+
+    menu.push({
+      key: 'inadimplentes',
+      name: 'Inadimplentes',
+      icon: 'ion-ios-alert-outline',
+      child: inadimplentesChild
+    });
+  }
+
   
 
   menu.push({

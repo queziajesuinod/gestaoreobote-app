@@ -1,4 +1,6 @@
 const { Model } = require('sequelize');
+const resolveSchema = require('../config/schema');
+const SCHEMA = resolveSchema('dev');
 
 module.exports = (sequelize, DataTypes) => {
   class Perfil extends Model {
@@ -25,7 +27,7 @@ module.exports = (sequelize, DataTypes) => {
     sequelize,
     modelName: 'Perfil',
     tableName: 'Perfis', // Define explicitamente o nome da tabela
-    schema: process.env.DB_SCHEMA || 'dev'
+    schema: SCHEMA
   });
 
   return Perfil;

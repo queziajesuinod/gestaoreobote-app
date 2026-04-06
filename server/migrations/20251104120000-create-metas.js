@@ -1,4 +1,4 @@
-const SCHEMA = process.env.DB_SCHEMA || 'dev';
+const SCHEMA = (process.env.DB_SCHEMA || 'dev').trim();
 
 module.exports = {
   async up(queryInterface, Sequelize) {

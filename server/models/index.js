@@ -9,6 +9,8 @@ dotenv.config();
 const basename = path.basename(__filename);
 const env = process.env.NODE_ENV || 'development';
 const config = require(__dirname + '/../config/config.js')[env];
+const resolveSchema = require('../config/schema');
+const DEFAULT_SCHEMA = resolveSchema(env === 'production' ? 'public' : 'dev');
 const db = {};
 
 const sequelize = new Sequelize(
@@ -21,7 +23,7 @@ const sequelize = new Sequelize(
     dialect: config.dialect,
     dialectOptions: config.dialectOptions,
     define: {
-      schema: process.env.DB_SCHEMA || 'dev' // 👈 Isso aplica o schema para todos os models por padrão
+      schema: DEFAULT_SCHEMA // 👈 Isso aplica o schema para todos os models por padrão
     }
   }
 );

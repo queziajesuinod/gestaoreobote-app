@@ -3,7 +3,7 @@
 const { Model } = require('sequelize');
 
 module.exports = (sequelize, DataTypes) => {
-  const SCHEMA = process.env.DB_SCHEMA || 'dev';
+  const SCHEMA = (process.env.DB_SCHEMA || 'dev').trim();
 
   class Meta extends Model {
     static associate() {

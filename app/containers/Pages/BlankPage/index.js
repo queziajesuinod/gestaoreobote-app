@@ -695,6 +695,7 @@ function BlankPage() {
                           </Avatar>
                         </ListItemAvatar>
                         <ListItemText
+                          disableTypography
                           primary={
                             <Box display="flex" justifyContent="space-between" alignItems="center">
                               <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
@@ -709,7 +710,7 @@ function BlankPage() {
                             </Box>
                           }
                           secondary={
-                            <Box component="span">
+                            <Box component="div">
                               <Typography variant="body2" color="textSecondary">
                                 {cliente.cidade}{cliente.estado ? ` • ${cliente.estado}` : ''}
                               </Typography>

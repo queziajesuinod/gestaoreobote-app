@@ -18,10 +18,19 @@ import {
   ProfilePage,
   UsersAdmin,
   PerfisAdmin,
+<<<<<<< HEAD
   LeadsPage,
   LeadDetalhes,
   LeadsInsights,
   EvolutionConfig
+=======
+  InadimplentesProcessos,
+  InadimplentesFormulario,
+  InadimplentesDetalhes,
+  InadimplentesWebhook,
+  InadimplenteDashboard,
+  InadimplentesCobrancas
+>>>>>>> main
 } from '../pageListAsync';
 
 function Application({ isAuthenticated }) {
@@ -95,6 +104,36 @@ function Application({ isAuthenticated }) {
         <Route
           path="perfis"
           element={<ProtectedRoute element={<PerfisAdmin />} isAuthenticated={isAuthenticated} />}
+        />
+
+        {/* Rotas do Módulo de Inadimplentes */}
+        <Route
+          path="inadimplentes/dashboard-inadiplentes"
+          element={<ProtectedRoute element={<InadimplenteDashboard />} isAuthenticated={isAuthenticated} />}
+        />
+        <Route
+          path="inadimplentes/processos"
+          element={<ProtectedRoute element={<InadimplentesProcessos />} isAuthenticated={isAuthenticated} />}
+        />
+        <Route
+          path="inadimplentes/processos-novo"
+          element={<ProtectedRoute element={<InadimplentesFormulario />} isAuthenticated={isAuthenticated} />}
+        />
+        <Route
+          path="inadimplentes/processos/:id/editar"
+          element={<ProtectedRoute element={<InadimplentesFormulario />} isAuthenticated={isAuthenticated} />}
+        />
+        <Route
+          path="inadimplentes/processos/:id"
+          element={<ProtectedRoute element={<InadimplentesDetalhes />} isAuthenticated={isAuthenticated} />}
+        />
+        <Route
+          path="inadimplentes/webhook"
+          element={<ProtectedRoute element={<InadimplentesWebhook />} isAuthenticated={isAuthenticated} />}
+        />
+        <Route
+          path="inadimplentes/cobrancas"
+          element={<ProtectedRoute element={<InadimplentesCobrancas />} isAuthenticated={isAuthenticated} />}
         />
 
       </Routes>

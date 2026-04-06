@@ -4,7 +4,7 @@ const ExcelJS = require('exceljs');
 const normalizarPerfil = (perfil) => (perfil ? String(perfil).toUpperCase() : '');
 const usuarioEhAdminOuRh = (perfil) => {
   const normalizado = normalizarPerfil(perfil);
-  return normalizado === 'ADMIN' || normalizado === 'RH';
+  return normalizado === 'ADMIN' || normalizado === 'RH' || normalizado === 'MASTER';
 };
 const usuarioEhGestor = (perfil) => normalizarPerfil(perfil) === 'GESTOR';
 const usuarioEhConsultorRestrito = (perfil, consultorId) => Boolean(consultorId)
@@ -35,15 +35,24 @@ async function criar(req, res) {
   }
 }
 
-// 🔹 Listar todas
+// 🔹 Listar todas (com filtros opcionais)
 async function listar(req, res) {
   try {
     const perfil = normalizarPerfil(req.user?.perfil);
     const consultorId = req.user?.consultorId ? Number(req.user.consultorId) : null;
     const isConsultor = usuarioEhConsultorRestrito(perfil, consultorId);
-    const cotas = await cotaService.listarCotas(isConsultor ? consultorId : null);
+    
+    // Aplicar filtros se fornecidos
+    const { clienteId, grupo, busca, limit } = req.query;
+    
+    const cotas = await cotaService.listarCotas(
+      isConsultor ? consultorId : null,
+      { clienteId, grupo, busca, limit }
+    );
+    
     return res.json(cotas);
   } catch (error) {
+    console.error('❌ Erro ao listar cotas:', error);
     return res.status(500).json({ message: 'Erro ao listar cotas', error });
   }
 }

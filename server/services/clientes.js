@@ -131,6 +131,69 @@ async function getClientesPorConsultor(consultorId) {
   });
 }
 
+async function buscarClientesPorConsultor(consultorId, busca = '', limit = 0) {
+  if (!consultorId) {
+    return [];
+  }
+
+  const atributosBase = [
+    'id',
+    'nome',
+    'cpf',
+    'cidade',
+    'estado',
+    'dtnascimento',
+    'profissao',
+    'celular',
+    'email',
+    'createdAt',
+    'updatedAt'
+  ];
+
+  const where = {};
+  if (busca && busca.trim().length) {
+    const termo = `%${busca.trim().toUpperCase()}%`;
+    where[Op.or] = [
+      { nome: { [Op.iLike]: termo } },
+      { cpf: { [Op.iLike]: termo } }
+    ];
+  }
+
+  const queryOptions = {
+    attributes: [
+      ...atributosBase,
+      [Sequelize.fn('COUNT', Sequelize.fn('DISTINCT', Sequelize.col('cotas.id'))), 'totalCotas']
+    ],
+    include: [
+      {
+        model: Cota,
+        as: 'cotas',
+        attributes: [],
+        required: true,
+        include: [
+          {
+            model: Consultor,
+            as: 'consultores',
+            attributes: [],
+            through: { attributes: [] },
+            required: true,
+            where: { id: consultorId }
+          }
+        ]
+      }
+    ],
+    where,
+    group: atributosBase.map(campo => `Cliente.${campo}`),
+    order: [['nome', 'ASC']]
+  };
+
+  if (limit) {
+    queryOptions.limit = limit;
+  }
+
+  return Cliente.findAll(queryOptions);
+}
+
 async function consultorTemAcessoAoCliente(clienteId, consultorId) {
   if (!clienteId || !consultorId) {
     return false;
@@ -240,6 +303,7 @@ async function deletarCliente(id) {
 module.exports = {
   getTodosClientes,
   getClientesPorConsultor,
+  buscarClientesPorConsultor,
   consultorTemAcessoAoCliente,
   getClienteById,
   createCliente,

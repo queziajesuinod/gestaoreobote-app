@@ -100,6 +100,7 @@ export const PerfisAdmin = loadable(() =>
     fallback: <Loading />,
   });
 
+<<<<<<< HEAD
 export const LeadsPage = loadable(() =>
   import('./Pages/Leads'), {
     fallback: <Loading />,
@@ -117,5 +118,35 @@ export const LeadsInsights = loadable(() =>
 
 export const EvolutionConfig = loadable(() =>
   import('./Pages/EvolutionConfig'), {
+=======
+// Módulo de Inadimplentes
+export const InadimplentesProcessos = loadable(() =>
+  import('./Pages/Inadimplentes/ListaProcessos'), {
+    fallback: <Loading />,
+  });
+
+export const InadimplentesFormulario = loadable(() =>
+  import('./Pages/Inadimplentes/FormularioProcesso'), {
+    fallback: <Loading />,
+  });
+
+export const InadimplentesDetalhes = loadable(() =>
+  import('./Pages/Inadimplentes/DetalhesProcesso'), {
+    fallback: <Loading />,
+  });
+
+export const InadimplentesWebhook = loadable(() =>
+  import('./Pages/Inadimplentes/ConfiguracoesWebhook'), {
+    fallback: <Loading />,
+  });
+
+export const InadimplenteDashboard = loadable(() =>
+  import('./Pages/Inadimplentes/DashboardInadiplentes'), {
+    fallback: <Loading />,
+  });
+
+export const InadimplentesCobrancas = loadable(() =>
+  import('./Pages/Inadimplentes/ListaCobrancas'), {
+>>>>>>> main
     fallback: <Loading />,
   });

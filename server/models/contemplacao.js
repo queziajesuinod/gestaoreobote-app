@@ -3,7 +3,7 @@
 const { Model } = require('sequelize');
 
 module.exports = (sequelize, DataTypes) => {
-  const SCHEMA = process.env.DB_SCHEMA || 'dev';
+  const SCHEMA = (process.env.DB_SCHEMA || 'dev').trim();
 
   class Contemplacao extends Model {
     static associate(models) {
@@ -29,7 +29,7 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false
     },
     tipo: {
-      type: DataTypes.ENUM('LANCE', 'SORTEIO'),
+      type: DataTypes.ENUM('LANCE', 'SORTEIO','PONTUAL'),
       allowNull: false
     },
     observacao: {

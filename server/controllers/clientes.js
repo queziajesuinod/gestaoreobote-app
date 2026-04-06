@@ -2,16 +2,15 @@ const clienteService = require('../services/clientes');
 
 const usuarioPodeGerenciarClientes = (perfil) => {
   const perfilNormalizado = (perfil || '').toUpperCase();
-  return perfilNormalizado === 'ADMIN' || perfilNormalizado === 'RH';
+  return perfilNormalizado === 'ADMIN' || perfilNormalizado === 'RH' || perfilNormalizado === 'MASTER';
 };
 
 module.exports = {
-  // 🔹 GET /clientes
   async listar(req, res) {
     try {
       const perfil = req.user?.perfil ? req.user.perfil.toUpperCase() : '';
       const consultorId = req.user?.consultorId ? Number(req.user.consultorId) : null;
-      const isConsultor = consultorId && perfil !== 'ADMIN' && perfil !== 'GESTOR' && perfil !== 'RH';
+      const isConsultor = consultorId && !['ADMIN', 'GESTOR', 'RH', 'MASTER'].includes(perfil);
 
       let clientes;
       if (isConsultor) {
@@ -37,13 +36,43 @@ module.exports = {
     }
   },
 
+  async listarPorConsultor(req, res) {
+    try {
+      const consultorId = Number(req.params.consultorId);
+      if (!consultorId) {
+        return res.status(400).json({
+          sucesso: false,
+          mensagem: 'ID do consultor é obrigatório',
+          dados: []
+        });
+      }
+
+      const busca = req.query.busca || '';
+      const limit = req.query.limit ? Number(req.query.limit) : 0;
+
+      const clientes = await clienteService.buscarClientesPorConsultor(
+        consultorId,
+        busca,
+        limit
+      );
+
+      return res.status(200).json({
+        sucesso: true,
+        mensagem: 'Clientes obtidos com sucesso',
+        dados: clientes
+      });
+    } catch (error) {
+      return res.status(500).json({ sucesso: false, erro: error.message });
+    }
+  },
+
   // 🔹 GET /clientes/:id
   async buscarPorId(req, res) {
     try {
       const { id } = req.params;
       const perfil = req.user?.perfil ? req.user.perfil.toUpperCase() : '';
       const consultorId = req.user?.consultorId ? Number(req.user.consultorId) : null;
-      const isConsultor = consultorId && perfil !== 'ADMIN' && perfil !== 'GESTOR' && perfil !== 'RH';
+      const isConsultor = consultorId && !['ADMIN', 'GESTOR', 'RH', 'MASTER'].includes(perfil);
 
       const cliente = await clienteService.getClienteById(id);
       if (!cliente) {

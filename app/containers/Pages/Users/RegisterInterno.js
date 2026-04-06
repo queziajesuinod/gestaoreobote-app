@@ -14,6 +14,7 @@ import CircularProgress from '@mui/material/CircularProgress';
 import Typography from '@mui/material/Typography';
 import { useFormik } from 'formik';
 import * as yup from 'yup';
+import { getStoredUser } from '../../../utils/userStorage';
 
 const API_URL = process.env.REACT_APP_API_URL?.replace(/\/$/, '') || 'http://localhost:3003';
 
@@ -54,6 +55,18 @@ function RegisterInterno() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [storedUser, setStoredUserState] = useState(() => getStoredUser());
+  const perfilUsuario = storedUser?.perfil?.toUpperCase() || '';
+  const ehMasterLogado = perfilUsuario === 'MASTER';
+
+  useEffect(() => {
+    const handleUserUpdated = (event) => {
+      setStoredUserState(event?.detail || getStoredUser());
+    };
+
+    window.addEventListener('app:user-updated', handleUserUpdated);
+    return () => window.removeEventListener('app:user-updated', handleUserUpdated);
+  }, []);
 
   // Carregar perfis disponíveis
   useEffect(() => {
@@ -69,7 +82,15 @@ function RegisterInterno() {
 
         if (response.ok) {
           const data = await response.json();
-          setPerfis(data || []);
+          const lista = Array.isArray(data) ? data : (data?.dados || data);
+          const perfisFiltrados = lista.filter((perfil) => {
+            const descricao = (perfil?.descricao || '').toUpperCase();
+            if (!ehMasterLogado && descricao.includes('MASTER')) {
+              return false;
+            }
+            return true;
+          });
+          setPerfis(perfisFiltrados);
           console.log('✅ Perfis carregados:', data);
         } else {
           console.error('Erro ao carregar perfis');
@@ -77,7 +98,7 @@ function RegisterInterno() {
         }
       } catch (err) {
         console.error('Erro ao carregar perfis:', err);
-        setPerfis([{ id: 1, descricao: 'Usuário' }]);
+          setPerfis([{ id: 1, descricao: 'Usuário' }]);
       }
     }
     carregarPerfis();
@@ -114,6 +135,21 @@ function RegisterInterno() {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
+        const perfilSelecionado = perfis.find((perfil) => String(perfil.id) === String(values.perfilId));
+
+        if (!ehMasterLogado && perfilSelecionado) {
+          const descricao = (perfilSelecionado.descricao || '').toUpperCase();
+          if (descricao.includes('MASTER')) {
+            throw new Error('Somente perfil MASTER pode criar outro MASTER.');
+          }
+        }
+
+        const response = await fetch(`${API_URL}/users`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
           body: JSON.stringify({
             name: values.name,
             username: values.username,
@@ -123,6 +159,7 @@ function RegisterInterno() {
             active: true,
             image: null
           })
+        });
         });
 
         const data = await response.json();
@@ -332,4 +369,3 @@ function RegisterInterno() {
 }
 
 export default RegisterInterno;
-

@@ -17,6 +17,7 @@ const { resolve } = require('path');
 const app = express();
 const bodyParser = require('body-parser');
 const metasService = require('./services/metas');
+const cronInadimplentes = require('./cron/inadimplentes');
 
 // ✅ Middleware de autenticação JWT (Protege APIs)
 const authMiddleware = (req, res, next) => {
@@ -69,6 +70,7 @@ app.use('/agendor', authMiddleware, require("./routers/agendor"));
 app.use('/clientes', authMiddleware, require('./routers/clientes'));
 app.use('/cotas', authMiddleware, require('./routers/cotas'));
 app.use('/metas', authMiddleware, require('./routers/metas'));
+app.use('/api/inadimplentes', require('./routers/inadimplentes')); // Módulo de Inadimplentes (autenticação interna)
 
 
 // 🔹 Carregar Material Icons e Documentação
@@ -144,5 +146,7 @@ app.listen(port, host, async (err) => {
     console.log('🔄 Executando primeira sincronização de leads...');
     sincronizacaoService.sincronizarTodosLeads();
   }, 60000);
+  // Inicializar cron jobs do módulo de inadimplentes
+  cronInadimplentes.inicializarCronJobs();
 
 });

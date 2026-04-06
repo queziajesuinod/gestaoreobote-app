@@ -21,6 +21,22 @@ const pageTitles = {
   'consultores': 'Consultores',
   'usuarios': 'Usuários',
   'perfis': 'Perfis',
+
+  //Inadiplentes
+
+  'inadimplentes': 'Inadimplentes',
+  'processos': 'Lista de Processos',
+  'detalhes-processo': 'Detalhes do Processo', 
+  'processos-novo': 'Novo Processo',
+  'editar-processo': 'Editar Processo',
+  'relatorios-inadimplencia': 'Relatórios de Inadimplência',
+  'configuracoes-inadimplencia': 'Configurações de Inadimplência',
+  'notificacoes-inadimplencia': 'Notificações de Inadimplência',
+  'historico-inadimplencia': 'Histórico de Inadimplência',
+  'analises-inadimplencia': 'Análises de Inadimplência',
+  'dashboard-inadiplente': 'Dashboard de Inadimplência',
+  'cobrancas': 'Cobranças de Inadimplência',
+  
   
   // Usuários
   'profile': 'Meu Perfil',
