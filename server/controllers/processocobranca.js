@@ -149,9 +149,9 @@ module.exports = {
    */
   async listar(req, res) {
     try {
-      const { status, cotaId, clienteId, consultorId, diaVencimento } = req.query;
+      const { status, cotaId, clienteId, consultorId, diaVencimento, limite, offset } = req.query;
 
-  const perfilUsuario = (req.user?.perfil || '').toUpperCase();
+      const perfilUsuario = (req.user?.perfil || '').toUpperCase();
       const ehAdminOuMaster = ['ADMIN', 'MASTER'].includes(perfilUsuario);
       const isConsultorPerfil = perfilUsuario === 'CONSULTOR';
       const podeSelecionarConsultor = ehAdminOuMaster || perfilUsuario === 'GESTOR';
@@ -185,7 +185,10 @@ module.exports = {
         includeConsultor.required = true;
       }
 
-      const processos = await ProcessoCobranca.findAll({
+      const limiteNum = limite ? parseInt(limite, 10) : 50;
+      const offsetNum = offset ? parseInt(offset, 10) : 0;
+
+      const { count: total, rows: processos } = await ProcessoCobranca.findAndCountAll({
         where,
         include: [
           {
@@ -196,13 +199,20 @@ module.exports = {
             ]
           }
         ],
-        order: [['createdAt', 'DESC']]
+        order: [['createdAt', 'DESC']],
+        limit: limiteNum,
+        offset: offsetNum,
+        distinct: true
       });
 
       return res.status(200).json({
         sucesso: true,
         mensagem: 'Processos listados com sucesso',
-        dados: processos
+        dados: processos,
+        total,
+        limite: limiteNum,
+        offset: offsetNum,
+        totalPaginas: Math.ceil(total / limiteNum)
       });
 
     } catch (erro) {

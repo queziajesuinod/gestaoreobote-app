@@ -443,8 +443,12 @@ class InadimplenciaService {
       includeConsultor.required = true;
     }
 
-    // Buscar inadimplentes
-    const inadimplentes = await CobrancaMensal.findAll({
+    const limite = filtros.limite ? parseInt(filtros.limite, 10) : 50;
+    const pagina = filtros.pagina ? parseInt(filtros.pagina, 10) : 1;
+    const offset = (pagina - 1) * limite;
+
+    // Buscar inadimplentes com paginação
+    const { count: total, rows: inadimplentes } = await CobrancaMensal.findAndCountAll({
       where,
       include: [
         {
@@ -462,10 +466,14 @@ class InadimplenciaService {
         {
           association: 'notificacoes',
           order: [['createdAt', 'DESC']],
-          limit: 5
+          limit: 5,
+          separate: true
         }
       ],
-      order: [['dataVencimento', 'ASC']]
+      order: [['dataVencimento', 'ASC']],
+      limit: limite,
+      offset,
+      distinct: true
     });
 
     // Calcular dias de atraso para cada cobrança
@@ -473,14 +481,20 @@ class InadimplenciaService {
     const inadimplentesComDias = inadimplentes.map(cobranca => {
       const vencimento = new Date(cobranca.dataVencimento);
       const diasAtraso = Math.floor((hoje - vencimento) / (1000 * 60 * 60 * 24));
-      
+
       return {
         ...cobranca.toJSON(),
         diasAtraso
       };
     });
 
-    return inadimplentesComDias;
+    return {
+      dados: inadimplentesComDias,
+      total,
+      pagina,
+      limite,
+      totalPaginas: Math.ceil(total / limite)
+    };
   }
 
   /**

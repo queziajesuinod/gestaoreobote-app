@@ -59,7 +59,8 @@ const TIPOS_CONTEMPLACAO = [
   {value: 'LANCE_FIDELIDADE', label: 'Lance Fidelidade' },
   { value: 'LANCE_FIXO', label: 'Lance Fixo' },
   { value: 'LANCE_LIVRE', label: 'Lance Livre' },
-  { value: 'SORTEIO', label: 'Sorteio' }
+  { value: 'SORTEIO', label: 'Sorteio' },
+  { value: 'PONTUAL', label: 'Pontual' }
 ];
 
 const getToken = () => localStorage.getItem('token');

@@ -7,7 +7,7 @@ const {
   CotaConsultor
 } = require('../models');
 
-const TIPOS_CONTEMPLACAO = ['LANCE_FIXO', 'LANCE_LIVRE', 'SORTEIO'];
+const TIPOS_CONTEMPLACAO = ['LANCE_FIXO', 'LANCE_LIVRE', 'SORTEIO','PONTUAL'];
 
 const contemplacaoInclude = {
   model: Contemplacao,

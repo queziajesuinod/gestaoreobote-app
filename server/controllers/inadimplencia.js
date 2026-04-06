@@ -26,7 +26,7 @@ module.exports = {
    */
   async listar(req, res) {
     try {
-      const { diasAtrasoMin, diasAtrasoMax, consultorId } = req.query;
+      const { diasAtrasoMin, diasAtrasoMax, consultorId, pagina, limite } = req.query;
       const consultorFiltro = obterConsultorFiltro(req, consultorId);
 
       const filtros = {};
@@ -35,13 +35,19 @@ module.exports = {
       if (consultorFiltro !== null) {
         filtros.consultorId = consultorFiltro;
       }
+      if (pagina) filtros.pagina = pagina;
+      if (limite) filtros.limite = limite;
 
-      const inadimplentes = await inadimplenciaService.listarInadimplentes(filtros);
+      const resultado = await inadimplenciaService.listarInadimplentes(filtros);
 
       return res.status(200).json({
         sucesso: true,
         mensagem: 'Inadimplentes listados com sucesso',
-        dados: inadimplentes
+        dados: resultado.dados,
+        total: resultado.total,
+        pagina: resultado.pagina,
+        limite: resultado.limite,
+        totalPaginas: resultado.totalPaginas
       });
 
     } catch (erro) {

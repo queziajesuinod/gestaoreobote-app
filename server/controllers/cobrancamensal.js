@@ -9,7 +9,7 @@ module.exports = {
    */
   async listar(req, res) {
     try {
-      const { status, dataInicio, dataFim, processoCobrancaId, limite, consultorId, mes, ano, cotaId, clienteId } = req.query;
+      const { status, dataInicio, dataFim, processoCobrancaId, limite, pagina, offset, consultorId, mes, ano, cotaId, clienteId } = req.query;
 
       const perfilUsuario = (req.user?.perfil || '').toUpperCase();
       const isConsultorPerfil = perfilUsuario === 'CONSULTOR';
@@ -23,6 +23,8 @@ module.exports = {
       if (dataFim) filtros.dataFim = dataFim;
       if (processoCobrancaId) filtros.processoCobrancaId = processoCobrancaId;
       if (limite) filtros.limite = limite;
+      if (pagina) filtros.pagina = pagina;
+      if (offset) filtros.offset = offset;
       if (isConsultorPerfil && consultorLogadoId) {
         filtros.consultorId = consultorLogadoId;
       } else if (podeSelecionarConsultor && consultorId) {
@@ -33,12 +35,16 @@ module.exports = {
       if (cotaId) filtros.cotaId = cotaId;
       if (clienteId) filtros.clienteId = clienteId;
 
-      const cobrancas = await cobrancaService.listarCobrancas(filtros);
+      const resultado = await cobrancaService.listarCobrancas(filtros);
 
       return res.status(200).json({
         sucesso: true,
         mensagem: 'Cobranças listadas com sucesso',
-        dados: cobrancas
+        dados: resultado.dados,
+        total: resultado.total,
+        pagina: resultado.pagina,
+        limite: resultado.limite,
+        totalPaginas: resultado.totalPaginas
       });
 
     } catch (erro) {

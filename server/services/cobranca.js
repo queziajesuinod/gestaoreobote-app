@@ -578,6 +578,10 @@ class CobrancaService {
       cotaInclude.required = true;
     }
 
+    const limite = filtros.limite ? parseInt(filtros.limite, 10) : 50;
+    const offset = filtros.offset ? parseInt(filtros.offset, 10) : 0;
+    const pagina = Math.floor(offset / limite) + 1;
+
     // Opções de query
     const options = {
       where,
@@ -587,22 +591,20 @@ class CobrancaService {
           include: [cotaInclude]
         }
       ],
-      order: [['dataVencimento', 'DESC']]
+      order: [['dataVencimento', 'DESC']],
+      limit: limite,
+      offset,
+      distinct: true
     };
 
-    // Limite de resultados
-    if (filtros.limite) {
-      options.limit = parseInt(filtros.limite, 10);
-    }
-
-    // Buscar cobranças
-    const cobrancas = await CobrancaMensal.findAll(options);
+    // Buscar cobranças com total
+    const { count: total, rows: cobrancas } = await CobrancaMensal.findAndCountAll(options);
 
     // Calcular dias de atraso para cada cobrança
     const hoje = new Date();
     const cobrancasComAtraso = cobrancas.map(cobranca => {
       const cobrancaJSON = cobranca.toJSON();
-      
+
       if (cobrancaJSON.status === 'atrasado' && cobrancaJSON.dataVencimento) {
         const vencimento = new Date(cobrancaJSON.dataVencimento);
         const diasAtraso = Math.max(0, Math.floor((hoje - vencimento) / (1000 * 60 * 60 * 24)));
@@ -610,11 +612,17 @@ class CobrancaService {
       } else {
         cobrancaJSON.diasAtraso = 0;
       }
-      
+
       return cobrancaJSON;
     });
 
-    return cobrancasComAtraso;
+    return {
+      dados: cobrancasComAtraso,
+      total,
+      pagina,
+      limite,
+      totalPaginas: Math.ceil(total / limite)
+    };
   }
 
   /**

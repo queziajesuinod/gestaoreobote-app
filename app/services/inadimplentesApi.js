@@ -13,6 +13,15 @@ const getHeaders = () => ({
   Authorization: `Bearer ${getToken()}`
 });
 
+const extrairMensagemErro = async (response, mensagemPadrao) => {
+  try {
+    const payload = await response.json();
+    return payload?.mensagem || payload?.erro || mensagemPadrao;
+  } catch (erro) {
+    return mensagemPadrao;
+  }
+};
+
 // ============================================================================
 // PROCESSOS DE COBRANÇA
 // ============================================================================
@@ -24,11 +33,13 @@ export const listarProcessos = async (filtros = {}) => {
   if (filtros.clienteId) params.append('clienteId', filtros.clienteId);
   if (filtros.consultorId) params.append('consultorId', filtros.consultorId);
   if (filtros.diaVencimento) params.append('diaVencimento', filtros.diaVencimento);
-  
+  if (filtros.limite) params.append('limite', filtros.limite);
+  if (filtros.offset !== undefined) params.append('offset', filtros.offset);
+
   const response = await fetch(`${API_URL}/api/inadimplentes/processos?${params}`, {
     headers: getHeaders()
   });
-  
+
   if (!response.ok) throw new Error('Erro ao listar processos');
   return response.json();
 };
@@ -49,7 +60,7 @@ export const criarProcesso = async (dados) => {
     body: JSON.stringify(dados)
   });
   
-  if (!response.ok) throw new Error('Erro ao criar processo');
+  if (!response.ok) throw new Error(await extrairMensagemErro(response, 'Erro ao criar processo'));
   return response.json();
 };
 
@@ -171,11 +182,14 @@ export const listarCobrancas = async (filtros = {}) => {
   if (filtros.consultorId) params.append('consultorId', filtros.consultorId);
   if (filtros.mes) params.append('mes', filtros.mes);
   if (filtros.ano) params.append('ano', filtros.ano);
-  
+  if (filtros.pagina) params.append('pagina', filtros.pagina);
+  if (filtros.offset !== undefined) params.append('offset', filtros.offset);
+  if (filtros.limite) params.append('limite', filtros.limite);
+
   const response = await fetch(`${API_URL}/api/inadimplentes/cobrancas?${params}`, {
     headers: getHeaders()
   });
-  
+
   if (!response.ok) throw new Error('Erro ao listar cobranças');
   return response.json();
 };

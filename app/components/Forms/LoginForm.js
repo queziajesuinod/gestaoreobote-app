@@ -41,7 +41,7 @@ const LinkBtn = React.forwardRef(function LinkBtn(props, ref) { // eslint-disabl
   return <NavLink to={props.to} {...props} />; // eslint-disable-line
 });
 
-function LoginForm({ onSubmit }) {
+function LoginForm({ onSubmit = null }) {
   const { classes, cx } = useStyles();
   const [showPassword, setShowPassword] = useState(false);
 
@@ -54,7 +54,6 @@ function LoginForm({ onSubmit }) {
     },
     validationSchema,
     onSubmit: async (values) => {
-      console.log('You submitted:' + JSON.stringify(values, null, 2));
       if (onSubmit) {
         await onSubmit(values);
       }
@@ -158,10 +157,6 @@ function LoginForm({ onSubmit }) {
 
 LoginForm.propTypes = {
   onSubmit: PropTypes.func
-};
-
-LoginForm.defaultProps = {
-  onSubmit: null
 };
 
 export default LoginForm;
