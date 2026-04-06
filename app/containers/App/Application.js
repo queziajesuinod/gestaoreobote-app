@@ -18,19 +18,16 @@ import {
   ProfilePage,
   UsersAdmin,
   PerfisAdmin,
-<<<<<<< HEAD
   LeadsPage,
   LeadDetalhes,
   LeadsInsights,
-  EvolutionConfig
-=======
+  EvolutionConfig,
   InadimplentesProcessos,
   InadimplentesFormulario,
   InadimplentesDetalhes,
   InadimplentesWebhook,
   InadimplenteDashboard,
   InadimplentesCobrancas
->>>>>>> main
 } from '../pageListAsync';
 
 function Application({ isAuthenticated }) {

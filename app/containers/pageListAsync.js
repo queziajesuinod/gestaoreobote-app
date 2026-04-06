@@ -100,7 +100,6 @@ export const PerfisAdmin = loadable(() =>
     fallback: <Loading />,
   });
 
-<<<<<<< HEAD
 export const LeadsPage = loadable(() =>
   import('./Pages/Leads'), {
     fallback: <Loading />,
@@ -118,7 +117,9 @@ export const LeadsInsights = loadable(() =>
 
 export const EvolutionConfig = loadable(() =>
   import('./Pages/EvolutionConfig'), {
-=======
+    fallback: <Loading />,
+  });
+  
 // Módulo de Inadimplentes
 export const InadimplentesProcessos = loadable(() =>
   import('./Pages/Inadimplentes/ListaProcessos'), {
@@ -147,6 +148,5 @@ export const InadimplenteDashboard = loadable(() =>
 
 export const InadimplentesCobrancas = loadable(() =>
   import('./Pages/Inadimplentes/ListaCobrancas'), {
->>>>>>> main
     fallback: <Loading />,
   });
