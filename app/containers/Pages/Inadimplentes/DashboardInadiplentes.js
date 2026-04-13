@@ -404,11 +404,17 @@ function Dashboard() {
     try {
       setDetectando(true);
       const response = await inadimplentesApi.detectarInadimplencia();
-      
-      mostrarSnackbar(
-        `Detecção concluída: ${response.dados.cobrancasVerificadas} cobranças verificadas, 
-        ${response.dados.webhooksEnviados} notificações enviadas`
-      );
+
+      const d = response.dados;
+      const partes = [
+        `${d.cobrancasVerificadas} cobranças verificadas`,
+        `${d.statusAtualizados} marcadas como atrasadas`,
+        `${d.webhooksEnviados} notificações enviadas`,
+      ];
+      if (d.webhooksFalharam > 0) {
+        partes.push(`${d.webhooksFalharam} falhas`);
+      }
+      mostrarSnackbar(`Detecção concluída: ${partes.join(' · ')}`);
 
       // Recarregar dados
       await carregarDados();
@@ -531,7 +537,7 @@ function Dashboard() {
                 onClick={handleDetectarInadimplencia}
                 disabled={detectando}
               >
-                {detectando ? 'Detectando...' : 'Detectar Inadimplência'}
+                {detectando ? 'Processando em lotes...' : 'Detectar Inadimplência'}
               </Button>
 
               <Button

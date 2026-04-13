@@ -91,29 +91,51 @@ class InadimplenciaService {
       };
     }
 
-    const cobrancasAtrasadas = await this.buscarCobrancasAtrasadasParaNotificar();
+    const BATCH_SIZE = 100;
+    let offset = 0;
+    let totalVerificadas = 0;
+    let statusAtualizados = 0;
+    let webhooksEnviados = 0;
+    let webhooksFalharam = 0;
 
-    console.log(`[Inadimplência] Encontradas ${cobrancasAtrasadas.length} cobranças atrasadas`);
+    while (true) {
+      const lote = await this.buscarCobrancasAtrasadasParaNotificar(BATCH_SIZE, offset);
+      if (lote.length === 0) break;
 
-    const resultado = await this.processarCobrancasAtrasadas(
-      cobrancasAtrasadas,
-      { respeitarNotificacaoHoje: true }
-    );
+      console.log(`[Inadimplência] Processando lote: ${lote.length} cobranças (offset ${offset})`);
+
+      const resultadoLote = await this.processarCobrancasAtrasadas(
+        lote,
+        { respeitarNotificacaoHoje: true }
+      );
+
+      totalVerificadas += lote.length;
+      statusAtualizados += resultadoLote.statusAtualizados;
+      webhooksEnviados += resultadoLote.webhooksEnviados;
+      webhooksFalharam += resultadoLote.webhooksFalharam;
+
+      offset += lote.length;
+      if (lote.length < BATCH_SIZE) break;
+    }
 
     await configuracaoCobrancaService.registrarExecucao(configuracao);
 
     console.log('[Inadimplência] Detecção concluída:', {
-      cobrancasVerificadas: cobrancasAtrasadas.length,
-      ...resultado
+      cobrancasVerificadas: totalVerificadas,
+      statusAtualizados,
+      webhooksEnviados,
+      webhooksFalharam
     });
 
     return {
-      cobrancasVerificadas: cobrancasAtrasadas.length,
-      ...resultado
+      cobrancasVerificadas: totalVerificadas,
+      statusAtualizados,
+      webhooksEnviados,
+      webhooksFalharam
     };
   }
 
-  async buscarCobrancasAtrasadasParaNotificar() {
+  async buscarCobrancasAtrasadasParaNotificar(limit = 100, offset = 0) {
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
 
@@ -142,7 +164,9 @@ class InadimplenciaService {
             }
           ]
         }
-      ]
+      ],
+      limit,
+      offset
     });
   }
 

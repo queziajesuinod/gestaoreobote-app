@@ -144,7 +144,7 @@ function inicializarCronJobs() {
     console.log('========================================\n');
 
     try {
-      const WebhookLog = require('../models/webhooklog');
+      const { WebhookLog } = require('../models');
       const { Op } = require('sequelize');
 
       // Remover logs com mais de 90 dias
