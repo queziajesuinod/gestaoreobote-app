@@ -114,18 +114,21 @@ class WebhookService {
    * Montar payload do webhook
    */
   async montarPayload(cobrancaMensal, evento = 'inadimplencia_detectada', extraPayload = {}) {
-    // Carregar dados relacionados
-    const processoCobranca = await cobrancaMensal.getProcessoCobranca({
-      include: [
-        {
-          association: 'cota',
-          include: [
-            { association: 'cliente' },
-            { association: 'consultor' }
-          ]
-        }
-      ]
-    });
+    // Usar associações já carregadas (evita re-fetch com imagem_base64 e N+1 queries)
+    let processoCobranca = cobrancaMensal.processoCobranca;
+    if (!processoCobranca) {
+      processoCobranca = await cobrancaMensal.getProcessoCobranca({
+        include: [
+          {
+            association: 'cota',
+            include: [
+              { association: 'cliente', attributes: ['id', 'nome', 'celular', 'email'] },
+              { association: 'consultor', attributes: ['id', 'nome', 'celular', 'email'] }
+            ]
+          }
+        ]
+      });
+    }
 
     const cota = processoCobranca.cota;
     const cliente = cota.cliente;

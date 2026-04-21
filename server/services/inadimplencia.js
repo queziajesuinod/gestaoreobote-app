@@ -158,8 +158,14 @@ class InadimplenciaService {
             {
               association: 'cota',
               include: [
-                { association: 'cliente' },
-                { association: 'consultor' }
+                {
+                  association: 'cliente',
+                  attributes: ['id', 'nome', 'celular', 'email']
+                },
+                {
+                  association: 'consultor',
+                  attributes: ['id', 'nome', 'celular', 'email', 'id_agendor', 'ativo']
+                }
               ]
             }
           ]
@@ -192,6 +198,7 @@ class InadimplenciaService {
           cobrancas: []
         });
       }
+      // Guardar apenas referência à instância Sequelize (não serializar ainda, precisa de .update())
       processosMap.get(processId).cobrancas.push(cobranca);
     }
 
