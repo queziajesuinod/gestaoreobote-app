@@ -27,6 +27,8 @@ import {
   TableHead,
   TablePagination,
   TableRow,
+  Switch,
+  FormControlLabel,
   TextField,
   MenuItem,
   Tooltip,
@@ -126,6 +128,7 @@ function Dashboard() {
   const [totalCobrancasAtrasadas, setTotalCobrancasAtrasadas] = useState(0);
   const [modoCobranca, setModoCobranca] = useState('diaria');
   const [diasSemanaCobranca, setDiasSemanaCobranca] = useState([]);
+  const [cronAtivo, setCronAtivo] = useState(true);
   const [modoSalvando, setModoSalvando] = useState(false);
 
   useEffect(() => {
@@ -303,6 +306,7 @@ function Dashboard() {
       const response = await inadimplentesApi.obterConfiguracaoCobranca();
       const dados = response.dados || {};
       setModoCobranca(dados.modo || 'diaria');
+      setCronAtivo(dados.ativo !== false);
 
       const dias = Array.isArray(dados.diasSemana)
         ? dados.diasSemana
@@ -335,7 +339,8 @@ function Dashboard() {
       setModoSalvando(true);
       await inadimplentesApi.atualizarConfiguracaoCobranca({
         modo: modoCobranca,
-        diasSemana: modoCobranca === 'semanal' ? diasSemanaCobranca : []
+        diasSemana: modoCobranca === 'semanal' ? diasSemanaCobranca : [],
+        ativo: cronAtivo
       });
       mostrarSnackbar('Configuração de cobrança salva');
     } catch (error) {
@@ -580,9 +585,26 @@ function Dashboard() {
         {!isConsultorPerfil && (
           <Card sx={{ mb: 3 }}>
             <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Agendamento de Cobrança
-              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                <Typography variant="h6">
+                  Agendamento de Cobrança
+                </Typography>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={cronAtivo}
+                      onChange={(e) => setCronAtivo(e.target.checked)}
+                      color={cronAtivo ? 'success' : 'default'}
+                    />
+                  }
+                  label={
+                    <Typography variant="body2" color={cronAtivo ? 'success.main' : 'text.secondary'} fontWeight="bold">
+                      {cronAtivo ? 'Verificação ATIVA' : 'Verificação INATIVA'}
+                    </Typography>
+                  }
+                  labelPlacement="start"
+                />
+              </Box>
             <Typography variant="body2" color="textSecondary" paragraph>
               Defina a periodicidade em que a detecção automática de inadimplência deve rodar. Ajustes aqui afetam apenas o cron diário.
             </Typography>

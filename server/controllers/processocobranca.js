@@ -430,6 +430,118 @@ module.exports = {
   },
 
   /**
+   * POST /api/inadimplentes/processos/lote/pausar
+   * Pausar vários processos de uma vez
+   */
+  async pausarEmLote(req, res) {
+    try {
+      const { ids } = req.body;
+
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ sucesso: false, mensagem: 'Informe ao menos um processo (ids)' });
+      }
+
+      const resultados = { sucesso: [], falha: [] };
+
+      for (const id of ids) {
+        try {
+          await cobrancaService.pausarProcesso(id);
+          resultados.sucesso.push(id);
+        } catch (err) {
+          resultados.falha.push({ id, motivo: err.message });
+        }
+      }
+
+      return res.status(200).json({
+        sucesso: true,
+        mensagem: `${resultados.sucesso.length} processo(s) pausado(s)`,
+        dados: resultados
+      });
+
+    } catch (erro) {
+      console.error('[ProcessoCobranca] Erro ao pausar em lote:', erro);
+      return res.status(500).json({ sucesso: false, mensagem: 'Erro ao pausar processos em lote' });
+    }
+  },
+
+  /**
+   * POST /api/inadimplentes/processos/lote/meses
+   * Atualizar quantidade de meses de vários processos de uma vez
+   */
+  async atualizarMesesEmLote(req, res) {
+    try {
+      const { ids, quantidadeMeses } = req.body;
+
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ sucesso: false, mensagem: 'Informe ao menos um processo (ids)' });
+      }
+
+      const meses = quantidadeMeses === null || quantidadeMeses === '' ? null : Number(quantidadeMeses);
+      if (meses !== null && (!Number.isFinite(meses) || meses < 1)) {
+        return res.status(400).json({ sucesso: false, mensagem: 'Quantidade de meses inválida' });
+      }
+
+      const resultados = { sucesso: [], falha: [] };
+
+      for (const id of ids) {
+        try {
+          const processo = await ProcessoCobranca.findByPk(id);
+          if (!processo) throw new Error('Processo não encontrado');
+          await processo.update({ quantidadeMeses: meses === null ? null : Math.floor(meses) });
+          resultados.sucesso.push(id);
+        } catch (err) {
+          resultados.falha.push({ id, motivo: err.message });
+        }
+      }
+
+      return res.status(200).json({
+        sucesso: true,
+        mensagem: `${resultados.sucesso.length} processo(s) atualizado(s)`,
+        dados: resultados
+      });
+
+    } catch (erro) {
+      console.error('[ProcessoCobranca] Erro ao atualizar meses em lote:', erro);
+      return res.status(500).json({ sucesso: false, mensagem: 'Erro ao atualizar meses em lote' });
+    }
+  },
+
+  /**
+   * POST /api/inadimplentes/processos/lote/encerrar
+   * Encerrar vários processos de uma vez
+   */
+  async encerrarEmLote(req, res) {
+    try {
+      const { ids } = req.body;
+
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ sucesso: false, mensagem: 'Informe ao menos um processo (ids)' });
+      }
+
+      const resultados = { sucesso: [], falha: [] };
+
+      for (const id of ids) {
+        try {
+          await cobrancaService.encerrarProcesso(id);
+          resultados.sucesso.push(id);
+        } catch (err) {
+          resultados.falha.push({ id, motivo: err.message });
+        }
+      }
+
+      return res.status(200).json({
+        sucesso: true,
+        mensagem: `${resultados.sucesso.length} processo(s) encerrado(s)`,
+        dados: resultados
+      });
+
+    } catch (erro) {
+      console.error('[ProcessoCobranca] Erro ao encerrar em lote:', erro);
+      return res.status(500).json({ sucesso: false, mensagem: 'Erro ao encerrar processos em lote' });
+    }
+  },
+
+  /**
    * POST /api/inadimplentes/processos/:id/pausar
    * Pausar processo de cobrança
    */

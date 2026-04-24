@@ -14,6 +14,7 @@ import {
   FormControl,
   IconButton,
   InputLabel,
+  InputAdornment,
   ListSubheader,
   MenuItem,
   Paper,
@@ -29,7 +30,8 @@ import {
   TableRow,
   TextField,
   Tooltip,
-  Typography
+  Typography,
+  Checkbox
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -41,7 +43,9 @@ import {
   Stop as StopIcon,
   UploadFile as UploadFileIcon,
   Visibility as VisibilityIcon,
-  Refresh as RefreshIcon
+  Refresh as RefreshIcon,
+  CheckBox as CheckBoxIcon,
+  EditCalendar as EditCalendarIcon
 } from '@mui/icons-material';
 import { PapperBlock } from 'dan-components';
 import brand from 'dan-api/dummy/brand';
@@ -272,7 +276,17 @@ function ListaProcessos() {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [totalProcessos, setTotalProcessos] = useState(0);
 
-  
+  // Seleção múltipla
+  const [selecionados, setSelecionados] = useState([]);
+
+  // Dialog ações em lote
+  const [dialogLote, setDialogLote] = useState({
+    open: false,
+    acao: null, // 'pausar' | 'encerrar' | 'meses'
+    meses: '',
+    salvando: false
+  });
+
   // Snackbar
   const [snackbar, setSnackbar] = useState({
     open: false,
@@ -314,6 +328,7 @@ function ListaProcessos() {
   const carregarProcessos = async () => {
     try {
       setLoading(true);
+      setSelecionados([]);
       const filtros = {
         limite: rowsPerPage,
         offset: page * rowsPerPage
@@ -838,6 +853,66 @@ function ListaProcessos() {
     );
   };
 
+  // ---- Seleção múltipla ----
+  const idsElegiveis = processos
+    .filter(p => p.status !== 'encerrado')
+    .map(p => p.id);
+
+  const todosSelecionados = idsElegiveis.length > 0 && idsElegiveis.every(id => selecionados.includes(id));
+  const algunsSelecionados = selecionados.length > 0 && !todosSelecionados;
+
+  const handleToggleSelecionado = (id) => {
+    setSelecionados(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  const handleToggleTodos = () => {
+    if (todosSelecionados) {
+      setSelecionados([]);
+    } else {
+      setSelecionados(idsElegiveis);
+    }
+  };
+
+  // ---- Ações em lote ----
+  const abrirDialogLote = (acao) => {
+    setDialogLote({ open: true, acao, meses: '', salvando: false });
+  };
+
+  const fecharDialogLote = () => {
+    if (dialogLote.salvando) return;
+    setDialogLote(prev => ({ ...prev, open: false }));
+  };
+
+  const confirmarLote = async () => {
+    setDialogLote(prev => ({ ...prev, salvando: true }));
+    try {
+      let resultado;
+
+      if (dialogLote.acao === 'pausar') {
+        resultado = await inadimplentesApi.pausarProcessosEmLote(selecionados);
+      } else if (dialogLote.acao === 'encerrar') {
+        resultado = await inadimplentesApi.encerrarProcessosEmLote(selecionados);
+      } else if (dialogLote.acao === 'meses') {
+        const meses = dialogLote.meses === '' ? null : Number(dialogLote.meses);
+        resultado = await inadimplentesApi.atualizarMesesEmLote(selecionados, meses);
+      }
+
+      const { sucesso, falha } = resultado.dados;
+      if (falha.length === 0) {
+        mostrarSnackbar(resultado.mensagem, 'success');
+      } else {
+        mostrarSnackbar(`${sucesso.length} ok, ${falha.length} com erro`, 'warning');
+      }
+
+      setDialogLote(prev => ({ ...prev, open: false, salvando: false }));
+      carregarProcessos();
+    } catch (error) {
+      console.error('Erro na ação em lote:', error);
+      mostrarSnackbar('Erro ao executar ação em lote', 'error');
+      setDialogLote(prev => ({ ...prev, salvando: false }));
+    }
+  };
+
   // Paginação
   const handleChangePage = (_event, newPage) => {
     setPage(newPage);
@@ -1035,6 +1110,59 @@ function ListaProcessos() {
           </Tooltip>
         </Box>
 
+        {/* Barra de ações em lote */}
+        {podeGerenciarProcessos && selecionados.length > 0 && (
+          <Paper
+            elevation={3}
+            sx={{
+              mb: 2,
+              px: 2,
+              py: 1,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 2,
+              flexWrap: 'wrap',
+              bgcolor: 'primary.50',
+              border: '1px solid',
+              borderColor: 'primary.main'
+            }}
+          >
+            <CheckBoxIcon color="primary" />
+            <Typography variant="body2" fontWeight="medium" sx={{ flex: 1 }}>
+              {selecionados.length} processo(s) selecionado(s)
+            </Typography>
+            <Button
+              size="small"
+              variant="outlined"
+              color="warning"
+              startIcon={<PauseIcon />}
+              onClick={() => abrirDialogLote('pausar')}
+            >
+              Pausar
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              color="error"
+              startIcon={<StopIcon />}
+              onClick={() => abrirDialogLote('encerrar')}
+            >
+              Encerrar
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<EditCalendarIcon />}
+              onClick={() => abrirDialogLote('meses')}
+            >
+              Alterar Meses
+            </Button>
+            <Button size="small" color="inherit" onClick={() => setSelecionados([])}>
+              Cancelar
+            </Button>
+          </Paper>
+        )}
+
         {/* Tabela */}
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
@@ -1046,6 +1174,20 @@ function ListaProcessos() {
               <Table>
                 <TableHead>
                   <TableRow>
+                    {podeGerenciarProcessos && (
+                      <TableCell padding="checkbox">
+                        <Tooltip title={idsElegiveis.length === 0 ? 'Nenhum processo disponível' : todosSelecionados ? 'Desmarcar todos' : 'Selecionar todos'}>
+                          <span>
+                            <Checkbox
+                              indeterminate={algunsSelecionados}
+                              checked={todosSelecionados}
+                              onChange={handleToggleTodos}
+                              disabled={idsElegiveis.length === 0}
+                            />
+                          </span>
+                        </Tooltip>
+                      </TableCell>
+                    )}
                     <TableCell>Cota</TableCell>
                     <TableCell>Cliente</TableCell>
                     <TableCell>Administradora</TableCell>
@@ -1059,7 +1201,7 @@ function ListaProcessos() {
                 <TableBody>
                   {processos.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} align="center">
+                      <TableCell colSpan={podeGerenciarProcessos ? 9 : 8} align="center">
                         <Typography variant="body2" color="textSecondary">
                           Nenhum processo encontrado
                         </Typography>
@@ -1071,8 +1213,20 @@ function ListaProcessos() {
                       // ficam em cotasProcesso[]. Usamos a primeira cota como referência.
                       const cotaRef = processo.cota || processo.cotasProcesso?.[0]?.cota || null;
                       const diaVencRef = processo.diaVencimento ?? processo.cotasProcesso?.[0]?.diaVencimento;
+                      const elegivel = processo.status !== 'encerrado';
+                      const estaSelecionado = selecionados.includes(processo.id);
                       return (
-                      <TableRow key={processo.id} hover>
+                      <TableRow key={processo.id} hover selected={estaSelecionado} sx={estaSelecionado ? { bgcolor: 'action.selected' } : undefined}>
+                        {podeGerenciarProcessos && (
+                          <TableCell padding="checkbox">
+                            {elegivel && (
+                              <Checkbox
+                                checked={estaSelecionado}
+                                onChange={() => handleToggleSelecionado(processo.id)}
+                              />
+                            )}
+                          </TableCell>
+                        )}
                         <TableCell>
                           <Typography variant="body2" fontWeight="bold">
                             {processo.tipo === 'multiplo'
@@ -1236,6 +1390,62 @@ function ListaProcessos() {
           </>
         )}
       </PapperBlock>
+
+      {/* Dialog de Ações em Lote */}
+      <Dialog open={dialogLote.open} onClose={fecharDialogLote} maxWidth="xs" fullWidth>
+        <DialogTitle>
+          {dialogLote.acao === 'pausar' && `Pausar ${selecionados.length} processo(s)`}
+          {dialogLote.acao === 'encerrar' && `Encerrar ${selecionados.length} processo(s)`}
+          {dialogLote.acao === 'meses' && `Alterar meses de ${selecionados.length} processo(s)`}
+        </DialogTitle>
+        <DialogContent>
+          {dialogLote.acao === 'pausar' && (
+            <Typography variant="body2">
+              Os processos selecionados serão pausados. Novas cobranças não serão geradas até reativar.
+              <br /><br />
+              Apenas processos com status <strong>Ativo</strong> serão afetados.
+            </Typography>
+          )}
+          {dialogLote.acao === 'encerrar' && (
+            <Typography variant="body2" color="error">
+              Os processos selecionados serão encerrados definitivamente. Esta ação não pode ser desfeita.
+            </Typography>
+          )}
+          {dialogLote.acao === 'meses' && (
+            <Box sx={{ pt: 1 }}>
+              <Typography variant="body2" sx={{ mb: 2 }}>
+                Defina a quantidade de meses para todos os processos selecionados. Deixe em branco para ilimitado.
+              </Typography>
+              <TextField
+                fullWidth
+                label="Quantidade de Meses"
+                type="number"
+                value={dialogLote.meses}
+                onChange={(e) => setDialogLote(prev => ({ ...prev, meses: e.target.value }))}
+                inputProps={{ min: 1 }}
+                InputProps={{
+                  endAdornment: <InputAdornment position="end">meses</InputAdornment>
+                }}
+                placeholder="Deixe em branco para ilimitado"
+              />
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={fecharDialogLote} disabled={dialogLote.salvando}>
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            color={dialogLote.acao === 'encerrar' ? 'error' : dialogLote.acao === 'pausar' ? 'warning' : 'primary'}
+            onClick={confirmarLote}
+            disabled={dialogLote.salvando}
+            startIcon={dialogLote.salvando ? <CircularProgress size={16} /> : undefined}
+          >
+            {dialogLote.salvando ? 'Processando...' : 'Confirmar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Dialog de Progresso da Importação */}
       <Dialog

@@ -23,8 +23,8 @@ module.exports = {
 
   async atualizar(req, res) {
     try {
-      const { modo, diasSemana } = req.body;
-      const configuracao = await configuracaoCobrancaService.atualizar({ modo, diasSemana });
+      const { modo, diasSemana, ativo } = req.body;
+      const configuracao = await configuracaoCobrancaService.atualizar({ modo, diasSemana, ativo });
 
       return res.status(200).json({
         sucesso: true,

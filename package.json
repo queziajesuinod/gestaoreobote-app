@@ -105,7 +105,12 @@
       "pg",
       "pg-hstore",
       "sequelize",
-      "sequelize-cli"
+      "sequelize-cli",
+      "node-cron",
+      "yum",
+      "pdfkit",
+      "exceljs",
+      "jsonwebtoken"
     ],
     "include": [
       "core-js",

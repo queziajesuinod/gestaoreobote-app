@@ -1,6 +1,6 @@
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
-const { Op } = require('sequelize');
+const { Op, fn, col, literal } = require('sequelize');
 const {
   ProcessoCobranca,
   CobrancaMensal
@@ -176,7 +176,8 @@ class RelatoriosService {
           ]
         }
       ],
-      order: [['dataVencimento', 'ASC']]
+      order: [['dataVencimento', 'ASC']],
+      limit: 2000
     });
 
     return new Promise((resolve, reject) => {
@@ -256,13 +257,24 @@ class RelatoriosService {
             { association: 'cliente' },
             { association: 'consultor' }
           ]
-        },
-        {
-          association: 'cobrancas'
         }
       ],
-      order: [['createdAt', 'DESC']]
+      order: [['createdAt', 'DESC']],
+      limit: 5000
     });
+
+    const cobrancaCounts = await CobrancaMensal.findAll({
+      attributes: [
+        'processoCobrancaId',
+        [fn('COUNT', col('id')), 'total'],
+        [fn('SUM', literal("CASE WHEN status = 'pago' THEN 1 ELSE 0 END")), 'pagas'],
+        [fn('SUM', literal("CASE WHEN status = 'atrasado' THEN 1 ELSE 0 END")), 'atrasadas']
+      ],
+      group: ['processoCobrancaId'],
+      raw: true
+    });
+    const countsMap = {};
+    cobrancaCounts.forEach(c => { countsMap[c.processoCobrancaId] = c; });
 
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Processos de Cobranca');
@@ -289,9 +301,7 @@ class RelatoriosService {
     };
 
     processos.forEach(processo => {
-      const cobrancas = processo.cobrancas || [];
-      const cobrancasPagas = cobrancas.filter(c => c.status === 'pago').length;
-      const cobrancasAtrasadas = cobrancas.filter(c => c.status === 'atrasado').length;
+      const counts = countsMap[processo.id] || { total: 0, pagas: 0, atrasadas: 0 };
 
       worksheet.addRow({
         id: processo.id.slice(0, 8),
@@ -302,9 +312,9 @@ class RelatoriosService {
         diaVencimento: processo.diaVencimento,
         dataInicio: new Date(processo.dataInicioCobranca).toLocaleDateString('pt-BR'),
         status: processo.status.toUpperCase(),
-        totalCobrancas: cobrancas.length,
-        pagas: cobrancasPagas,
-        atrasadas: cobrancasAtrasadas
+        totalCobrancas: parseInt(counts.total, 10) || 0,
+        pagas: parseInt(counts.pagas, 10) || 0,
+        atrasadas: parseInt(counts.atrasadas, 10) || 0
       });
     });
 
@@ -318,9 +328,9 @@ class RelatoriosService {
       diaVencimento: '',
       dataInicio: '',
       status: '',
-      totalCobrancas: processos.reduce((sum, p) => sum + (p.cobrancas || []).length, 0),
-      pagas: processos.reduce((sum, p) => sum + ((p.cobrancas || []).filter(c => c.status === 'pago').length), 0),
-      atrasadas: processos.reduce((sum, p) => sum + ((p.cobrancas || []).filter(c => c.status === 'atrasado').length), 0)
+      totalCobrancas: cobrancaCounts.reduce((sum, c) => sum + (parseInt(c.total, 10) || 0), 0),
+      pagas: cobrancaCounts.reduce((sum, c) => sum + (parseInt(c.pagas, 10) || 0), 0),
+      atrasadas: cobrancaCounts.reduce((sum, c) => sum + (parseInt(c.atrasadas, 10) || 0), 0)
     });
 
     totalRow.font = { bold: true };
@@ -350,7 +360,8 @@ class RelatoriosService {
           ]
         }
       ],
-      order: [['dataVencimento', 'ASC']]
+      order: [['dataVencimento', 'ASC']],
+      limit: 5000
     });
 
     const workbook = new ExcelJS.Workbook();

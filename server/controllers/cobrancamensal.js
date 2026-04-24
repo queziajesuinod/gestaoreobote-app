@@ -247,6 +247,96 @@ module.exports = {
   },
 
   /**
+   * POST /api/inadimplentes/cobrancas/lote/pagar
+   * Marcar várias cobranças como pagas de uma vez
+   */
+  async marcarVariasComoPago(req, res) {
+    try {
+      const { ids, dataPagamento, observacao } = req.body;
+
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({
+          sucesso: false,
+          mensagem: 'Informe ao menos uma cobrança (ids)'
+        });
+      }
+
+      const resultados = { sucesso: [], falha: [] };
+
+      for (const id of ids) {
+        try {
+          await cobrancaService.marcarComoPago(id, { dataPagamento, observacao });
+          resultados.sucesso.push(id);
+        } catch (err) {
+          resultados.falha.push({ id, motivo: err.message });
+        }
+      }
+
+      return res.status(200).json({
+        sucesso: true,
+        mensagem: `${resultados.sucesso.length} cobrança(s) marcada(s) como paga(s)`,
+        dados: resultados
+      });
+
+    } catch (erro) {
+      console.error('[CobrancaMensal] Erro ao marcar em lote como pago:', erro);
+      return res.status(500).json({
+        sucesso: false,
+        mensagem: 'Erro ao processar pagamentos em lote'
+      });
+    }
+  },
+
+  /**
+   * POST /api/inadimplentes/cobrancas/lote/anotar
+   * Adicionar a mesma anotação em várias cobranças
+   */
+  async adicionarAnotacaoEmLote(req, res) {
+    try {
+      const { ids, tipo, canal, mensagem } = req.body;
+      const usuarioId = req.user?.id;
+
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({
+          sucesso: false,
+          mensagem: 'Informe ao menos uma cobrança (ids)'
+        });
+      }
+
+      if (!tipo || !canal || !mensagem) {
+        return res.status(400).json({
+          sucesso: false,
+          mensagem: 'Campos obrigatórios: tipo, canal, mensagem'
+        });
+      }
+
+      const resultados = { sucesso: [], falha: [] };
+
+      for (const id of ids) {
+        try {
+          await inadimplenciaService.adicionarAnotacao(id, { tipo, canal, mensagem, usuarioId });
+          resultados.sucesso.push(id);
+        } catch (err) {
+          resultados.falha.push({ id, motivo: err.message });
+        }
+      }
+
+      return res.status(200).json({
+        sucesso: true,
+        mensagem: `Anotação adicionada em ${resultados.sucesso.length} cobrança(s)`,
+        dados: resultados
+      });
+
+    } catch (erro) {
+      console.error('[CobrancaMensal] Erro ao anotar em lote:', erro);
+      return res.status(500).json({
+        sucesso: false,
+        mensagem: 'Erro ao adicionar anotações em lote'
+      });
+    }
+  },
+
+  /**
    * GET /api/inadimplentes/cobrancas/estatisticas
    * Obter estatísticas de cobranças
    */

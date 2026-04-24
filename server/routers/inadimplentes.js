@@ -56,6 +56,24 @@ router.get('/processos', processoCobrancaController.listar);
 router.post('/processos', processoCobrancaController.criar);
 
 /**
+ * POST /api/inadimplentes/processos/lote/pausar
+ * Pausar vários processos — ANTES de /:id
+ */
+router.post('/processos/lote/pausar', processoCobrancaController.pausarEmLote);
+
+/**
+ * POST /api/inadimplentes/processos/lote/encerrar
+ * Encerrar vários processos — ANTES de /:id
+ */
+router.post('/processos/lote/encerrar', processoCobrancaController.encerrarEmLote);
+
+/**
+ * POST /api/inadimplentes/processos/lote/meses
+ * Atualizar quantidade de meses de vários processos — ANTES de /:id
+ */
+router.post('/processos/lote/meses', processoCobrancaController.atualizarMesesEmLote);
+
+/**
  * GET /api/inadimplentes/processos/:id
  * Buscar processo específico
  */
@@ -157,6 +175,20 @@ router.post('/cotas-processo/:id/encerrar', cotaProcessoController.encerrar);
  * IMPORTANTE: Esta rota deve vir ANTES de /cobrancas/:id
  */
 router.get('/cobrancas/estatisticas', cobrancaMensalController.obterEstatisticas);
+
+/**
+ * POST /api/inadimplentes/cobrancas/lote/pagar
+ * Marcar várias cobranças como pagas de uma vez
+ * Body: { ids: string[], dataPagamento, observacao }
+ */
+router.post('/cobrancas/lote/pagar', cobrancaMensalController.marcarVariasComoPago);
+
+/**
+ * POST /api/inadimplentes/cobrancas/lote/anotar
+ * Adicionar anotação em várias cobranças
+ * Body: { ids: string[], tipo, canal, mensagem }
+ */
+router.post('/cobrancas/lote/anotar', cobrancaMensalController.adicionarAnotacaoEmLote);
 
 /**
  * GET /api/inadimplentes/cobrancas

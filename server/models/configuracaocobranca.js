@@ -34,6 +34,12 @@ module.exports = (sequelize) => {
       allowNull: true,
       comment: 'Dias em que a detecção roda quando o modo é semanal'
     },
+    ativo: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+      comment: 'Ativa ou desativa a execução automática do cron de inadimplência'
+    },
     ultimaExecucao: {
       type: DataTypes.DATE,
       allowNull: true,

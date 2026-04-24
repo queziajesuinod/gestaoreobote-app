@@ -106,6 +106,36 @@ export const reativarProcesso = async (id) => {
   return response.json();
 };
 
+export const pausarProcessosEmLote = async (ids) => {
+  const response = await fetch(`${API_URL}/api/inadimplentes/processos/lote/pausar`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify({ ids })
+  });
+  if (!response.ok) throw new Error('Erro ao pausar processos em lote');
+  return response.json();
+};
+
+export const encerrarProcessosEmLote = async (ids) => {
+  const response = await fetch(`${API_URL}/api/inadimplentes/processos/lote/encerrar`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify({ ids })
+  });
+  if (!response.ok) throw new Error('Erro ao encerrar processos em lote');
+  return response.json();
+};
+
+export const atualizarMesesEmLote = async (ids, quantidadeMeses) => {
+  const response = await fetch(`${API_URL}/api/inadimplentes/processos/lote/meses`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify({ ids, quantidadeMeses })
+  });
+  if (!response.ok) throw new Error('Erro ao atualizar meses em lote');
+  return response.json();
+};
+
 export const encerrarProcesso = async (id) => {
   const response = await fetch(`${API_URL}/api/inadimplentes/processos/${id}/encerrar`, {
     method: 'POST',
@@ -236,6 +266,28 @@ export const adicionarAnotacao = async (id, dados) => {
   });
   
   if (!response.ok) throw new Error('Erro ao adicionar anotação');
+  return response.json();
+};
+
+export const marcarVariasComoPago = async (ids, dados) => {
+  const response = await fetch(`${API_URL}/api/inadimplentes/cobrancas/lote/pagar`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify({ ids, ...dados })
+  });
+
+  if (!response.ok) throw new Error('Erro ao marcar cobranças como pagas em lote');
+  return response.json();
+};
+
+export const adicionarAnotacaoEmLote = async (ids, dados) => {
+  const response = await fetch(`${API_URL}/api/inadimplentes/cobrancas/lote/anotar`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify({ ids, ...dados })
+  });
+
+  if (!response.ok) throw new Error('Erro ao adicionar anotação em lote');
   return response.json();
 };
 
@@ -602,6 +654,9 @@ export default {
   pausarProcesso,
   reativarProcesso,
   encerrarProcesso,
+  pausarProcessosEmLote,
+  encerrarProcessosEmLote,
+  atualizarMesesEmLote,
   listarAdministradoras,
   listarConsultores,
   listarClientes,
@@ -611,7 +666,9 @@ export default {
   listarCobrancas,
   buscarCobranca,
   marcarComoPago,
+  marcarVariasComoPago,
   adicionarAnotacao,
+  adicionarAnotacaoEmLote,
   forcarNotificacao,
   obterEstatisticas,
   

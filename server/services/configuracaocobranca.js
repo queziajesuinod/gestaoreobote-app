@@ -40,6 +40,10 @@ class ConfiguracaoCobrancaService {
         .filter((dia) => Number.isFinite(dia) && dia >= 0 && dia <= 6);
     }
 
+    if (typeof dados.ativo === 'boolean') {
+      payload.ativo = dados.ativo;
+    }
+
     return configuracao.update(payload);
   }
 

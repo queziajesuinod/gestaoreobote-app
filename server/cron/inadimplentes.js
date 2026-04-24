@@ -9,6 +9,7 @@
 const cron = require('node-cron');
 const cobrancaService = require('../services/cobranca');
 const inadimplenciaService = require('../services/inadimplencia');
+const configuracaoCobrancaService = require('../services/configuracaocobranca');
 
 /**
  * Inicializar todos os cron jobs do módulo de inadimplentes
@@ -35,11 +36,19 @@ function inicializarCronJobs() {
    */
   cron.schedule('0 0 * * *', async () => {
     console.log('\n========================================');
-    console.log('🕐 [CRON] Iniciando geração automática de cobranças mensais');
+    console.log('🕐 [CRON] Verificando configuração para geração de cobranças mensais');
     console.log(`⏰ Horário: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Manaus' })}`);
     console.log('========================================\n');
 
     try {
+      const configuracao = await configuracaoCobrancaService.obterOuCriar();
+
+      if (!configuracao.ativo) {
+        console.log('⏸️  [CRON] Verificação desativada nas configurações. Pulando geração de cobranças.');
+        return;
+      }
+
+      console.log('🚀 [CRON] Iniciando geração automática de cobranças mensais');
       const resultado = await cobrancaService.gerarCobrancasMensaisAutomatico();
 
       console.log('\n✅ [CRON] Geração de cobranças concluída com sucesso!');
@@ -87,11 +96,24 @@ function inicializarCronJobs() {
    */
   cron.schedule('0 8 * * *', async () => {
     console.log('\n========================================');
-    console.log('🔍 [CRON] Iniciando detecção automática de inadimplência');
+    console.log('🔍 [CRON] Verificando configuração para detecção de inadimplência');
     console.log(`⏰ Horário: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Manaus' })}`);
     console.log('========================================\n');
 
     try {
+      const configuracao = await configuracaoCobrancaService.obterOuCriar();
+
+      if (!configuracao.ativo) {
+        console.log('⏸️  [CRON] Verificação desativada nas configurações. Pulando detecção de inadimplência.');
+        return;
+      }
+
+      if (!configuracaoCobrancaService.deveExecutarHoje(configuracao)) {
+        console.log(`⏭️  [CRON] Modo "${configuracao.modo}" — não é dia de executar hoje. Pulando.`);
+        return;
+      }
+
+      console.log('🚀 [CRON] Iniciando detecção automática de inadimplência');
       const resultado = await inadimplenciaService.detectarInadimplenciaAutomatico();
 
       console.log('\n✅ [CRON] Detecção de inadimplência concluída com sucesso!');
@@ -106,6 +128,8 @@ function inicializarCronJobs() {
           console.log(`  - ${detalhe}`);
         });
       }
+
+      await configuracaoCobrancaService.registrarExecucao(configuracao);
 
     } catch (error) {
       console.error('\n❌ [CRON] Erro ao detectar inadimplência:', error);
