@@ -1461,7 +1461,13 @@ function Clientes() {
         open={openDetalhes}
         onClose={handleCloseDetalhes}
         fullWidth
-        maxWidth="md"
+        maxWidth={false}
+        PaperProps={{
+          sx: {
+            width: { xs: 'calc(100vw - 16px)', sm: 'calc(100vw - 48px)' },
+            maxWidth: 1440
+          }
+        }}
       >
         <DialogTitle>Detalhes do Cliente</DialogTitle>
         <DialogContent dividers>
@@ -1531,19 +1537,28 @@ function Clientes() {
             </Box>
           </Box>
 
-          <TableContainer component={Paper}>
-            <Table size="small">
+          <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
+            <Table
+              size="small"
+              sx={{
+                minWidth: 1220,
+                '& .MuiTableCell-root': {
+                  whiteSpace: 'nowrap',
+                  verticalAlign: 'top'
+                }
+              }}
+            >
               <TableHead>
                 <TableRow>
-                  <TableCell>Grupo/Cota/Dígito</TableCell>
-                  <TableCell>Valor Líquido</TableCell>
-                  <TableCell>Valor Bruto</TableCell>
-                  <TableCell>Data Aquisição</TableCell>
-                  <TableCell>Administradora</TableCell>
-                  <TableCell>Consultores</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Contemplação</TableCell>
-                  <TableCell align="center">Ações</TableCell>
+                  <TableCell sx={{ minWidth: 150 }}>Grupo/Cota/Dígito</TableCell>
+                  <TableCell sx={{ minWidth: 130 }}>Valor Líquido</TableCell>
+                  <TableCell sx={{ minWidth: 130 }}>Valor Bruto</TableCell>
+                  <TableCell sx={{ minWidth: 130 }}>Data Aquisição</TableCell>
+                  <TableCell sx={{ minWidth: 170 }}>Administradora</TableCell>
+                  <TableCell sx={{ minWidth: 240 }}>Consultores</TableCell>
+                  <TableCell sx={{ minWidth: 150 }}>Status</TableCell>
+                  <TableCell sx={{ minWidth: 210 }}>Contemplação</TableCell>
+                  <TableCell align="center" sx={{ minWidth: 220 }}>Ações</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
