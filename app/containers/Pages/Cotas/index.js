@@ -35,6 +35,11 @@ import brand from 'dan-api/dummy/brand';
 import { PapperBlock } from 'dan-components';
 import { getStoredUser } from '../../../utils/userStorage';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
+import IconButton from '@mui/material/IconButton';
+import Tooltip from '@mui/material/Tooltip';
+import CancelIcon from '@mui/icons-material/Cancel';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import CheckBoxIcon from '@mui/icons-material/CheckBox';
 
 const API_URL = process.env.REACT_APP_API_URL?.replace(/\/$/, '') || 'http://localhost:3003';
 const getToken = () => localStorage.getItem('token');
@@ -210,6 +215,15 @@ function CotasPage() {
   });
   const [salvandoContemplacao, setSalvandoContemplacao] = useState(false);
 
+  // Cancelamento
+  const [selecionados, setSelecionados] = useState([]);
+  const [dialogCancelamento, setDialogCancelamento] = useState({
+    open: false,
+    ids: [],      // uma ou várias cotas
+    dataCancelamento: new Date().toISOString().slice(0, 10),
+    salvando: false
+  });
+
   const consultorOptions = useMemo(() => {
     const normalized = consultores.map(consultor => ({
       ...consultor,
@@ -279,6 +293,7 @@ function CotasPage() {
     || perfilUsuario === 'RH'
     || permissoesUsuario.includes('GESTAO')
     || permissoesUsuario.includes('CLIENTES_ALL');
+  const podeGerenciarCotas = ['ADMIN', 'RH', 'MASTER'].includes(perfilUsuario);
 
   const showSnackbar = useCallback((message, severity = 'success') => {
     setSnackbar({ open: true, message, severity });
@@ -377,6 +392,7 @@ function CotasPage() {
 
   const fetchCotas = useCallback(async () => {
     setLoading(true);
+    setSelecionados([]);
     try {
       const params = new URLSearchParams();
       params.append('page', (page || 0) + 1);
@@ -448,6 +464,77 @@ function CotasPage() {
     setAppliedFilters(cloneFilters(baseFilters));
     setPage(0);
     setRowsPerPage(10);
+  };
+
+  // ---- Seleção múltipla ----
+  const idsElegiveis = cotas.map(c => c.id);
+  const todosSelecionados = idsElegiveis.length > 0 && idsElegiveis.every(id => selecionados.includes(id));
+  const algunsSelecionados = selecionados.length > 0 && !todosSelecionados;
+
+  const handleToggleSelecionado = (id) => {
+    setSelecionados(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  const handleToggleTodos = () => {
+    setSelecionados(todosSelecionados ? [] : idsElegiveis);
+  };
+
+  // ---- Cancelamento ----
+  const abrirDialogCancelamento = (ids) => {
+    setDialogCancelamento({
+      open: true,
+      ids,
+      dataCancelamento: new Date().toISOString().slice(0, 10),
+      salvando: false
+    });
+  };
+
+  const fecharDialogCancelamento = () => {
+    if (dialogCancelamento.salvando) return;
+    setDialogCancelamento(prev => ({ ...prev, open: false }));
+  };
+
+  const confirmarCancelamento = async () => {
+    setDialogCancelamento(prev => ({ ...prev, salvando: true }));
+    try {
+      const { ids, dataCancelamento } = dialogCancelamento;
+      const url = ids.length === 1
+        ? `${API_URL}/cotas/${ids[0]}/cancelar`
+        : `${API_URL}/cotas/lote/cancelar`;
+      const body = ids.length === 1
+        ? { dataCancelamento }
+        : { ids, dataCancelamento };
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify(body)
+      });
+      const data = await response.json();
+      if (!response.ok || data.sucesso === false) throw new Error(data?.mensagem || 'Erro ao cancelar');
+
+      showSnackbar(data.mensagem || 'Cancelamento realizado com sucesso');
+      setDialogCancelamento(prev => ({ ...prev, open: false, salvando: false }));
+      fetchCotas();
+    } catch (error) {
+      showSnackbar(error.message || 'Erro ao cancelar cotas', 'error');
+      setDialogCancelamento(prev => ({ ...prev, salvando: false }));
+    }
+  };
+
+  const handleReativar = async (cotaId) => {
+    try {
+      const response = await fetch(`${API_URL}/cotas/${cotaId}/reativar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` }
+      });
+      const data = await response.json();
+      if (!response.ok || data.sucesso === false) throw new Error(data?.mensagem || 'Erro ao reativar');
+      showSnackbar('Cota reativada com sucesso');
+      fetchCotas();
+    } catch (error) {
+      showSnackbar(error.message || 'Erro ao reativar cota', 'error');
+    }
   };
 
   const handleChangePage = (event, newPage) => {
@@ -842,6 +929,34 @@ function CotasPage() {
         </Grid>
 
         <Paper elevation={2} sx={{ p: 2 }}>
+          {/* Barra de ações em lote */}
+          {podeGerenciarCotas && selecionados.length > 0 && (
+            <Box
+              sx={{
+                mb: 2, px: 2, py: 1,
+                display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap',
+                bgcolor: 'primary.50', border: '1px solid', borderColor: 'primary.main', borderRadius: 1
+              }}
+            >
+              <CheckBoxIcon color="primary" />
+              <Typography variant="body2" fontWeight="medium" sx={{ flex: 1 }}>
+                {selecionados.length} cota(s) selecionada(s)
+              </Typography>
+              <Button
+                size="small"
+                variant="contained"
+                color="error"
+                startIcon={<CancelIcon />}
+                onClick={() => abrirDialogCancelamento(selecionados)}
+              >
+                Cancelar Selecionadas
+              </Button>
+              <Button size="small" color="inherit" onClick={() => setSelecionados([])}>
+                Limpar Seleção
+              </Button>
+            </Box>
+          )}
+
           <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2} sx={{ mb: 2 }}>
             <Typography variant="h6">Resultados</Typography>
             <Box display="flex" gap={3} flexWrap="wrap">
@@ -863,6 +978,18 @@ function CotasPage() {
             <Table>
               <TableHead>
                 <TableRow>
+                  {podeGerenciarCotas && (
+                    <TableCell padding="checkbox">
+                      <Tooltip title={todosSelecionados ? 'Desmarcar todas' : 'Selecionar todas'}>
+                        <Checkbox
+                          indeterminate={algunsSelecionados}
+                          checked={todosSelecionados}
+                          onChange={handleToggleTodos}
+                          disabled={idsElegiveis.length === 0}
+                        />
+                      </Tooltip>
+                    </TableCell>
+                  )}
                   <TableCell  sx={{ fontSize: '0.8rem' }} sortDirection={orderBy === 'cliente' ? order : false}>
                     <TableSortLabel
                       active={orderBy === 'cliente'}
@@ -929,7 +1056,8 @@ function CotasPage() {
                   <TableCell>
                     Contemplação
                   </TableCell>
-                  {podeGerirContemplacao && (
+                  <TableCell sx={{ fontSize: '0.8rem' }}>Status</TableCell>
+                  {(podeGerirContemplacao || podeGerenciarCotas) && (
                     <TableCell align="center" sx={{ fontSize: '0.8rem' }}>
                       Ações
                     </TableCell>
@@ -955,14 +1083,29 @@ function CotasPage() {
 
                 {!loading && cotas.map(cota => {
                   const consultoresResumo = mapConsultoresDetalhes(cota);
+                  const estaSelecionado = selecionados.includes(cota.id);
+                  const cancelado = cota.status === 'cancelado';
                   return (
                   <TableRow
                     key={cota.id}
                     hover
+                    selected={estaSelecionado}
                     sx={{
-                      backgroundColor: cota.contemplacao ? 'rgba(34,197,94,0.08)' : 'inherit'
+                      backgroundColor: cancelado
+                        ? 'rgba(239,68,68,0.06)'
+                        : cota.contemplacao
+                          ? 'rgba(34,197,94,0.08)'
+                          : 'inherit'
                     }}
                   >
+                    {podeGerenciarCotas && (
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          checked={estaSelecionado}
+                          onChange={() => handleToggleSelecionado(cota.id)}
+                        />
+                      </TableCell>
+                    )}
                     <TableCell sx={{ fontSize: '0.8rem' }}>{cota.cliente?.nome || '—'}</TableCell>
                     <TableCell sx={{ fontSize: '0.8rem' }}>
                       {consultoresResumo.length === 0 ? (
@@ -997,17 +1140,46 @@ function CotasPage() {
                         <Chip size="small" variant="outlined" label="Não contemplada" />
                       )}
                     </TableCell>
-                    {podeGerirContemplacao && (
-                      <TableCell align="center">
-                        <Button
-                          variant={cota.contemplacao ? 'contained' : 'outlined'}
-                          color="primary"
+                    <TableCell sx={{ fontSize: '0.75rem' }}>
+                      {cancelado ? (
+                        <Chip
                           size="small"
-                          startIcon={<EmojiEventsIcon fontSize="small" />}
-                          onClick={() => handleOpenContemplacaoCotaGeral(cota)}
-                        >
-                          {cota.contemplacao ? 'Editar' : 'Contemplar'}
-                        </Button>
+                          color="error"
+                          label={`Cancelada${cota.dataCancelamento ? ` · ${new Date(cota.dataCancelamento).toLocaleDateString('pt-BR')}` : ''}`}
+                        />
+                      ) : (
+                        <Chip size="small" color="success" variant="outlined" label="Ativa" />
+                      )}
+                    </TableCell>
+                    {(podeGerirContemplacao || podeGerenciarCotas) && (
+                      <TableCell align="center">
+                        <Box display="flex" justifyContent="center" gap={0.5}>
+                          {podeGerirContemplacao && (
+                            <Button
+                              variant={cota.contemplacao ? 'contained' : 'outlined'}
+                              color="primary"
+                              size="small"
+                              startIcon={<EmojiEventsIcon fontSize="small" />}
+                              onClick={() => handleOpenContemplacaoCotaGeral(cota)}
+                            >
+                              {cota.contemplacao ? 'Editar' : 'Contemplar'}
+                            </Button>
+                          )}
+                          {podeGerenciarCotas && !cancelado && (
+                            <Tooltip title="Cancelar cota">
+                              <IconButton size="small" color="error" onClick={() => abrirDialogCancelamento([cota.id])}>
+                                <CancelIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                          {podeGerenciarCotas && cancelado && (
+                            <Tooltip title="Reativar cota">
+                              <IconButton size="small" color="success" onClick={() => handleReativar(cota.id)}>
+                                <CheckCircleIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                        </Box>
                       </TableCell>
                     )}
                   </TableRow>
@@ -1029,6 +1201,42 @@ function CotasPage() {
           />
         </Paper>
       </PapperBlock>
+
+      {/* Dialog de Cancelamento */}
+      <Dialog open={dialogCancelamento.open} onClose={fecharDialogCancelamento} maxWidth="xs" fullWidth>
+        <DialogTitle>
+          {dialogCancelamento.ids.length === 1 ? 'Cancelar Cota' : `Cancelar ${dialogCancelamento.ids.length} Cotas`}
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 1 }}>
+            <Typography variant="body2" sx={{ mb: 2 }}>
+              {dialogCancelamento.ids.length === 1
+                ? 'Informe a data de cancelamento para esta cota.'
+                : `Informe a data de cancelamento para as ${dialogCancelamento.ids.length} cotas selecionadas.`}
+            </Typography>
+            <TextField
+              fullWidth
+              label="Data de Cancelamento"
+              type="date"
+              value={dialogCancelamento.dataCancelamento}
+              onChange={(e) => setDialogCancelamento(prev => ({ ...prev, dataCancelamento: e.target.value }))}
+              InputLabelProps={{ shrink: true }}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={fecharDialogCancelamento} disabled={dialogCancelamento.salvando}>Cancelar</Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={confirmarCancelamento}
+            disabled={dialogCancelamento.salvando || !dialogCancelamento.dataCancelamento}
+            startIcon={dialogCancelamento.salvando ? <CircularProgress size={16} /> : <CancelIcon />}
+          >
+            {dialogCancelamento.salvando ? 'Cancelando...' : 'Confirmar Cancelamento'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={openContemplacaoDialog}

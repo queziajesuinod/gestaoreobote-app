@@ -75,6 +75,15 @@ module.exports = (sequelize, DataTypes) => {
       administradora: {
         type: DataTypes.STRING,
         allowNull: false
+      },
+      status: {
+        type: DataTypes.ENUM('ativo', 'cancelado'),
+        allowNull: false,
+        defaultValue: 'ativo'
+      },
+      dataCancelamento: {
+        type: DataTypes.DATEONLY,
+        allowNull: true
       }
     },
     {

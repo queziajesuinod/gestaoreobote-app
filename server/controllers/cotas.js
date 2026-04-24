@@ -378,6 +378,91 @@ async function removerContemplacao(req, res) {
   }
 }
 
+async function cancelar(req, res) {
+  try {
+    const perfil = normalizarPerfil(req.user?.perfil);
+    if (!usuarioEhAdminOuRh(perfil)) {
+      return res.status(403).json({ sucesso: false, mensagem: 'Apenas administradores ou RH podem cancelar cotas.' });
+    }
+
+    const { id } = req.params;
+    const { dataCancelamento } = req.body;
+    const data = dataCancelamento || new Date().toISOString().slice(0, 10);
+
+    const { Cota } = require('../models');
+    const cota = await Cota.findByPk(id);
+    if (!cota) {
+      return res.status(404).json({ sucesso: false, mensagem: 'Cota não encontrada.' });
+    }
+
+    await cota.update({ status: 'cancelado', dataCancelamento: data });
+    return res.status(200).json({ sucesso: true, mensagem: 'Cota cancelada com sucesso.', dados: cota });
+  } catch (error) {
+    console.error('❌ Erro ao cancelar cota:', error);
+    return res.status(500).json({ sucesso: false, mensagem: 'Erro ao cancelar cota.', erro: error.message });
+  }
+}
+
+async function cancelarEmLote(req, res) {
+  try {
+    const perfil = normalizarPerfil(req.user?.perfil);
+    if (!usuarioEhAdminOuRh(perfil)) {
+      return res.status(403).json({ sucesso: false, mensagem: 'Apenas administradores ou RH podem cancelar cotas.' });
+    }
+
+    const { ids, dataCancelamento } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ sucesso: false, mensagem: 'Informe ao menos uma cota (ids).' });
+    }
+
+    const data = dataCancelamento || new Date().toISOString().slice(0, 10);
+    const { Cota } = require('../models');
+    const resultados = { sucesso: [], falha: [] };
+
+    for (const id of ids) {
+      try {
+        const cota = await Cota.findByPk(id);
+        if (!cota) throw new Error('Cota não encontrada');
+        await cota.update({ status: 'cancelado', dataCancelamento: data });
+        resultados.sucesso.push(id);
+      } catch (err) {
+        resultados.falha.push({ id, motivo: err.message });
+      }
+    }
+
+    return res.status(200).json({
+      sucesso: true,
+      mensagem: `${resultados.sucesso.length} cota(s) cancelada(s)`,
+      dados: resultados
+    });
+  } catch (error) {
+    console.error('❌ Erro ao cancelar cotas em lote:', error);
+    return res.status(500).json({ sucesso: false, mensagem: 'Erro ao cancelar cotas em lote.' });
+  }
+}
+
+async function reativarCota(req, res) {
+  try {
+    const perfil = normalizarPerfil(req.user?.perfil);
+    if (!usuarioEhAdminOuRh(perfil)) {
+      return res.status(403).json({ sucesso: false, mensagem: 'Apenas administradores ou RH podem reativar cotas.' });
+    }
+
+    const { id } = req.params;
+    const { Cota } = require('../models');
+    const cota = await Cota.findByPk(id);
+    if (!cota) {
+      return res.status(404).json({ sucesso: false, mensagem: 'Cota não encontrada.' });
+    }
+
+    await cota.update({ status: 'ativo', dataCancelamento: null });
+    return res.status(200).json({ sucesso: true, mensagem: 'Cota reativada com sucesso.', dados: cota });
+  } catch (error) {
+    console.error('❌ Erro ao reativar cota:', error);
+    return res.status(500).json({ sucesso: false, mensagem: 'Erro ao reativar cota.' });
+  }
+}
+
 module.exports = {
   criar,
   listar,
@@ -392,5 +477,8 @@ module.exports = {
   exportar,
   registrarContemplacao,
   removerContemplacao,
-  mover
+  mover,
+  cancelar,
+  cancelarEmLote,
+  reativarCota
 };

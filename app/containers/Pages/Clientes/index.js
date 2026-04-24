@@ -42,7 +42,9 @@ import {
   Refresh as RefreshIcon,
   Search as SearchIcon,
   Visibility as VisibilityIcon,
-  SwapHoriz as SwapHorizIcon
+  SwapHoriz as SwapHorizIcon,
+  Cancel as CancelIcon,
+  CheckCircle as CheckCircleIcon
 } from '@mui/icons-material';
 import brand from 'dan-api/dummy/brand';
 import { PapperBlock } from 'dan-components';
@@ -56,7 +58,7 @@ const ESTADOS = [
 ];
 
 const TIPOS_CONTEMPLACAO = [
-  {value: 'LANCE_FIDELIDADE', label: 'Lance Fidelidade' },
+  { value: 'LANCE_FIDELIDADE', label: 'Lance Fidelidade' },
   { value: 'LANCE_FIXO', label: 'Lance Fixo' },
   { value: 'LANCE_LIVRE', label: 'Lance Livre' },
   { value: 'SORTEIO', label: 'Sorteio' },
@@ -128,6 +130,13 @@ function Clientes() {
   const [clienteDestinoMovimentoSearch, setClienteDestinoMovimentoSearch] = useState('');
   const [removendoCotasCliente, setRemovendoCotasCliente] = useState(false);
 
+  const [dialogCancelamentoCota, setDialogCancelamentoCota] = useState({
+    open: false,
+    cota: null,
+    dataCancelamento: new Date().toISOString().slice(0, 10),
+    salvando: false
+  });
+
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: '',
@@ -198,23 +207,23 @@ function Clientes() {
     return date.toISOString().slice(0, 10);
   };
 
-const formatDateBR = (value) => {
-  if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleDateString('pt-BR');
-};
-
-const formatTipoContemplacao = (tipo) => {
-  const mapa = {
-    LANCE_FIXO: 'Lance Fixo',
-    LANCE_LIVRE: 'Lance Livre',
-    SORTEIO: 'Sorteio',
-    LANCE: 'Lance'
+  const formatDateBR = (value) => {
+    if (!value) return '—';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '—';
+    return date.toLocaleDateString('pt-BR');
   };
-  const chave = (tipo || '').toUpperCase();
-  return mapa[chave] || tipo || '—';
-};
+
+  const formatTipoContemplacao = (tipo) => {
+    const mapa = {
+      LANCE_FIXO: 'Lance Fixo',
+      LANCE_LIVRE: 'Lance Livre',
+      SORTEIO: 'Sorteio',
+      LANCE: 'Lance'
+    };
+    const chave = (tipo || '').toUpperCase();
+    return mapa[chave] || tipo || '—';
+  };
 
   const formatCotaIdentificador = (cota) => {
     if (!cota) return '—';
@@ -252,8 +261,8 @@ const formatTipoContemplacao = (tipo) => {
       return [];
     }
     const valorBase = Number(
-      cota?.valorDistribuidoPorConsultor ??
-      (lista.length ? (Number(cota?.valor ?? 0) / lista.length) : 0)
+      cota?.valorDistribuidoPorConsultor
+      ?? (lista.length ? (Number(cota?.valor ?? 0) / lista.length) : 0)
     );
     const valorIndividual = Number.isFinite(valorBase) ? valorBase : null;
     return lista.map(consultor => ({
@@ -265,6 +274,11 @@ const formatTipoContemplacao = (tipo) => {
     }));
   };
 
+  const sanitizeDigits = (value = '') => {
+    if (value === null || value === undefined) return '';
+    return value.toString().replace(/\D/g, '');
+  };
+
   const toNumberOrNull = (value) => {
     if (value === '' || value === null || value === undefined) return null;
     if (typeof value === 'number') {
@@ -274,11 +288,6 @@ const formatTipoContemplacao = (tipo) => {
     if (!digits) return null;
     const number = Number(digits) / 100;
     return Number.isNaN(number) ? null : number;
-  };
-
-  const sanitizeDigits = (value = '') => {
-    if (value === null || value === undefined) return '';
-    return value.toString().replace(/\D/g, '');
   };
 
   const formatDocumento = (value = '') => {
@@ -322,24 +331,7 @@ const formatTipoContemplacao = (tipo) => {
     return Math.round(number * 100).toString();
   };
 
-  useEffect(() => {
-    loadClientes();
-    if (podeGerenciarClientes) {
-      loadConsultores();
-    } else {
-      setConsultores([]);
-    }
-  }, [podeGerenciarClientes]);
-
-  useEffect(() => {
-    setPage(0);
-  }, [searchTerm, clientes, orderBy, order]);
-
-  useEffect(() => {
-    setCotasPage(0);
-  }, [cotas, cotaSearchTerm]);
-
-  const loadClientes = async () => {
+  async function loadClientes() {
     setLoadingClientes(true);
     let normalizados = [];
     try {
@@ -362,9 +354,9 @@ const formatTipoContemplacao = (tipo) => {
       setLoadingClientes(false);
     }
     return normalizados;
-  };
+  }
 
-  const loadConsultores = async () => {
+  async function loadConsultores() {
     if (!podeGerenciarClientes) {
       setConsultores([]);
       return;
@@ -382,7 +374,24 @@ const formatTipoContemplacao = (tipo) => {
     } catch (error) {
       showSnackbar('Falha ao carregar consultores', 'error');
     }
-  };
+  }
+
+  useEffect(() => {
+    loadClientes();
+    if (podeGerenciarClientes) {
+      loadConsultores();
+    } else {
+      setConsultores([]);
+    }
+  }, [podeGerenciarClientes]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [searchTerm, clientes, orderBy, order]);
+
+  useEffect(() => {
+    setCotasPage(0);
+  }, [cotas, cotaSearchTerm]);
 
   const consultorOptionsParaSelect = useMemo(() => {
     const lista = Array.isArray(consultores) ? consultores : [];
@@ -398,8 +407,7 @@ const formatTipoContemplacao = (tipo) => {
       if (resultado.some(consultor => String(consultor.id) === idSelecionado)) {
         return;
       }
-      const consultorEncontrado =
-        lista.find(consultor => String(consultor.id) === idSelecionado)
+      const consultorEncontrado = lista.find(consultor => String(consultor.id) === idSelecionado)
         || consultoresEmEdicao.find(consultor => String(consultor.id) === idSelecionado);
       if (consultorEncontrado) {
         resultado.push({
@@ -901,6 +909,88 @@ const formatTipoContemplacao = (tipo) => {
     }
   };
 
+  const handleOpenCancelamentoCota = (cota) => {
+    if (!podeGerenciarClientes) {
+      showSnackbar('Voce nao tem permissao para cancelar cotas.', 'error');
+      return;
+    }
+    setDialogCancelamentoCota({
+      open: true,
+      cota,
+      dataCancelamento: new Date().toISOString().slice(0, 10),
+      salvando: false
+    });
+  };
+
+  const handleCloseCancelamentoCota = () => {
+    if (dialogCancelamentoCota.salvando) return;
+    setDialogCancelamentoCota(prev => ({ ...prev, open: false }));
+  };
+
+  const refreshCotasClienteSelecionado = async () => {
+    if (!selectedCliente) return;
+    await loadCotas(selectedCliente.id);
+    const listaAtualizada = await loadClientes();
+    setSelectedCliente(prev => {
+      if (!prev) return prev;
+      const encontrado = listaAtualizada.find(c => c.id === prev.id);
+      return encontrado || prev;
+    });
+  };
+
+  const handleConfirmarCancelamentoCota = async () => {
+    if (!dialogCancelamentoCota.cota) return;
+    setDialogCancelamentoCota(prev => ({ ...prev, salvando: true }));
+    try {
+      const response = await fetch(`${API_URL}/cotas/${dialogCancelamentoCota.cota.id}/cancelar`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${getToken()}`
+        },
+        body: JSON.stringify({ dataCancelamento: dialogCancelamentoCota.dataCancelamento })
+      });
+      const data = await response.json();
+      if (!response.ok || data?.sucesso === false) {
+        throw new Error(data?.mensagem || 'Erro ao cancelar cota');
+      }
+
+      showSnackbar(data?.mensagem || 'Cota cancelada com sucesso.');
+      setDialogCancelamentoCota(prev => ({ ...prev, open: false, salvando: false }));
+      await refreshCotasClienteSelecionado();
+    } catch (error) {
+      console.error('Erro ao cancelar cota:', error);
+      showSnackbar(error.message || 'Falha ao cancelar cota', 'error');
+      setDialogCancelamentoCota(prev => ({ ...prev, salvando: false }));
+    }
+  };
+
+  const handleReativarCotaCliente = async (cota) => {
+    if (!podeGerenciarClientes) {
+      showSnackbar('Voce nao tem permissao para reativar cotas.', 'error');
+      return;
+    }
+    try {
+      const response = await fetch(`${API_URL}/cotas/${cota.id}/reativar`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${getToken()}`
+        }
+      });
+      const data = await response.json();
+      if (!response.ok || data?.sucesso === false) {
+        throw new Error(data?.mensagem || 'Erro ao reativar cota');
+      }
+
+      showSnackbar(data?.mensagem || 'Cota reativada com sucesso.');
+      await refreshCotasClienteSelecionado();
+    } catch (error) {
+      console.error('Erro ao reativar cota:', error);
+      showSnackbar(error.message || 'Falha ao reativar cota', 'error');
+    }
+  };
+
   const handleDeleteTodasCotasDoCliente = async () => {
     if (!podeGerenciarClientes) {
       showSnackbar('Você não tem permissão para remover cotas.', 'error');
@@ -1012,17 +1102,17 @@ const formatTipoContemplacao = (tipo) => {
     const termo = searchTerm.trim().toLowerCase();
     const filtrados = termo
       ? clientes.filter(cliente => {
-          const campos = [
-            cliente.nome,
-            cliente.email,
-            cliente.celular,
-            cliente.cpf,
-            cliente.cidade,
-            cliente.estado,
-            cliente.totalCotas !== undefined && cliente.totalCotas !== null ? cliente.totalCotas.toString() : ''
-          ].map(valor => (valor || '').toString().toLowerCase());
-          return campos.some(valor => valor.includes(termo));
-        })
+        const campos = [
+          cliente.nome,
+          cliente.email,
+          cliente.celular,
+          cliente.cpf,
+          cliente.cidade,
+          cliente.estado,
+          cliente.totalCotas !== undefined && cliente.totalCotas !== null ? cliente.totalCotas.toString() : ''
+        ].map(valor => (valor || '').toString().toLowerCase());
+        return campos.some(valor => valor.includes(termo));
+      })
       : clientes;
     const sorted = [...filtrados].sort((a, b) => {
       const normalizeString = (value) => (value || '').toString().toLowerCase();
@@ -1175,7 +1265,7 @@ const formatTipoContemplacao = (tipo) => {
                     Nome
                   </TableSortLabel>
                 </TableCell>
-          
+
                 <TableCell sortDirection={orderBy === 'celular' ? order : false}>
                   <TableSortLabel
                     active={orderBy === 'celular'}
@@ -1451,6 +1541,7 @@ const formatTipoContemplacao = (tipo) => {
                   <TableCell>Data Aquisição</TableCell>
                   <TableCell>Administradora</TableCell>
                   <TableCell>Consultores</TableCell>
+                  <TableCell>Status</TableCell>
                   <TableCell>Contemplação</TableCell>
                   <TableCell align="center">Ações</TableCell>
                 </TableRow>
@@ -1458,96 +1549,125 @@ const formatTipoContemplacao = (tipo) => {
               <TableBody>
                 {loadingCotas ? (
                   <TableRow>
-                    <TableCell colSpan={8} align="center">
+                    <TableCell colSpan={9} align="center">
                       <CircularProgress size={24} />
                     </TableCell>
                   </TableRow>
                 ) : cotasFiltradas.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} align="center">
+                    <TableCell colSpan={9} align="center">
                       Nenhuma cota encontrada com o critério informado.
                     </TableCell>
                   </TableRow>
                 ) : (
                   cotasPaginadas.map(cota => {
                     const consultoresResumo = obterConsultoresComValores(cota);
+                    const cotaCancelada = cota.status === 'cancelado';
                     return (
-                    <TableRow
-                      key={cota.id}
-                      sx={{
-                        backgroundColor: cota.contemplacao ? 'rgba(34,197,94,0.08)' : 'inherit'
-                      }}
-                    >
-                      <TableCell>{formatCotaIdentificador(cota)}</TableCell>
-                      <TableCell>
-                        {cota.valor !== null && cota.valor !== undefined
-                          ? Number(cota.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-                          : '—'}
-                      </TableCell>
-                      <TableCell>
-                        {cota.valorTotal !== null && cota.valorTotal !== undefined
-                          ? Number(cota.valorTotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-                          : '—'}
-                      </TableCell>
-                      <TableCell>
-                        {cota.dtaquisicao
-                          ? new Date(cota.dtaquisicao).toLocaleDateString()
-                          : '—'}
-                      </TableCell>
-                      <TableCell>{cota.administradora}</TableCell>
-                      <TableCell>
-                        {consultoresResumo.length === 0 ? (
-                          cota.consultorLegado || '—'
-                        ) : (
-                          consultoresResumo.map((consultor) => (
-                            <Box
-                              key={consultor.id || consultor.nome}
-                              sx={{ fontSize: '0.75rem' }}
-                            >
-                              {consultor.nome}
-                              {consultor.idagendor ? ` · ID: ${consultor.idagendor}` : ''}
-                              {consultor.valorIndividualFormatado ? ` (${consultor.valorIndividualFormatado})` : ''}
+                      <TableRow
+                        key={cota.id}
+                        sx={{
+                          backgroundColor: cotaCancelada
+                            ? 'rgba(239,68,68,0.06)'
+                            : cota.contemplacao
+                              ? 'rgba(34,197,94,0.08)'
+                              : 'inherit'
+                        }}
+                      >
+                        <TableCell>{formatCotaIdentificador(cota)}</TableCell>
+                        <TableCell>
+                          {cota.valor !== null && cota.valor !== undefined
+                            ? Number(cota.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                            : '—'}
+                        </TableCell>
+                        <TableCell>
+                          {cota.valorTotal !== null && cota.valorTotal !== undefined
+                            ? Number(cota.valorTotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                            : '—'}
+                        </TableCell>
+                        <TableCell>
+                          {cota.dtaquisicao
+                            ? new Date(cota.dtaquisicao).toLocaleDateString()
+                            : '—'}
+                        </TableCell>
+                        <TableCell>{cota.administradora}</TableCell>
+                        <TableCell>
+                          {consultoresResumo.length === 0 ? (
+                            cota.consultorLegado || '—'
+                          ) : (
+                            consultoresResumo.map((consultor) => (
+                              <Box
+                                key={consultor.id || consultor.nome}
+                                sx={{ fontSize: '0.75rem' }}
+                              >
+                                {consultor.nome}
+                                {consultor.idagendor ? ` · ID: ${consultor.idagendor}` : ''}
+                                {consultor.valorIndividualFormatado ? ` (${consultor.valorIndividualFormatado})` : ''}
+                              </Box>
+                            ))
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {cotaCancelada ? (
+                            <Chip
+                              size="small"
+                              color="error"
+                              label={`Cancelada${cota.dataCancelamento ? ` - ${new Date(cota.dataCancelamento).toLocaleDateString('pt-BR')}` : ''}`}
+                            />
+                          ) : (
+                            <Chip size="small" color="success" variant="outlined" label="Ativa" />
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {cota.contemplacao ? (
+                            <Chip
+                              size="small"
+                              color="success"
+                              icon={<EmojiEventsIcon fontSize="small" />}
+                              label={`${formatTipoContemplacao(cota.contemplacao.tipo)} · ${formatDateBR(cota.contemplacao.dataContemplacao)}`}
+                            />
+                          ) : (
+                            <Chip size="small" variant="outlined" label="Não contemplada" />
+                          )}
+                        </TableCell>
+                        <TableCell align="center">
+                          {podeGerenciarClientes ? (
+                            <Box display="flex" justifyContent="center" gap={1}>
+                              <Tooltip title={cota.contemplacao ? 'Editar contemplação' : 'Marcar como contemplada'}>
+                                <IconButton size="small" color={cota.contemplacao ? 'success' : 'default'} onClick={() => handleOpenContemplacaoDialog(cota)}>
+                                  <EmojiEventsIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip title="Mover cota para outro cliente">
+                                <IconButton size="small" color="secondary" onClick={() => handleOpenMoverCota(cota)}>
+                                  <SwapHorizIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                              {cotaCancelada ? (
+                                <Tooltip title="Reativar cota">
+                                  <IconButton size="small" color="success" onClick={() => handleReativarCotaCliente(cota)}>
+                                    <CheckCircleIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              ) : (
+                                <Tooltip title="Cancelar cota">
+                                  <IconButton size="small" color="error" onClick={() => handleOpenCancelamentoCota(cota)}>
+                                    <CancelIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                              <IconButton size="small" color="primary" onClick={() => handleEditCota(cota)}>
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                              <IconButton size="small" color="error" onClick={() => handleDeleteCota(cota)}>
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
                             </Box>
-                          ))
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {cota.contemplacao ? (
-                          <Chip
-                            size="small"
-                            color="success"
-                            icon={<EmojiEventsIcon fontSize="small" />}
-                            label={`${formatTipoContemplacao(cota.contemplacao.tipo)} · ${formatDateBR(cota.contemplacao.dataContemplacao)}`}
-                          />
-                        ) : (
-                          <Chip size="small" variant="outlined" label="Não contemplada" />
-                        )}
-                      </TableCell>
-                      <TableCell align="center">
-                        {podeGerenciarClientes ? (
-                          <Box display="flex" justifyContent="center" gap={1}>
-                            <Tooltip title={cota.contemplacao ? 'Editar contemplação' : 'Marcar como contemplada'}>
-                              <IconButton size="small" color={cota.contemplacao ? 'success' : 'default'} onClick={() => handleOpenContemplacaoDialog(cota)}>
-                                <EmojiEventsIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Mover cota para outro cliente">
-                              <IconButton size="small" color="secondary" onClick={() => handleOpenMoverCota(cota)}>
-                                <SwapHorizIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                            <IconButton size="small" color="primary" onClick={() => handleEditCota(cota)}>
-                              <EditIcon fontSize="small" />
-                            </IconButton>
-                            <IconButton size="small" color="error" onClick={() => handleDeleteCota(cota)}>
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </Box>
-                        ) : (
-                          '—'
-                        )}
-                      </TableCell>
-                    </TableRow>
+                          ) : (
+                            '—'
+                          )}
+                        </TableCell>
+                      </TableRow>
                     );
                   })
                 )}
@@ -1568,6 +1688,42 @@ const formatTipoContemplacao = (tipo) => {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseDetalhes}>Fechar</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={dialogCancelamentoCota.open}
+        onClose={handleCloseCancelamentoCota}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Cancelar Cota</DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 1 }}>
+            <Typography variant="body2" sx={{ mb: 2 }}>
+              Informe a data de cancelamento para a cota {dialogCancelamentoCota.cota ? formatCotaIdentificador(dialogCancelamentoCota.cota) : ''}.
+            </Typography>
+            <TextField
+              fullWidth
+              label="Data de Cancelamento"
+              type="date"
+              value={dialogCancelamentoCota.dataCancelamento}
+              onChange={e => setDialogCancelamentoCota(prev => ({ ...prev, dataCancelamento: e.target.value }))}
+              InputLabelProps={{ shrink: true }}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseCancelamentoCota} disabled={dialogCancelamentoCota.salvando}>Cancelar</Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleConfirmarCancelamentoCota}
+            disabled={dialogCancelamentoCota.salvando || !dialogCancelamentoCota.dataCancelamento}
+            startIcon={dialogCancelamentoCota.salvando ? <CircularProgress size={16} /> : <CancelIcon />}
+          >
+            {dialogCancelamentoCota.salvando ? 'Cancelando...' : 'Confirmar Cancelamento'}
+          </Button>
         </DialogActions>
       </Dialog>
 
