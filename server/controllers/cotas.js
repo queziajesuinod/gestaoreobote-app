@@ -1,4 +1,5 @@
 const cotaService = require('../services/cotas');
+const cobrancaService = require('../services/cobranca');
 const ExcelJS = require('exceljs');
 
 const normalizarPerfil = (perfil) => (perfil ? String(perfil).toUpperCase() : '');
@@ -396,7 +397,13 @@ async function cancelar(req, res) {
     }
 
     await cota.update({ status: 'cancelado', dataCancelamento: data });
-    return res.status(200).json({ sucesso: true, mensagem: 'Cota cancelada com sucesso.', dados: cota });
+    const sincronizacao = await cobrancaService.encerrarProcessosDaCota(id, data);
+    return res.status(200).json({
+      sucesso: true,
+      mensagem: 'Cota cancelada com sucesso.',
+      dados: cota,
+      sincronizacao
+    });
   } catch (error) {
     console.error('❌ Erro ao cancelar cota:', error);
     return res.status(500).json({ sucesso: false, mensagem: 'Erro ao cancelar cota.', erro: error.message });
@@ -424,7 +431,8 @@ async function cancelarEmLote(req, res) {
         const cota = await Cota.findByPk(id);
         if (!cota) throw new Error('Cota não encontrada');
         await cota.update({ status: 'cancelado', dataCancelamento: data });
-        resultados.sucesso.push(id);
+        const sincronizacao = await cobrancaService.encerrarProcessosDaCota(id, data);
+        resultados.sucesso.push({ id, sincronizacao });
       } catch (err) {
         resultados.falha.push({ id, motivo: err.message });
       }

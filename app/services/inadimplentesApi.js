@@ -13,6 +13,8 @@ const getHeaders = () => ({
   Authorization: `Bearer ${getToken()}`
 });
 
+const hojeISO = () => new Date().toISOString().slice(0, 10);
+
 const extrairMensagemErro = async (response, mensagemPadrao) => {
   try {
     const payload = await response.json();
@@ -116,11 +118,11 @@ export const pausarProcessosEmLote = async (ids) => {
   return response.json();
 };
 
-export const encerrarProcessosEmLote = async (ids) => {
+export const encerrarProcessosEmLote = async (ids, dataCancelamento = hojeISO()) => {
   const response = await fetch(`${API_URL}/api/inadimplentes/processos/lote/encerrar`, {
     method: 'POST',
     headers: getHeaders(),
-    body: JSON.stringify({ ids })
+    body: JSON.stringify({ ids, dataCancelamento })
   });
   if (!response.ok) throw new Error('Erro ao encerrar processos em lote');
   return response.json();
@@ -136,10 +138,11 @@ export const atualizarMesesEmLote = async (ids, quantidadeMeses) => {
   return response.json();
 };
 
-export const encerrarProcesso = async (id) => {
+export const encerrarProcesso = async (id, dataCancelamento = hojeISO()) => {
   const response = await fetch(`${API_URL}/api/inadimplentes/processos/${id}/encerrar`, {
     method: 'POST',
-    headers: getHeaders()
+    headers: getHeaders(),
+    body: JSON.stringify({ dataCancelamento })
   });
   
   if (!response.ok) throw new Error('Erro ao encerrar processo');

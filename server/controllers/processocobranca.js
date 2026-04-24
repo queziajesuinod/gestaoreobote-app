@@ -512,7 +512,7 @@ module.exports = {
    */
   async encerrarEmLote(req, res) {
     try {
-      const { ids } = req.body;
+      const { ids, dataCancelamento } = req.body;
 
       if (!Array.isArray(ids) || ids.length === 0) {
         return res.status(400).json({ sucesso: false, mensagem: 'Informe ao menos um processo (ids)' });
@@ -522,7 +522,7 @@ module.exports = {
 
       for (const id of ids) {
         try {
-          await cobrancaService.encerrarProcesso(id);
+          await cobrancaService.encerrarProcesso(id, { dataCancelamento });
           resultados.sucesso.push(id);
         } catch (err) {
           resultados.falha.push({ id, motivo: err.message });
@@ -598,8 +598,9 @@ module.exports = {
   async encerrar(req, res) {
     try {
       const { id } = req.params;
+      const { dataCancelamento } = req.body || {};
 
-      const processo = await cobrancaService.encerrarProcesso(id);
+      const processo = await cobrancaService.encerrarProcesso(id, { dataCancelamento });
 
       return res.status(200).json({
         sucesso: true,

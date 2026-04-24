@@ -1,8 +1,124 @@
-const { ProcessoCobranca, CobrancaMensal, Cota, Cliente } = require('../models');
+const {
+  ProcessoCobranca,
+  CobrancaMensal,
+  Cota,
+  Cliente,
+  CotaProcessoCobranca
+} = require('../models');
 const { Op } = require('sequelize');
 const inadimplenciaService = require('./inadimplencia');
 
 class CobrancaService {
+  normalizarDataCancelamento(dataCancelamento) {
+    if (dataCancelamento) {
+      return dataCancelamento;
+    }
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  async cancelarCobrancasAbertas(where) {
+    await CobrancaMensal.update(
+      { status: 'cancelado' },
+      {
+        where: {
+          ...where,
+          status: { [Op.in]: ['pendente', 'atrasado'] }
+        }
+      }
+    );
+  }
+
+  async encerrarProcessosDaCota(cotaId, dataCancelamento = null) {
+    const data = this.normalizarDataCancelamento(dataCancelamento);
+    const processosAfetados = new Set();
+
+    const vinculos = await CotaProcessoCobranca.findAll({
+      where: {
+        cotaId,
+        status: { [Op.ne]: 'encerrado' }
+      }
+    });
+
+    for (const vinculo of vinculos) {
+      await vinculo.update({ status: 'encerrado' });
+      processosAfetados.add(vinculo.processoCobrancaId);
+      await this.cancelarCobrancasAbertas({ cotaProcessoId: vinculo.id });
+    }
+
+    const processosLegado = await ProcessoCobranca.findAll({
+      where: {
+        cotaId,
+        status: { [Op.ne]: 'encerrado' }
+      }
+    });
+
+    for (const processo of processosLegado) {
+      await processo.update({ status: 'encerrado' });
+      processosAfetados.add(processo.id);
+      await this.cancelarCobrancasAbertas({ processoCobrancaId: processo.id });
+      await this.criarAnotacaoCancelamento(processo, data);
+    }
+
+    for (const processoId of processosAfetados) {
+      const processo = await ProcessoCobranca.findByPk(processoId);
+      if (!processo || processo.status === 'encerrado') {
+        continue;
+      }
+
+      const cotasAbertas = await CotaProcessoCobranca.count({
+        where: {
+          processoCobrancaId: processoId,
+          status: { [Op.ne]: 'encerrado' }
+        }
+      });
+
+      if (cotasAbertas === 0) {
+        await processo.update({ status: 'encerrado' });
+        await this.cancelarCobrancasAbertas({ processoCobrancaId: processo.id });
+        await this.criarAnotacaoCancelamento(processo, data);
+      }
+    }
+
+    console.log(`[Cobrança] Processos da cota ${cotaId} encerrados por cancelamento de cota`);
+
+    return { processosAfetados: Array.from(processosAfetados) };
+  }
+
+  async cancelarCotasDoProcesso(processoId, dataCancelamento = null) {
+    const data = this.normalizarDataCancelamento(dataCancelamento);
+    const processo = await ProcessoCobranca.findByPk(processoId);
+    if (!processo) {
+      throw new Error('Processo não encontrado');
+    }
+
+    const cotaIds = new Set();
+    if (processo.cotaId) {
+      cotaIds.add(processo.cotaId);
+    }
+
+    const vinculos = await CotaProcessoCobranca.findAll({
+      where: { processoCobrancaId: processoId }
+    });
+
+    for (const vinculo of vinculos) {
+      cotaIds.add(vinculo.cotaId);
+      if (vinculo.status !== 'encerrado') {
+        await vinculo.update({ status: 'encerrado' });
+      }
+    }
+
+    if (cotaIds.size > 0) {
+      await Cota.update(
+        { status: 'cancelado', dataCancelamento: data },
+        { where: { id: { [Op.in]: Array.from(cotaIds) } } }
+      );
+    }
+
+    await this.cancelarCobrancasAbertas({ processoCobrancaId: processoId });
+
+    return { cotaIds: Array.from(cotaIds), dataCancelamento: data };
+  }
+
   /**
    * Extrair ano e mês do primeiro mês pago (formato YYYY-MM ou YYYY-MM-DD)
    */
@@ -724,27 +840,34 @@ class CobrancaService {
   /**
    * Encerrar processo de cobrança
    */
-  async encerrarProcesso(processoId) {
+  async encerrarProcesso(processoId, opcoes = {}) {
     const processo = await ProcessoCobranca.findByPk(processoId);
     if (!processo) {
       throw new Error('Processo não encontrado');
     }
 
+    const dataCancelamento = this.normalizarDataCancelamento(opcoes.dataCancelamento);
+    if (opcoes.cancelarCotas !== false) {
+      await this.cancelarCotasDoProcesso(processoId, dataCancelamento);
+    }
+
     await processo.update({ status: 'encerrado' });
     console.log(`[Cobrança] Processo ${processoId} encerrado`);
 
-    await this.criarAnotacaoCancelamento(processo);
+    await this.criarAnotacaoCancelamento(processo, dataCancelamento);
     return processo;
   }
 
-  async criarAnotacaoCancelamento(processo) {
+  async criarAnotacaoCancelamento(processo, dataCancelamento = null) {
     const cobrancaVigente = await this.obterCobrancaVigente(processo.id);
     if (!cobrancaVigente) {
       return;
     }
 
-    const dataCancelamento = new Date().toLocaleDateString('pt-BR');
-    const mensagem = `Processo de cobrança cancelado em ${dataCancelamento}`;
+    const data = dataCancelamento
+      ? new Date(dataCancelamento).toLocaleDateString('pt-BR')
+      : new Date().toLocaleDateString('pt-BR');
+    const mensagem = `Processo de cobrança cancelado em ${data}`;
 
     await inadimplenciaService.adicionarAnotacao(cobrancaVigente.id, {
       tipo: 'manual',

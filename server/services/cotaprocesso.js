@@ -1,5 +1,6 @@
 const { ProcessoCobranca, CotaProcessoCobranca, Cota, CobrancaMensal } = require('../models');
 const { Op } = require('sequelize');
+const cobrancaService = require('./cobranca');
 
 class CotaProcessoService {
   /**
@@ -349,7 +350,7 @@ class CotaProcessoService {
   /**
    * Encerrar cota no processo
    */
-  async encerrarCota(cotaProcessoId) {
+  async encerrarCota(cotaProcessoId, dataCancelamento = null) {
     const cotaProcesso = await CotaProcessoCobranca.findByPk(cotaProcessoId);
 
     if (!cotaProcesso) {
@@ -360,7 +361,13 @@ class CotaProcessoService {
       throw new Error('Cota já está encerrada');
     }
 
+    const data = cobrancaService.normalizarDataCancelamento(dataCancelamento);
     await cotaProcesso.update({ status: 'encerrado' });
+    await Cota.update(
+      { status: 'cancelado', dataCancelamento: data },
+      { where: { id: cotaProcesso.cotaId } }
+    );
+    await cobrancaService.encerrarProcessosDaCota(cotaProcesso.cotaId, data);
 
     return cotaProcesso;
   }

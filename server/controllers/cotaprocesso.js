@@ -181,8 +181,9 @@ module.exports = {
   async encerrar(req, res) {
     try {
       const { id: cotaProcessoId } = req.params;
+      const { dataCancelamento } = req.body || {};
 
-      const cotaProcesso = await cotaProcessoService.encerrarCota(cotaProcessoId);
+      const cotaProcesso = await cotaProcessoService.encerrarCota(cotaProcessoId, dataCancelamento);
 
       return res.status(200).json({
         sucesso: true,
