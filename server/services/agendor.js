@@ -512,9 +512,10 @@ async function listarTarefasDoDeal({ dealId, dueDateGt, dueDateLt, apenasPendent
   if (!dealId) throw new Error('dealId é obrigatório.');
 
   const params = {};
-  // janela padrão: -31d a +31d (a API exige ao menos um filtro de data e limita a 31 dias por lado)
-  params.dueDateGt = dueDateGt || new Date(Date.now() - 31 * 864e5).toISOString();
-  params.dueDateLt = dueDateLt || new Date(Date.now() + 31 * 864e5).toISOString();
+  // janela padrão: -7d a +23d (=30 dias). A API exige filtro de data E que
+  // (dueDateLt - dueDateGt) <= 31 dias — favorece pendentes recém-vencidas e agendadas.
+  params.dueDateGt = dueDateGt || new Date(Date.now() - 7 * 864e5).toISOString();
+  params.dueDateLt = dueDateLt || new Date(Date.now() + 23 * 864e5).toISOString();
 
   const response = await agendorRequestComRetry('get', `/deals/${dealId}/tasks`, tokenParaUso, { params });
   const tarefas = response.data.data || [];

@@ -166,7 +166,10 @@ async function responderSessao({ sessao, texto, ctx, telefone, agora }, d) {
         try {
           resultado = await executarAcoes({ ctx, intent, cliente: payload.cliente, telefone: sessao.telefone, agora }, d);
         } catch (e) {
-          return { resposta: `Ops, falhei ao gravar no Agendor: ${e.message}. Nada foi perdido — tenta confirmar de novo.` };
+          const detalhe = e?.response?.data?.errors ? e.response.data.errors.join('; ')
+            : (e?.response?.data ? JSON.stringify(e.response.data) : e.message);
+          console.error('[assistente] erro ao gravar no Agendor:', e?.config?.url || '', '->', detalhe);
+          return { resposta: `Ops, deu erro ao gravar no Agendor: ${detalhe}. Nada foi perdido — tenta confirmar de novo (responde "sim").`, motivo: 'erro_agendor' };
         }
         await d.sessoes.encerrar(sessao, S.CONCLUIDO);
         return { resposta: montarResumo(resultado, payload.cliente), encerrada: true };
@@ -236,7 +239,9 @@ async function executarAcoes({ ctx, intent, cliente, telefone, agora }, d) {
 
   // 1) achar negócio aberto ou criar em Prospecção
   const negocios = await d.agendor.buscarNegociosDaPessoa({ personId: cliente.id, agendorToken: token });
-  let deal = (negocios || []).find(n => n?.dealStatus?.id === 1 || /andamento/i.test(n?.dealStatus?.name || ''));
+  const abertos = (negocios || []).filter(n => n?.dealStatus?.id === 1 || /andamento/i.test(n?.dealStatus?.name || ''));
+  // preferir um negócio aberto que já esteja no funil configurado (evita mover entre funis diferentes)
+  let deal = abertos.find(n => n?.dealStage?.funnel?.id === d.etapas.FUNIL_PADRAO) || abertos[0];
   let etapaSeq = deal?.dealStage?.sequence || null;
 
   if (!deal) {
