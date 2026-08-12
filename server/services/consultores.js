@@ -65,8 +65,14 @@ async function gerarUsernameDisponivel(base, transaction) {
   return username;
 }
 
+function normalizarWhatsapp(valor) {
+  if (!valor) return null;
+  const digitos = String(valor).replace(/\D/g, '');
+  return digitos || null;
+}
+
 async function createConsultor(body) {
-  const { nome, id_agendor, ativo = true, imagem_base64, email } = body;
+  const { nome, id_agendor, ativo = true, imagem_base64, email, whatsapp } = body;
   if (!nome) {
     throw new Error('Nome do consultor é obrigatório.');
   }
@@ -82,7 +88,8 @@ async function createConsultor(body) {
       nome,
       ativo,
       imagem_base64,
-      email: emailNormalizado
+      email: emailNormalizado,
+      whatsapp: normalizarWhatsapp(whatsapp)
     }, { transaction });
 
     await sincronizarUsuarioConsultor(novoConsultor, { transaction });
@@ -111,6 +118,9 @@ async function atualizarConsultor(id, dadosAtualizados) {
   const payload = { ...dadosAtualizados };
   if (Object.prototype.hasOwnProperty.call(payload, 'email') && payload.email) {
     payload.email = payload.email.trim().toLowerCase();
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, 'whatsapp')) {
+    payload.whatsapp = normalizarWhatsapp(payload.whatsapp);
   }
   const atualizado = await consultor.update(payload);
 
@@ -213,5 +223,6 @@ module.exports = {
   createConsultor,
   getConsultorById,
   deletarConsultor,
-  atualizarConsultor
+  atualizarConsultor,
+  normalizarWhatsapp
 };

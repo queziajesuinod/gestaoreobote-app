@@ -29,6 +29,7 @@ module.exports = (sequelize) => {
         },
         nome: DataTypes.STRING,
         id_agendor: DataTypes.STRING,
+        whatsapp: DataTypes.STRING,
         ativo: {
             type: DataTypes.BOOLEAN,
             defaultValue: true,

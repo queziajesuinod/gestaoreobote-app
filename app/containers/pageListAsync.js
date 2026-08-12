@@ -85,6 +85,11 @@ export const Metas = loadable(() =>
     fallback: <Loading />,
   });
 
+export const AssistenteAuditoria = loadable(() =>
+  import('./Pages/AssistenteAuditoria'), {
+    fallback: <Loading />,
+  });
+
 export const ProfilePage = loadable(() =>
   import('./Pages/Users/Profile'), {
     fallback: <Loading />,

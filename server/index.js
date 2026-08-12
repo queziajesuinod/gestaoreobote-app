@@ -64,6 +64,7 @@ app.use('/agendor', authMiddleware, require("./routers/agendor"));
 app.use('/clientes', authMiddleware, require('./routers/clientes'));
 app.use('/cotas', authMiddleware, require('./routers/cotas'));
 app.use('/metas', authMiddleware, require('./routers/metas'));
+app.use('/assistente', authMiddleware, require('./routers/assistente'));
 app.use('/api/inadimplentes', require('./routers/inadimplentes')); // Módulo de Inadimplentes (autenticação interna)
 
 

@@ -362,6 +362,193 @@ async function fetchComRetry(url, agendorToken, { params, tentativa = 1 }) {
   }
 }
 
+// ===================== ESCRITA / BUSCA PONTUAL (assistente WhatsApp) =====================
+// Requisição genérica (GET/POST/PUT/DELETE) reaproveitando rate limiter + retry por token.
+async function agendorRequestComRetry(method, url, agendorToken, { params, data, tentativa = 1 } = {}) {
+  const tokenKey = obterTokenKey(agendorToken);
+  const limiter = obterLimiter(tokenKey);
+
+  try {
+    return await agendarChamadaAgendor(() => agendorHttp.request({
+      method,
+      url,
+      headers: { Authorization: `Token ${agendorToken}` },
+      params,
+      data
+    }), tokenKey);
+  } catch (error) {
+    const status = error?.response?.status;
+    const retryAfterMs = parseRetryAfterMs(error?.response?.headers?.['retry-after']);
+    const isRateLimit = status === 429;
+    const isServerError = status >= 500 && status < 600;
+    // Só re-tenta idempotentes automaticamente; POST só em rate limit (a criação em si não repetiu ainda).
+    const metodoSeguro = ['get', 'put', 'delete'].includes(String(method).toLowerCase());
+    const isRetryable = isRateLimit || (isServerError && metodoSeguro);
+
+    if (isRetryable && tentativa < CONFIG.MAX_RETRIES) {
+      const backoffBase = retryAfterMs ?? Math.min(60000, CONFIG.RETRY_BASE_DELAY * Math.pow(2, tentativa - 1));
+      const espera = backoffBase + Math.floor(Math.random() * 400);
+      limiter.bloqueadoAte = Math.max(limiter.bloqueadoAte, Date.now() + espera);
+      console.warn(`Agendor ${method} ${url}: erro ${status || 'rede'} (tentativa ${tentativa}); aguardando ${espera}ms.`);
+      await esperar(espera);
+      return agendorRequestComRetry(method, url, agendorToken, { params, data, tentativa: tentativa + 1 });
+    }
+
+    throw error;
+  }
+}
+
+// Tipos de tarefa aceitos pelo Agendor (enum em MAIÚSCULO no POST).
+const TIPOS_TAREFA_AGENDOR = ['VISITA', 'REUNIAO', 'LIGACAO', 'EMAIL', 'WHATSAPP', 'PROPOSTA'];
+
+function normalizarTipoTarefa(tipo) {
+  if (!tipo) return null;
+  const semAcento = String(tipo).normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim();
+  const mapa = {
+    VISITA: 'VISITA',
+    REUNIAO: 'REUNIAO',
+    LIGACAO: 'LIGACAO',
+    EMAIL: 'EMAIL',
+    WHATSAPP: 'WHATSAPP',
+    PROPOSTA: 'PROPOSTA'
+  };
+  return mapa[semAcento] || null;
+}
+
+// Busca pessoas por nome (param correto confirmado empiricamente: ?name=).
+async function buscarPessoaPorNome({ nome, agendorToken, perPage = 20 }) {
+  const tokenParaUso = agendorToken || API_AGENDOR_TOKEN;
+  if (!tokenParaUso) throw new Error('Token do Agendor não configurado.');
+  if (!nome || !nome.trim()) return [];
+
+  const response = await agendorRequestComRetry('get', '/people', tokenParaUso, {
+    params: { name: nome.trim(), per_page: perPage }
+  });
+  return response.data.data || [];
+}
+
+// Negócios de uma pessoa. dealStatus opcional (1 = Em andamento / aberto).
+async function buscarNegociosDaPessoa({ personId, agendorToken, dealStatus }) {
+  const tokenParaUso = agendorToken || API_AGENDOR_TOKEN;
+  if (!tokenParaUso) throw new Error('Token do Agendor não configurado.');
+  if (!personId) throw new Error('personId é obrigatório.');
+
+  const params = {};
+  if (dealStatus) params.dealStatus = dealStatus;
+  const response = await agendorRequestComRetry('get', `/people/${personId}/deals`, tokenParaUso, { params });
+  return response.data.data || [];
+}
+
+// Cria um negócio para uma pessoa.
+// IMPORTANTE (confirmado empiricamente contra a API v3):
+//   - endpoint é POST /people/{personId}/deals (POST /deals dá 405).
+//   - `funnel` = ID do funil; `dealStage` = SEQUÊNCIA da etapa DENTRO do funil
+//     (NÃO o id global da etapa). Ex.: Funil de Vendas (716011) + Visita Marcada = dealStage 5.
+//     Sem `funnel`, a etapa vai para o funil default da conta.
+async function criarNegocio({ personId, title, funnel, dealStage, dealStatus = 1, value, description, agendorToken }) {
+  const tokenParaUso = agendorToken || API_AGENDOR_TOKEN;
+  if (!tokenParaUso) throw new Error('Token do Agendor não configurado.');
+  if (!personId) throw new Error('personId é obrigatório.');
+  if (!title) throw new Error('title é obrigatório.');
+
+  const body = { title };
+  if (funnel != null) body.funnel = funnel;
+  if (dealStage != null) body.dealStage = dealStage;
+  if (dealStatus != null) body.dealStatus = dealStatus;
+  if (value != null) body.value = value;
+  if (description) body.description = description;
+
+  const response = await agendorRequestComRetry('post', `/people/${personId}/deals`, tokenParaUso, { data: body });
+  return response.data.data || response.data;
+}
+
+// Cria uma tarefa num negócio (POST /deals/{dealId}/tasks).
+//   - campos (snake_case): text, type, due_date, assigned_users, finished_date, finished_by.
+//   - `type` aceito: VISITA, REUNIAO, LIGACAO, EMAIL, WHATSAPP, PROPOSTA.
+//   - `concluida=true` cria a tarefa JÁ FINALIZADA usando finished_date/finished_by
+//     (confirmado contra a spec v3: o campo é `finished_date`, NÃO done/finishedAt).
+async function criarTarefa({ dealId, text, tipo, dueDate, userId, concluida = false, finishedDate, agendorToken }) {
+  const tokenParaUso = agendorToken || API_AGENDOR_TOKEN;
+  if (!tokenParaUso) throw new Error('Token do Agendor não configurado.');
+  if (!dealId) throw new Error('dealId é obrigatório.');
+  if (!text) throw new Error('text é obrigatório.');
+
+  const tipoNormalizado = normalizarTipoTarefa(tipo);
+  const body = { text };
+  if (tipoNormalizado) body.type = tipoNormalizado;
+  if (dueDate) body.due_date = dueDate;
+
+  if (concluida) {
+    body.finished_date = finishedDate || dueDate || new Date().toISOString();
+    if (userId) body.finished_by = userId;
+  }
+
+  const response = await agendorRequestComRetry('post', `/deals/${dealId}/tasks`, tokenParaUso, { data: body });
+  return response.data.data || response.data;
+}
+
+// Finaliza uma tarefa PENDENTE já existente (agendamento) adicionando considerações.
+// PUT /deals/{dealId}/tasks/{taskId} é upsert: `text` é obrigatório (reenviar o texto/considerações).
+async function concluirTarefa({ dealId, taskId, text, tipo, finishedDate, userId, agendorToken }) {
+  const tokenParaUso = agendorToken || API_AGENDOR_TOKEN;
+  if (!tokenParaUso) throw new Error('Token do Agendor não configurado.');
+  if (!dealId || !taskId) throw new Error('dealId e taskId são obrigatórios.');
+  if (!text) throw new Error('text é obrigatório (upsert reenvia o texto/considerações).');
+
+  const body = { text, finished_date: finishedDate || new Date().toISOString() };
+  const tipoNormalizado = normalizarTipoTarefa(tipo);
+  if (tipoNormalizado) body.type = tipoNormalizado;
+  if (userId) body.finished_by = userId;
+
+  const response = await agendorRequestComRetry('put', `/deals/${dealId}/tasks/${taskId}`, tokenParaUso, { data: body });
+  return response.data.data || response.data;
+}
+
+// Lista tarefas de um negócio (GET exige filtro de data). Útil para achar agendamentos pendentes.
+// `apenasPendentes` filtra as que ainda não têm finishedAt.
+async function listarTarefasDoDeal({ dealId, dueDateGt, dueDateLt, apenasPendentes = false, agendorToken }) {
+  const tokenParaUso = agendorToken || API_AGENDOR_TOKEN;
+  if (!tokenParaUso) throw new Error('Token do Agendor não configurado.');
+  if (!dealId) throw new Error('dealId é obrigatório.');
+
+  const params = {};
+  // janela padrão: -31d a +31d (a API exige ao menos um filtro de data e limita a 31 dias por lado)
+  params.dueDateGt = dueDateGt || new Date(Date.now() - 31 * 864e5).toISOString();
+  params.dueDateLt = dueDateLt || new Date(Date.now() + 31 * 864e5).toISOString();
+
+  const response = await agendorRequestComRetry('get', `/deals/${dealId}/tasks`, tokenParaUso, { params });
+  const tarefas = response.data.data || [];
+  return apenasPendentes ? tarefas.filter(t => !t.finishedAt) : tarefas;
+}
+
+// Move o negócio para outra etapa do funil.
+// PUT /deals/{id}/stage — `dealStage` é a SEQUÊNCIA (1-based) da etapa; `funnel` é o ID do funil.
+async function moverEtapaNegocio({ dealId, funnel, dealStage, agendorToken }) {
+  const tokenParaUso = agendorToken || API_AGENDOR_TOKEN;
+  if (!tokenParaUso) throw new Error('Token do Agendor não configurado.');
+  if (!dealId) throw new Error('dealId é obrigatório.');
+  if (dealStage == null) throw new Error('dealStage (sequência) é obrigatório.');
+
+  const body = { dealStage };
+  if (funnel != null) body.funnel = funnel;
+  const response = await agendorRequestComRetry('put', `/deals/${dealId}/stage`, tokenParaUso, { data: body });
+  return response.data.data || response.data;
+}
+
+// Muda o status do negócio (ongoing | won | lost). PUT /deals/{id}/status.
+async function mudarStatusNegocio({ dealId, status, endTime, lossReason, agendorToken }) {
+  const tokenParaUso = agendorToken || API_AGENDOR_TOKEN;
+  if (!tokenParaUso) throw new Error('Token do Agendor não configurado.');
+  if (!dealId) throw new Error('dealId é obrigatório.');
+  if (!status) throw new Error('status é obrigatório (ongoing|won|lost).');
+
+  const body = { dealStatusText: status };
+  if (endTime) body.endTime = endTime;
+  if (lossReason) body.lossReason = lossReason;
+  const response = await agendorRequestComRetry('put', `/deals/${dealId}/status`, tokenParaUso, { data: body });
+  return response.data.data || response.data;
+}
+
 async function buscarNegociosPorRangePorStatus({ dataInicio, dataFim, dealStatus, agendorToken }) {
   const tokenParaUso = agendorToken || API_AGENDOR_TOKEN;
   if (!tokenParaUso) {
@@ -509,5 +696,16 @@ function logErroAxios(error, contexto) {
 module.exports = {
   buscarTarefas,
   buscarTarefasPorRange,
-  buscarNegociosPorRangePorStatus
+  buscarNegociosPorRangePorStatus,
+  // escrita / busca pontual (assistente WhatsApp)
+  buscarPessoaPorNome,
+  buscarNegociosDaPessoa,
+  criarNegocio,
+  criarTarefa,
+  concluirTarefa,
+  listarTarefasDoDeal,
+  moverEtapaNegocio,
+  mudarStatusNegocio,
+  normalizarTipoTarefa,
+  TIPOS_TAREFA_AGENDOR
 };

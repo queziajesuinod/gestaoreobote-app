@@ -96,6 +96,7 @@ function Gestao() {
     nome: '',
     id_agendor: '',
     email: '',
+    whatsapp: '',
     imagem_base64: '',
     ativo: true,
   });
@@ -309,6 +310,7 @@ function Gestao() {
       nome: '',
       id_agendor: '',
       email: '',
+      whatsapp: '',
       imagem_base64: '',
       ativo: true,
     });
@@ -715,7 +717,18 @@ function Gestao() {
             value={consultorForm.id_agendor}
             onChange={(e) => setConsultorForm({ ...consultorForm, id_agendor: e.target.value })}
           />
-          
+
+          <TextField
+            margin="dense"
+            label="WhatsApp (assistente Alô Reobote)"
+            type="text"
+            fullWidth
+            placeholder="Ex: 5567999998888 (DDI+DDD+número)"
+            helperText="Número que o consultor usa para enviar relatos ao assistente. Só dígitos."
+            value={consultorForm.whatsapp || ''}
+            onChange={(e) => setConsultorForm({ ...consultorForm, whatsapp: e.target.value })}
+          />
+
           {/* Componente de Upload de Imagem */}
           <Box sx={{ mt: 2, mb: 2 }}>
             <Typography variant="subtitle2" gutterBottom>

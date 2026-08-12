@@ -112,6 +112,23 @@ export const buildMenu = (permissoes = []) => {
     });
   }
 
+  // Assistente "Alô Reobote"
+  if (hasPermissao('GESTAO') || hasPermissao('ADMIN')) {
+    menu.push({
+      key: 'assistente',
+      name: 'Assistente',
+      icon: 'ion-ios-chatboxes-outline',
+      child: [
+        {
+          key: 'assistente_auditoria',
+          name: 'Auditoria',
+          link: '/app/assistente/auditoria',
+          icon: 'ion-ios-list-outline'
+        }
+      ]
+    });
+  }
+
   // Módulo de Inadimplentes
   if (hasPermissao('GESTAO') || hasPermissao('CLIENTES_ALL') || hasPermissao('ADMIN')) {
     const inadimplentesChild = [
