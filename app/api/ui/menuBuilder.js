@@ -126,6 +126,12 @@ export const buildMenu = (permissoes = []) => {
       icon: 'ion-ios-chatboxes-outline',
       child: [
         {
+          key: 'assistente_status',
+          name: 'Status',
+          link: '/app/assistente/status',
+          icon: 'ion-ios-pulse'
+        },
+        {
           key: 'assistente_auditoria',
           name: 'Auditoria',
           link: '/app/assistente/auditoria',

@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import PropTypes from 'prop-types';
+import { IMaskInput } from 'react-imask';
 import { Helmet } from 'react-helmet';
 import brand from 'dan-api/dummy/brand';
 import { PapperBlock } from 'dan-components';
@@ -52,7 +54,31 @@ import {
 
 const API_URL = process.env.REACT_APP_API_URL?.replace(/\/$/, '') || 'http://localhost:3003';
 
-function TabPanel({ children, value, index, ...other }) {
+// Máscara de WhatsApp BR: +55 (67) 99999-9999. Guarda só dígitos no state (unmask).
+const WhatsappMaskInput = React.forwardRef((props, ref) => {
+  const { onChange, name, ...other } = props;
+  return (
+    <IMaskInput
+      {...other}
+      mask="+00 (00) 00000-0000"
+      definitions={{ 0: /[0-9]/ }}
+      unmask
+      inputRef={ref}
+      onAccept={(value) => onChange({ target: { name, value } })}
+      overwrite
+    />
+  );
+});
+
+WhatsappMaskInput.displayName = 'WhatsappMaskInput';
+WhatsappMaskInput.propTypes = {
+  onChange: PropTypes.func.isRequired,
+  name: PropTypes.string
+};
+
+function TabPanel({
+  children, value, index, ...other
+}) {
   return (
     <div
       role="tabpanel"
@@ -71,7 +97,7 @@ function Gestao() {
   const description = brand.desc;
 
   const userStorage = JSON.parse(localStorage.getItem('user'));
-  
+
   // ⚠️ Função helper para obter o token atualizado
   const getToken = () => localStorage.getItem('token');
 
@@ -630,8 +656,8 @@ function Gestao() {
             <Table>
               <TableHead>
                 <TableRow>
-                    <TableCell>Nome</TableCell>
-                    <TableCell>ID Agendor</TableCell>
+                  <TableCell>Nome</TableCell>
+                  <TableCell>ID Agendor</TableCell>
                   <TableCell>Status</TableCell>
                   <TableCell align="right">Ações</TableCell>
                 </TableRow>
@@ -642,15 +668,15 @@ function Gestao() {
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
                         <Avatar sx={{ mr: 1 }}>
-                          {consultor.imagem_base64 ?  (
-                             <img
-                               src={`data:image/jpeg;base64,${consultor.imagem_base64}`}
-                               alt={consultor.nome}
-                               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                             />
-                           ) : (
-                             <PersonIcon />
-                           )}
+                          {consultor.imagem_base64 ? (
+                            <img
+                              src={`data:image/jpeg;base64,${consultor.imagem_base64}`}
+                              alt={consultor.nome}
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            />
+                          ) : (
+                            <PersonIcon />
+                          )}
                         </Avatar>
                         {consultor.nome}
                       </Box>
@@ -721,12 +747,12 @@ function Gestao() {
           <TextField
             margin="dense"
             label="WhatsApp (assistente Alô Reobote)"
-            type="text"
             fullWidth
-            placeholder="Ex: 5567999998888 (DDI+DDD+número)"
-            helperText="Número que o consultor usa para enviar relatos ao assistente. Só dígitos."
+            placeholder="+55 (67) 99999-9999"
+            helperText="Número que o consultor usa para enviar relatos ao assistente."
             value={consultorForm.whatsapp || ''}
             onChange={(e) => setConsultorForm({ ...consultorForm, whatsapp: e.target.value })}
+            InputProps={{ inputComponent: WhatsappMaskInput }}
           />
 
           {/* Componente de Upload de Imagem */}
@@ -734,7 +760,7 @@ function Gestao() {
             <Typography variant="subtitle2" gutterBottom>
               Foto do Consultor
             </Typography>
-            
+
             <input
               type="file"
               ref={fileInputRef}
@@ -774,7 +800,7 @@ function Gestao() {
                 >
                   {imagePreview ? 'Alterar Foto' : 'Adicionar Foto'}
                 </Button>
-                
+
                 {imagePreview && (
                   <Button
                     variant="outlined"

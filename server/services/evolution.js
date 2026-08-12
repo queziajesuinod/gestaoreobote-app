@@ -38,6 +38,32 @@ async function enviarTexto({ numero, texto, instance = EVOLUTION_INSTANCE }) {
   return { enviado: true, data };
 }
 
+// Consulta o estado da conexão da instância na Evolution (open/close/connecting).
+async function estadoConexao(instance = EVOLUTION_INSTANCE) {
+  if (!configurada()) return { ok: false, motivo: 'nao_configurada' };
+  try {
+    const { data } = await axios.get(`${EVOLUTION_API_URL}/instance/connectionState/${instance}`, {
+      headers: { apikey: EVOLUTION_API_KEY }, timeout: EVOLUTION_TIMEOUT_MS
+    });
+    return { ok: true, state: data?.instance?.state || data?.state || 'desconhecido', instance };
+  } catch (e) {
+    return { ok: false, motivo: e.response?.status || e.message };
+  }
+}
+
+// Resumo do que está configurado (booleans, sem expor segredos).
+function resumoConfig() {
+  return {
+    evolutionUrl: Boolean(EVOLUTION_API_URL),
+    evolutionApiKey: Boolean(EVOLUTION_API_KEY),
+    evolutionInstance: EVOLUTION_INSTANCE || null,
+    evolutionConfigurada: configurada(),
+    webhookSecret: Boolean(process.env.EVOLUTION_WEBHOOK_SECRET),
+    iaConfigurada: Boolean(process.env.IA_API_KEY || process.env.OPENAI_API_KEY),
+    iaModelo: process.env.IA_MODEL || null
+  };
+}
+
 // Valida o segredo do webhook, se configurado (via header apikey ou query ?secret=).
 function validarWebhook(req) {
   const secret = process.env.EVOLUTION_WEBHOOK_SECRET;
@@ -88,5 +114,7 @@ module.exports = {
   enviarTexto,
   validarWebhook,
   extrairMensagem,
+  estadoConexao,
+  resumoConfig,
   EVOLUTION_INSTANCE
 };

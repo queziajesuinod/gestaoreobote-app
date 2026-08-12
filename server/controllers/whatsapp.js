@@ -3,6 +3,7 @@
 
 const evolution = require('../services/evolution');
 const orquestrador = require('../services/assistente/orquestrador');
+const eventos = require('../services/assistente/eventos');
 
 // Dedup simples em memória (Evolution pode reentregar o mesmo messageId).
 const idsProcessados = new Set();
@@ -24,27 +25,47 @@ function jaProcessado(id) {
 async function processarEEnviar(body, deps = {}) {
   const evo = deps.evolution || evolution;
   const orq = deps.orquestrador || orquestrador;
+  const log = deps.eventos || eventos;
 
   const msg = evo.extrairMensagem(body);
   if (!msg) return { ignorado: 'sem_mensagem' };
-  if (msg.fromMe) return { ignorado: 'from_me' };
-  if (msg.isGroup) return { ignorado: 'grupo' };
-  if (jaProcessado(msg.messageId)) return { ignorado: 'duplicado' };
+
+  const base = { telefone: msg.numero, pushName: msg.pushName, tipo: msg.tipo, texto: msg.texto };
+  const registrar = (resultado, motivo, extra = {}) => {
+    // best-effort: não deixa o log derrubar o fluxo
+    log.registrarEvento({ ...base, resultado, motivo, ...extra }).catch(() => {});
+  };
+
+  if (msg.fromMe) { registrar('ignorado', 'from_me'); return { ignorado: 'from_me' }; }
+  if (msg.isGroup) { registrar('ignorado', 'grupo'); return { ignorado: 'grupo' }; }
+  if (jaProcessado(msg.messageId)) { registrar('ignorado', 'duplicado'); return { ignorado: 'duplicado' }; }
 
   // v1: só texto. Áudio entra na v2 (transcrição).
   if (msg.tipo === 'audio') {
-    await evo.enviarTexto({ numero: msg.numero, texto: 'Por enquanto eu só entendo *texto* 🙏. Em breve vou transcrever áudios!' });
+    const resposta = 'Por enquanto eu só entendo *texto* 🙏. Em breve vou transcrever áudios!';
+    await evo.enviarTexto({ numero: msg.numero, texto: resposta });
+    registrar('ignorado', 'audio', { respondeu: true, resposta });
     return { ignorado: 'audio' };
   }
-  if (!msg.texto || !msg.texto.trim()) return { ignorado: 'vazio' };
+  if (!msg.texto || !msg.texto.trim()) { registrar('ignorado', 'vazio'); return { ignorado: 'vazio' }; }
 
-  const resultado = await orq.processarMensagem({ telefone: msg.numero, texto: msg.texto });
+  let resultado;
+  try {
+    resultado = await orq.processarMensagem({ telefone: msg.numero, texto: msg.texto });
+  } catch (err) {
+    registrar('erro', 'excecao', { resposta: err.message });
+    throw err;
+  }
 
   // resposta null = ignorar em silêncio (número não cadastrado, sem gatilho, etc.)
   if (resultado && resultado.resposta) {
     await evo.enviarTexto({ numero: msg.numero, texto: resultado.resposta });
+    registrar('processado', resultado.motivo || 'respondido', { respondeu: true, resposta: resultado.resposta });
+    return { ok: true, respondeu: true };
   }
-  return { ok: true, respondeu: Boolean(resultado?.resposta) };
+
+  registrar('ignorado', resultado?.motivo || 'sem_resposta');
+  return { ok: true, respondeu: false };
 }
 
 // Handler HTTP do webhook.

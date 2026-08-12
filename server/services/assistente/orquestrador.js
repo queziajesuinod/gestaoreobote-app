@@ -86,7 +86,7 @@ async function processarMensagem({ telefone, texto }, deps = {}) {
   const agora = d.agora();
 
   const ctx = await d.resolverConsultor(telefone);
-  if (!ctx) return { resposta: null }; // número não cadastrado → ignora (segurança)
+  if (!ctx) return { resposta: null, motivo: 'nao_cadastrado' }; // número não cadastrado → ignora (segurança)
 
   const sessao = await d.sessoes.buscarAberta(telefone, agora);
 
@@ -98,7 +98,7 @@ async function processarMensagem({ telefone, texto }, deps = {}) {
   if (sessao) return responderSessao({ sessao, texto, ctx, telefone, agora }, d);
 
   // --- sem sessão: precisa do gatilho ---
-  if (!d.ia.detectarGatilho(texto)) return { resposta: null };
+  if (!d.ia.detectarGatilho(texto)) return { resposta: null, motivo: 'sem_gatilho' };
 
   let intent;
   try {

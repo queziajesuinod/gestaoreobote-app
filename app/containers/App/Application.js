@@ -16,6 +16,7 @@ import {
   Cotas,
   Metas,
   AssistenteAuditoria,
+  AssistenteStatus,
   ProfilePage,
   UsersAdmin,
   PerfisAdmin,
@@ -78,6 +79,10 @@ function Application({ isAuthenticated }) {
         <Route
           path="assistente/auditoria"
           element={<ProtectedRoute element={<AssistenteAuditoria />} isAuthenticated={isAuthenticated} />}
+        />
+        <Route
+          path="assistente/status"
+          element={<ProtectedRoute element={<AssistenteStatus />} isAuthenticated={isAuthenticated} />}
         />
         <Route
           path="usuarios"
