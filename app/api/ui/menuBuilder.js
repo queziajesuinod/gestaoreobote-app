@@ -112,8 +112,14 @@ export const buildMenu = (permissoes = []) => {
     });
   }
 
-  // Assistente "Alô Reobote"
-  if (hasPermissao('GESTAO') || hasPermissao('ADMIN')) {
+  // Assistente "Alô Reobote" — por enquanto visível SÓ para o perfil MASTER
+  let perfilAtual = '';
+  try {
+    perfilAtual = (JSON.parse(localStorage.getItem('user') || '{}').perfil || '').toUpperCase();
+  } catch (e) {
+    perfilAtual = '';
+  }
+  if (perfilAtual === 'MASTER') {
     menu.push({
       key: 'assistente',
       name: 'Assistente',

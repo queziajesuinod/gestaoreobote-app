@@ -54,6 +54,9 @@ app.use(express.json());
 // 🔓 **ROTA PÚBLICA** (Autenticação)
 app.use('/auth', require("./routers/auth"));
 
+// 🔓 **ROTA PÚBLICA** (Webhook da Evolution — assistente "Alô Reobote")
+app.use('/whatsapp', require("./routers/whatsapp"));
+
 // 🔒 **ROTAS PROTEGIDAS** (Exigem um token JWT válido)
 app.use('/users', authMiddleware, require("./routers/users"));
 app.use('/perfil', authMiddleware, require("./routers/perfis"));
