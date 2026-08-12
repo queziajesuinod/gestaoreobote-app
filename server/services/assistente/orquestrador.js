@@ -35,6 +35,9 @@ const ehCancelar = (t) => CANCELAR.test(t || '');
 
 function formatarData(iso) {
   if (!iso) return 'sem data';
+  // lê direto do texto ISO (wall-clock local, sem conversão de fuso)
+  const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+  if (m) return `${m[3]}/${m[2]} ${m[4]}:${m[5]}`;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return String(iso);
   const dd = String(d.getDate()).padStart(2, '0');

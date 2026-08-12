@@ -68,7 +68,7 @@ Regras de mapeamento de tipo (o CRM só aceita esses 6):
 - "reunião", "call", "vídeo chamada", "videochamada", "ligação de vídeo", "meet", "google meet" -> REUNIAO
 - "proposta", "enviei proposta", "apresentei proposta" -> PROPOSTA
 
-Regras de data: converta expressões relativas para ISO 8601 ABSOLUTO usando a data/hora atual informada. Ex.: "amanhã às 14h", "sexta que vem", "dia 15". Se não houver hora, use 09:00. Se não der para deduzir a data, use null.
+Regras de data: converta expressões relativas ("amanhã às 10h", "sexta que vem", "dia 15") em data/hora usando a DATA ATUAL informada. Use o formato "YYYY-MM-DDTHH:mm:ss" SEM fuso horário (sem "Z" e sem "-04:00") — representando o horário LOCAL do Brasil EXATAMENTE como a pessoa falou. NUNCA converta para UTC (se falou 10h, escreva T10:00:00, não T14:00:00). Se não houver hora, use 09:00. Se não der para deduzir a data, use null.
 Não invente cliente nem dados. Se algo não estiver no relato, use null.`;
 
 // Extrai a intenção do relato. `agora` = Date atual (injetável para testes).
@@ -81,7 +81,15 @@ async function extrairIntencao(texto, { agora = new Date() } = {}) {
     return { cliente_nome: null, interacao_realizada: null, proxima_acao: null, confianca: 0 };
   }
 
-  const userPrompt = `Data e hora atuais: ${agora.toISOString()} (fuso America/Campo_Grande, UTC-4).\n\nRelato do consultor:\n"""${relato}"""\n\nResponda apenas com o JSON.`;
+  // data/hora atual no fuso do Brasil (wall-clock), pra "hoje/amanhã" saírem certos
+  const TZ = process.env.ASSISTENTE_TZ || 'America/Campo_Grande';
+  let agoraBR;
+  try {
+    agoraBR = agora.toLocaleString('sv-SE', { timeZone: TZ }); // ex: "2026-08-12 15:30:00"
+  } catch (_) {
+    agoraBR = agora.toISOString().slice(0, 19).replace('T', ' ');
+  }
+  const userPrompt = `Data e hora atuais no Brasil: ${agoraBR} (horário local; NÃO use UTC).\n\nRelato do consultor:\n"""${relato}"""\n\nResponda apenas com o JSON.`;
 
   const { data } = await axios.post(
     `${IA_BASE_URL}/chat/completions`,
